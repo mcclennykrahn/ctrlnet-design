@@ -20,7 +20,8 @@
 - 通视约束网：只用通视的距离/角度边做平面平差，并把 95% 误差椭圆叠加到晕渲图；
 - 本地网页地图：FastAPI + 包内离线 Leaflet，晕渲/等高线/控制点/观测线/误差椭圆与两点剖面；
 - 六参数仿射影像配准：最小二乘、逐点残差/RMS、`.pgw`/`.tfw` 世界文件与网页 4 点配准演示；
-- 方案对比、贪心观测增补优化（最大 `mp`、trace、最弱边）；
+- 方案对比、贪心/局部搜索/精确分支定界观测优化（A/D/E/max_mp/最弱边），
+  支持观测成本 + 测站首次使用固定成本，并提供 SciPy MILP 线性代理近似；
 - 第 13 节黄金算例的精度与可靠性回归；
 - 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告。
 
@@ -37,7 +38,7 @@ C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不�
 | §5.4 可靠性：`Qv`、`R`、`r_i`、MDB、外部可靠性、w 检验 | `reliability.py`；λ0 用 `statistics.NormalDist` 精确计算，默认 7.849 | ✅ MVP |
 | §5.10 粗差探测与稳健估计：模拟观测、w/τ/χ²、Huber/IGG-III | `robust.py`；高斯-牛顿、迭代 snooping、IRLS、MAD 尺度 | ✅ P1/C1 |
 | §5.5 精度：`mp`、误差椭圆、边长相对精度、最弱点/边 | `precision.py`；标准椭圆与 95% 椭圆，`k=sqrt(-2ln0.05)` | ✅ MVP |
-| §5.6 优化：贪心、预算/阈值、A 最优/最弱边 | `optimize.py`；贪心 + 可选 1 换 1 局部搜索 | ✅ MVP（贪心子集） |
+| §5.6 优化：贪心、预算/阈值、A/D/E 最优、最弱边、MICP/MILP | `optimize.py`；贪心 + 1 换 1 局部搜索；≤20 候选的分支定界/穷举精确解；SciPy MILP 线性代理 | ✅ C2 |
 | §5.9 水准/高程网：路线/环、`σ_km`、固定/加权/自由基准、`r_i`/MDB | `leveling.py`；1D 设计矩阵、SVD、伪逆、相对高差精度 | ✅ P1/B1 |
 | §5.9.5 三角高程：斜距/平距、天顶距、曲率折光、误差传播 | `leveling.py`；解析偏导与逐项误差贡献 | ✅ P1/B1 |
 | §5.2 坐标与投影：局部 UTM、经纬度↔米制转换 | `fetch_dem.py`、`terrain.py`；样例重投影到 EPSG:32650 | ✅ P1/B2（局部） |
@@ -58,12 +59,13 @@ C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不�
 | geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
 | GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
 | 方差分量估计（VCE） | 未实现 Helmert/最小范数二次无偏估计 | ❌ 未实现 |
-| MICP/MILP/Pareto、A/D/E 精确最优 | 仅贪心与简单局部搜索 | ⚠️ 部分 |
+| MICP/MILP/Pareto、A/D/E 精确最优 | A/D/E/max_mp/最弱边的精确分支定界（≤20 候选）与 MILP 线性代理；Pareto 前沿未实现 | ✅ C2（小规模精确） |
 
 ## 2. 安装
 
 要求 Python ≥ 3.9。运行时依赖 `numpy>=1.24`、`matplotlib>=3.6`；`test` extra
-提供 `pytest`、`httpx`、`fastapi`、`pillow`、`rasterio`，`demo` extra 提供
+提供 `pytest`、`httpx`、`fastapi`、`pillow`、`rasterio`、`scipy`，`opt` extra
+提供 SciPy MILP（`scipy>=1.11`），`demo` extra 提供
 `ipykernel`、`nbconvert`、`nbformat`，`terrain` extra 提供 `rasterio`，
 `webmap` extra 提供 FastAPI/uvicorn/pillow/rasterio。
 
@@ -71,6 +73,7 @@ C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不�
 cd /workspace/ctrlnet-design
 python3 -m venv .venv
 .venv/bin/pip install -e ".[test,demo,terrain,webmap]"  # 只跑测试可改用 ".[test]"
+# 只跑 C2 MILP 演示：.venv/bin/pip install -e ".[opt]"
 # 只跑 B2 DEM 演示：.venv/bin/pip install -e ".[test,terrain]"
 # 只跑 B3 网页地图：.venv/bin/pip install -e ".[test,webmap]"
 ```
@@ -100,6 +103,9 @@ cd /workspace/ctrlnet-design
   `σ≤0`、NaN、重合点、非法 GNSS 相关系数；
 - `tests/test_optimize.py`：贪心加入观测后最大 `mp` 单调不增、预算约束、
   目标阈值、trace 目标单调性；
+- `tests/test_exact_optimizer.py`：A/D/E/max_mp/worst_rel 五种准则的分支定界
+  与穷举目标值一致、精确解不劣于贪心、预算约束、测站首次使用成本、
+  多站成本、方向定向参数、MILP 代理预算/真实目标复算；
 - `tests/test_robust.py`：固定种子模拟观测、近似坐标高斯-牛顿收敛、χ² 全局检验、
   无粗差无误判、10σ 粗差被 w 检验与 IGG-III 定位、稳健解接近无粗差解、
   `r_i` 与可控性关系、水准/GNSS 2D/方向观测接口；
@@ -114,7 +120,7 @@ cd /workspace/ctrlnet-design
 - `tests/test_webmap.py`：TestClient 覆盖页面、离线 Leaflet 静态资源、
   `/api/project`、`/api/layers`、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`70 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
+预期结果：`93 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -123,6 +129,7 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_demo.py
 .venv/bin/python scripts/run_leveling_demo.py
 .venv/bin/python scripts/run_robust_demo.py     # C1 粗差探测与稳健估计
+.venv/bin/python scripts/run_optimizer_compare.py  # C2 贪心/局部/精确/MILP 对比
 .venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
 .venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
 .venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
@@ -186,6 +193,9 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `blunder_detection.png` | C1 粗差探测：迭代前后各观测 `|w|`、临界线、IGG-III 权因子与坐标偏差对比 |
 | `robust_results.md` | C1 中文汇总：LS/剔除后 LS/Huber/IGG-III 偏差、snooping 轮次、`r_i` 与可控性 |
 | `robust_results.csv` | C1 各方法、各待定点的真值/估值/偏差、异常标签与粗差权因子 |
+| `optimizer_comparison.png` | C2 第 13 节网与 DEM 通视网在多预算下的目标值/耗时对比（贪心/局部搜索/精确/MILP） |
+| `optimizer_comparison.csv` | C2 每次运行的目标、成本、选中观测、耗时、精确标志与分支节点数 |
+| `optimizer_comparison.md` | C2 中文对比表、方法汇总、精确/近似说明与限制 |
 | `dem_hillshade_contours.png` | 真实 DEM 晕渲 + 50 m 等高线 + 7 个控制点 + 21 对观测线（绿=通视，红=遮挡） |
 | `intervisibility_profiles.png` | 6 条代表性剖面：地形、两端连线、曲率/折光视线、遮挡点与最小净空 |
 | `intervisibility.csv` | 全部点对的 `status/visible/min_clearance`、遮挡位置、仪器高/目标高、`k/R`、采样数 |
@@ -621,7 +631,110 @@ print(robust.outlier_labels, robust.observation_weight("CD"))
 `r_i≈0.90`，10σ 粗差 |w|≈9.0；角度 `r_i` 仅 0.04～0.08，同样 10σ 的 |w| 约
 2.0～2.9，低于 3.29，说明小 `r_i` 观测的粗差更难发现。
 
-## 12. 目录结构
+## 12. 观测方案优化（C2）
+
+### 12.1 统一准则与成本模型
+
+`optimize`/`greedy_optimize`/`local_search_optimize`/`exact_optimize` 使用同一
+`criterion` 接口：
+
+| 准则 | 目标 | 说明 |
+|---|---|---|
+| `A` | `min trace(Cx)` | A 最优；可用 `parameter_scales` 做尺度归一化 |
+| `D` | `min log det(Cx)` | D 最优；对非奇异参数缩放不变 |
+| `E` | `min lambda_max(Cx)` | E 最优；最坏方向方差最小 |
+| `max_mp` | `min max_i mp_i` | 直接对应点位验收指标 |
+| `worst_rel` | `min max_e (σ_s/s)_e` | 最弱边相对精度 |
+
+旧参数 `objective="trace"/"relative"` 仍作为别名保留，等价于 `A`/`worst_rel`。
+
+成本由观测成本和测站固定成本组成：
+
+```text
+total = Σ c_e x_e + Σ_s f_s · [第 s 个测站在候选集首次被使用]
+```
+
+- `Candidate(observation, cost=..., stations=...)`：`stations` 为空时，角度/方向
+  取测站，距离/GNSS 取全部引用点；显式传入可精确控制设站集合；
+- `CostModel(station_costs={"C": 100, ...}, default_station_cost=0)`：
+  按点名给固定成本；
+- `exact_optimize(..., station_costs=...)` 可直接传数字（所有站统一）或映射；
+- 默认按候选集合内“首次使用”计费，不自动扣除基准网已使用的测站；若要把
+  基准网既有测站视为已建，传 `existing_stations={"A", "B"}` 或构造
+  `CostModel(existing_stations=...)`。
+
+### 12.2 精确分支定界
+
+`exact_optimize(base, candidates, criterion="A", budget=...)` 对候选数 ≤ 20
+（`max_candidates` 可调）求预算约束下的**全局最优**：
+
+- 预先组装 `N(x)=N0+Σx_e a_e a_eᵀ/σ_e²`，候选子集只需矩阵加法；
+- 分支定界以“加入全部剩余观测后的目标值”为单调下界。增加独立观测不会使
+  `Cx` 变差，因此若下界已不优于当前最优，可安全剪枝；
+- 同时维护预算、测站首次使用掩码和距离边掩码；
+- 对方向观测引入新定向未知数、导致 `Cx` 维数变化时，A/D/E 自动关闭该下界，
+  退化为带预算剪枝的精确枚举，仍保证最优；
+- `exhaustive_optimize` 穷举全部预算可行子集，用于小例子交叉验证；
+- 若达到 `time_limit`，结果 `exact=False` 并明确标注未证明最优。
+
+```python
+from ctrlnet import Angle, Candidate, exact_optimize, section13_base
+
+base = section13_base()
+candidates = [
+    Candidate(Angle("D", "C", "A"), 1.0, stations=("C",)),
+    Candidate(Angle("A", "C", "B"), 1.0, stations=("C",)),
+    Candidate(Angle("D", "A", "C"), 1.0, stations=("A",)),
+]
+result = exact_optimize(
+    base, candidates, criterion="max_mp", budget=7.0,
+    cost_model=None, station_costs={"A": 2.0, "C": 5.0},
+)
+print(result.selected_labels, result.spent, result.objective_value)
+print(result.to_text())
+```
+
+精确解要求基准网满秩（存在可平差的初始方案），并支持固定基准和加权基准；
+自由网/最小约束的伪逆协方差不满足“正规矩阵直接求逆”的假设，仍建议用贪心或
+局部搜索。若所选候选子集无法使网形满秩，精确搜索会返回不可行/报错，而不是
+伪造一个有限目标值。
+
+### 12.3 MILP 线性代理（近似）
+
+`milp_optimize(..., criterion=...)` 基于 SciPy HiGHS 建立 0-1 MILP：
+
+- `max_mp`：对每个候选计算它对各点 `mp` 的一阶改善量，约束
+  `z ≥ mp_p(0) − Σ gain_{p,e} x_e`，最小化 `z`；
+- `worst_rel`：对每条候选/基准边做同样的一阶最弱边代理；
+- `A/D/E`：以候选单条加入时的标量目标改善量作为线性收益，做预算背包；
+- 预算行同时包含观测成本与测站 0-1 变量；设站首次使用成本只计一次；
+- 求解后一律用 `solve`+`analyze_precision` 真实目标复算，并做 1 加/1 换 1
+  局部搜索校正。结果对象 `exact=False`、`proxy_objective` 为代理目标值。
+
+该方法是**近似**，不保证全局最优；若没有 SciPy，调用会提示安装
+`pip install -e ".[opt]"`，其余方法不受影响。
+
+### 12.4 演示与结果
+
+`scripts/run_optimizer_compare.py` 对第 13 节网（10 个候选角）和
+DEM 通视网（基准 14 条通视距离 + 14 个通视候选）在多个预算下比较：
+
+- 贪心；
+- 贪心 + 1 换 1 局部搜索；
+- 精确分支定界（`max_mp`，预算约束下证明最优）；
+- SciPy MILP 线性代理（可用时）。
+
+输出：
+
+- `outputs/optimizer_comparison.png`：每个网的目标值—预算、耗时—预算曲线；
+- `outputs/optimizer_comparison.csv`：每次运行的目标、成本、选中观测、耗时、
+  精确标志和分支节点数；
+- `outputs/optimizer_comparison.md`：中文对比表、方法汇总、精确/近似说明。
+
+`tests/test_exact_optimizer.py` 验证：小例子穷举 = 分支定界；精确目标 ≤ 贪心；
+预算约束；同站/多站首次使用成本；五种准则；方向定向参数；MILP 真实目标复算。
+
+## 13. 目录结构
 
 ```text
 ctrlnet-design/
@@ -643,11 +756,12 @@ ctrlnet-design/
 │   │   ├── render.py          # 晕渲 PNG、等高线 GeoJSON、影像重采样
 │   │   └── static/            # index.html、app.js、style.css、leaflet/
 │   ├── compare.py             # 方案对比
-│   ├── optimize.py            # 贪心增补与局部搜索
+│   ├── optimize.py            # 贪心/局部搜索/精确分支定界/MILP 代理
 │   ├── plot.py                # 网图与椭圆
 │   ├── report.py              # 中文表格
 │   └── examples.py            # 第 13 节两方案
 ├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、Web API
+│   ├── test_exact_optimizer.py # C2 分支定界/穷举/预算/设站成本/五准则/MILP
 │   ├── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
 │   ├── test_robust.py         # 模拟观测/高斯-牛顿/粗差探测/稳健估计
 │   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
@@ -656,6 +770,7 @@ ctrlnet-design/
 │   ├── run_demo.py            # 平面网演示主脚本
 │   ├── run_leveling_demo.py   # 水准/三角高程演示
 │   ├── run_robust_demo.py     # C1 粗差探测与稳健估计演示
+│   ├── run_optimizer_compare.py  # C2 贪心/局部/精确/MILP 多预算对比
 │   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
 │   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
@@ -676,7 +791,7 @@ ctrlnet-design/
 └── README.md
 ```
 
-## 13. 计算约定与限制
+## 14. 计算约定与限制
 
 - 设计态接口（`solve`）：`σ0=1`，`Cx=(AᵀQl⁻¹A)⁺`，不估计单位权方差。
   实测模拟接口（`estimate_network`/`robust_estimate`）另行计算残差、σ̂0、
@@ -704,6 +819,11 @@ ctrlnet-design/
 - C1 实测模块以“先验 σ 已知、σ0=1”为默认；w 检验临界值 3.29 对应
   α0=0.001 双侧，τ 检验默认 t 分位数。稳健估计使用先验权下的标准化残差
   与 MAD 尺度；IGG-III 淘汰的观测权因子为 0，但其结果仍不能替代 MDB 报告。
+- C2 精确优化仅面向候选数 ≤ 20 的小规模组合，并要求所选方案满秩；
+  自由网/最小约束的伪逆协方差不适合直接进入正规矩阵分支定界。
+  分支定界默认按候选集合内首次使用计设站费，不自动扣除基准网既有测站；
+  需要时用 `existing_stations` 显式声明。MILP 为线性代理近似，不能替代
+  精确解或最终平差复算。
 - 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
   3D 联合、数据库、多工程与编辑。
 - 网页地图只绑定回环地址，无鉴权、只读单工程；扫描图配准为 6 参数仿射，
