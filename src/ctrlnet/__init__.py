@@ -70,6 +70,27 @@ from .reliability import (
     w_test,
 )
 
+from .leveling import (
+    HeightDifference,
+    HeightNetwork,
+    HeightObservation,
+    LevelingNetwork,
+    LevelingObservation,
+    LevelingObservationRecord,
+    LevelingPoint,
+    LevelingPointPrecision,
+    LevelingReliabilityResult,
+    LevelingResult,
+    RelativeHeightPrecision,
+    TrigHeight,
+    analyze_height_reliability,
+    analyze_leveling_reliability,
+    leveling,
+    plot_leveling_network,
+    solve_height_network,
+    solve_leveling,
+)
+
 __all__ = [
     "__version__",
     # model
@@ -133,6 +154,25 @@ __all__ = [
     # examples
     "section13_base",
     "section13_added",
+    # leveling / height network
+    "LevelingPoint",
+    "HeightDifference",
+    "LevelingObservation",
+    "HeightObservation",
+    "TrigHeight",
+    "LevelingNetwork",
+    "HeightNetwork",
+    "LevelingPointPrecision",
+    "RelativeHeightPrecision",
+    "LevelingObservationRecord",
+    "LevelingReliabilityResult",
+    "LevelingResult",
+    "solve_leveling",
+    "solve_height_network",
+    "leveling",
+    "analyze_leveling_reliability",
+    "analyze_height_reliability",
+    "plot_leveling_network",
 ]
 
 from .compare import (

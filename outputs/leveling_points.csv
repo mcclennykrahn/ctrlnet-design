@@ -1,0 +1,7 @@
+point,H_m,sigma_H_mm,role,height_type,fixed,weighted_constraint
+A,100.000000,0.000000,fixed,normal,1,0
+B,101.499080,1.828210,unknown,normal,0,0
+C,102.297931,1.849500,unknown,normal,0,0
+D,101.097849,1.552090,unknown,normal,0,0
+E,102.898305,2.067478,unknown,normal,0,0
+F,101.798436,1.939287,unknown,normal,0,0
