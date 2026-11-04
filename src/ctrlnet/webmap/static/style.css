@@ -71,6 +71,34 @@ html, body {
 .top-stats .stat b { display: block; font-size: 15px; font-weight: 700; color: #f8fafc; }
 .top-stats .stat span { display: block; font-size: 9.5px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
 
+
+.report-actions { display: flex; gap: 5px; align-items: center; margin-left: 4px; }
+.report-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 9px; border-radius: 7px; text-decoration: none;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(30, 41, 59, 0.72); color: #cbd5e1;
+  font-size: 10.5px; white-space: nowrap; transition: .15s ease;
+}
+.report-btn:hover { border-color: rgba(56, 189, 248, .65); color: #e0f2fe; }
+.report-btn.primary {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: linear-gradient(180deg, rgba(14,165,233,.28), rgba(2,132,199,.2));
+  color: #e0f2fe; font-weight: 650;
+}
+.scenario-panel { background: linear-gradient(180deg, rgba(56,189,248,.06), transparent); }
+.scenario-label { display:block; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.scenario-select {
+  width: 100%; border: 1px solid rgba(56,189,248,.38);
+  background: rgba(2, 6, 23, .72); color: #e0f2fe;
+  border-radius: 8px; padding: 7px 8px; font-size: 12px; outline: none;
+}
+.scenario-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(56,189,248,.15); }
+.scenario-select option { background: #0f172a; color: #e2e8f0; }
+.scenario-meta { margin-top: 7px; font-size: 10px; line-height: 1.5; color: #7dd3fc; font-variant-numeric: tabular-nums; }
+.scenario-meta b { color: #f8fafc; font-weight: 650; }
+.scenario-meta .muted-line { color: #7c8da6; }
+
 .offline-badge {
   display: flex; align-items: center; gap: 7px;
   border: 1px solid rgba(34, 197, 94, 0.35);
@@ -192,6 +220,8 @@ html, body {
 .tag-free { color: #422006; background: #fde68a; }
 .tag-ok { color: #052e16; background: #86efac; }
 .tag-bad { color: #450a0a; background: #fca5a5; }
+.tag-angle { color: #172554; background: #93c5fd; }
+.tag-observed { color: #082f49; background: #7dd3fc; }
 
 .detail-list { font-size: 10.5px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .detail-list b { color: #cbd5e1; font-weight: 600; }
@@ -264,6 +294,12 @@ html, body {
   padding: 2px 6px !important; border-radius: 5px !important;
 }
 .gcp-tooltip::before { display: none !important; }
+
+@media (max-width: 1240px) {
+  .top-stats { gap: 10px; }
+  .brand { min-width: 300px; }
+  .report-btn { padding: 6px 7px; }
+}
 
 @media (max-width: 1120px) {
   .top-stats { display: none; }

@@ -19,10 +19,23 @@
       </div>
     </div>
     <div class="top-stats" id="top-stats"></div>
+    <div class="report-actions" aria-label="报告下载">
+      <a id="report-html" class="report-btn primary" href="/api/report?format=html" download>⬇ 下载报告</a>
+      <a id="report-md" class="report-btn" href="/api/report?format=md" download>MD</a>
+      <a id="report-docx" class="report-btn" href="/api/report?format=docx" download>DOCX</a>
+    </div>
     <div class="offline-badge"><span class="dot"></span> 127.0.0.1 · 离线 Leaflet</div>
   </header>
 
   <aside id="left-panel" class="panel">
+    <section class="panel-section scenario-panel">
+      <div class="section-kicker">Scenario</div>
+      <h2>方案切换</h2>
+      <label class="scenario-label" for="scenario-select">当前方案</label>
+      <select id="scenario-select" class="scenario-select" aria-label="选择方案"></select>
+      <div id="scenario-meta" class="scenario-meta">正在载入方案…</div>
+    </section>
+
     <section class="panel-section">
       <div class="section-kicker">Layers</div>
       <h2>图层</h2>
@@ -31,7 +44,7 @@
       <label class="layer-row"><input type="checkbox" id="lyr-contours" checked>
         <span class="swatch swatch-contour"></span><span>等高线（50 m）</span></label>
       <label class="layer-row"><input type="checkbox" id="lyr-observations" checked>
-        <span class="swatch swatch-obs"></span><span>观测线（通视 / 遮挡）</span></label>
+        <span class="swatch swatch-obs"></span><span>观测线（距离/角度 · 通视/遮挡）</span></label>
       <label class="layer-row"><input type="checkbox" id="lyr-ellipses" checked>
         <span class="swatch swatch-ellipse"></span><span>95% 误差椭圆（放大）</span></label>
       <label class="layer-row"><input type="checkbox" id="lyr-points" checked>

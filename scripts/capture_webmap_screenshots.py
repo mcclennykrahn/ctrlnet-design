@@ -9,7 +9,7 @@
 
     /workspace/venvs/lab/bin/python scripts/capture_webmap_screenshots.py
     /workspace/venvs/lab/bin/python scripts/capture_webmap_screenshots.py \
-        --url http://127.0.0.1:8765/ --profile-from P1 --profile-to P6
+        --url http://127.0.0.1:8765/ --scenario dem-opt
 """
 
 from __future__ import annotations
@@ -21,12 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUTS = ROOT / "outputs"
 
 
-def capture(url: str, profile_from: str, profile_to: str) -> tuple[Path, Path]:
+def capture(url: str, scenario: str) -> tuple[Path, Path]:
     from playwright.sync_api import sync_playwright
 
     OUTPUTS.mkdir(parents=True, exist_ok=True)
     first = OUTPUTS / "webmap_screenshot.png"
-    second = OUTPUTS / "webmap_profile_screenshot.png"
+    second = OUTPUTS / "webmap_scenario_screenshot.png"
     errors: list[str] = []
 
     with sync_playwright() as playwright:
@@ -43,17 +43,14 @@ def capture(url: str, profile_from: str, profile_to: str) -> tuple[Path, Path]:
         page.wait_for_timeout(1200)
         page.screenshot(path=str(first))
 
-        page.evaluate(
-            "(args) => window.ctrlnetApp.showProfile(args[0], args[1])",
-            [profile_from, profile_to],
-        )
+        # 切换方案：下拉框 → 后端重新取点/观测/椭圆/统计。
+        page.select_option("#scenario-select", scenario)
         page.wait_for_function(
-            "window.lastProfile && (window.lastProfile.status === 'visible' || "
-            "window.lastProfile.status === 'blocked' || window.lastProfile.status === 'marginal' "
-            "|| window.lastProfile.status === 'unknown')",
-            timeout=30_000,
+            "(sid) => window.ctrlnetScenarioReady === sid",
+            arg=scenario,
+            timeout=60_000,
         )
-        page.wait_for_timeout(700)
+        page.wait_for_timeout(900)
         page.screenshot(path=str(second))
         browser.close()
 
@@ -67,10 +64,9 @@ def capture(url: str, profile_from: str, profile_to: str) -> tuple[Path, Path]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="截图 CTRLNET 本地网页地图")
     parser.add_argument("--url", default="http://127.0.0.1:8765/")
-    parser.add_argument("--profile-from", default="P1")
-    parser.add_argument("--profile-to", default="P6")
+    parser.add_argument("--scenario", default="dem-opt", help="第二张截图切换到的方案 id")
     args = parser.parse_args()
-    first, second = capture(args.url, args.profile_from, args.profile_to)
+    first, second = capture(args.url, args.scenario)
     print(f"wrote {first.relative_to(ROOT)}")
     print(f"wrote {second.relative_to(ROOT)}")
 

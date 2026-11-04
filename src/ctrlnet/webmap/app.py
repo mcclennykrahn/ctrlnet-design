@@ -163,8 +163,8 @@ def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
     store = ProjectStore(project_path)
     app = FastAPI(
         title="CTRLNET 本地网页地图",
-        description="离线 DEM 晕渲/等高线/控制点/观测线/误差椭圆与影像配准演示",
-        version="0.1.0",
+        description="SQLite 工程方案切换、DEM 晕渲/等高线、控制点/观测线/误差椭圆、报告下载与影像配准演示",
+        version="0.2.0",
         docs_url="/api/docs",
         redoc_url=None,
         openapi_url="/api/openapi.json",
@@ -182,18 +182,56 @@ def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
     def favicon() -> Response:
         return Response(status_code=204)
 
+    def _scenario_or_404(scenario: Optional[str]) -> str:
+        try:
+            return store.resolve_scenario_id(scenario)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.get("/api/health", summary="健康检查")
     def health() -> dict:
-        return {"status": "ok", "project": store.project_path.name}
+        return {
+            "status": "ok",
+            "project": store.project_path.name,
+            "n_scenarios": len(store.scenario_records()),
+            "selected_scenario": store.default_scenario_id(),
+        }
 
-    @app.get("/api/project", summary="工程详情")
-    def project() -> JSONResponse:
-        return JSONResponse(store.project_payload())
+    @app.get("/api/scenarios", summary="方案列表")
+    def scenarios() -> JSONResponse:
+        return JSONResponse(
+            {
+                "project_id": store.project.get("id"),
+                "default_scenario": store.default_scenario_id(),
+                "scenarios": store.scenario_records(),
+            }
+        )
 
-    @app.get("/api/layers", summary="图层清单与 GeoJSON")
-    def layers() -> JSONResponse:
-        payload = store.layers()
-        payload["summary"] = store.summary()
+    @app.get("/api/scenario/{scenario_id}", summary="方案详情（点/观测/椭圆/统计）")
+    def scenario(scenario_id: str) -> JSONResponse:
+        sid = _scenario_or_404(scenario_id)
+        try:
+            return JSONResponse(store.scenario_payload(sid))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/project", summary="工程详情（可指定方案）")
+    def project(scenario: Optional[str] = Query(None, description="方案 id 或名称")) -> JSONResponse:
+        sid = _scenario_or_404(scenario)
+        try:
+            return JSONResponse(store.project_payload(sid))
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/layers", summary="图层清单与 GeoJSON（可指定方案）")
+    def layers(scenario: Optional[str] = Query(None, description="方案 id 或名称")) -> JSONResponse:
+        sid = _scenario_or_404(scenario)
+        try:
+            payload = store.layers(sid)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
         return JSONResponse(payload)
 
     @app.get(
@@ -214,6 +252,59 @@ def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
         to_: str = Query(..., alias="to", description="终点点名或 E,N"),
     ) -> JSONResponse:
         return JSONResponse(build_profile(store, from_, to_))
+
+    @app.get("/api/report", summary="下载设计报告（HTML/Markdown/DOCX）")
+    def report(
+        scenario: Optional[str] = Query(None, description="方案 id 或名称"),
+        format: str = Query("html", description="html、md 或 docx"),
+    ) -> Response:
+        sid = _scenario_or_404(scenario)
+        try:
+            content, media, filename = store.report_content(sid, format)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"报告生成失败：{exc}") from exc
+        return Response(
+            content=content,
+            media_type=media,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.get("/api/report.md", summary="下载 Markdown 设计报告")
+    def report_md(scenario: Optional[str] = Query(None)) -> Response:
+        sid = _scenario_or_404(scenario)
+        try:
+            content, media, filename = store.report_content(sid, "md")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return Response(
+            content=content,
+            media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/api/report.docx", summary="下载 DOCX 设计报告（需要 pandoc）")
+    def report_docx(scenario: Optional[str] = Query(None)) -> Response:
+        sid = _scenario_or_404(scenario)
+        try:
+            content, media, filename = store.report_content(sid, "docx")
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return Response(
+            content=content,
+            media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/api/registration/demo", summary="示例扫描图配准结果")
     def registration_demo() -> JSONResponse:

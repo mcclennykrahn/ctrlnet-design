@@ -147,6 +147,10 @@ def _ellipse_polygon(
     ]
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    return None if value is None else float(value)
+
+
 def build_point_geojson(project: dict) -> dict:
     features = []
     for point in project.get("points", []):
@@ -163,9 +167,9 @@ def build_point_geojson(project: dict) -> dict:
                     "name": point["name"],
                     "fixed": bool(point.get("fixed", False)),
                     "role": "fixed" if point.get("fixed") else "unknown",
-                    "elevation_m": float(point.get("elevation_m", float("nan"))),
-                    "lon": float(point.get("lon", float("nan"))),
-                    "lat": float(point.get("lat", float("nan"))),
+                    "elevation_m": _optional_float(point.get("elevation_m")),
+                    "lon": _optional_float(point.get("lon")),
+                    "lat": _optional_float(point.get("lat")),
                     "E": float(point["E"]),
                     "N": float(point["N"]),
                     "sigma_E_mm": float(point.get("sigma_E_mm", 0.0)),
@@ -185,52 +189,178 @@ def build_point_geojson(project: dict) -> dict:
     }
 
 
+def _observation_feature(
+    a: dict,
+    b: dict,
+    *,
+    kind: str,
+    source: str,
+    status: str | None,
+    visible: bool | None,
+    **properties: Any,
+) -> dict:
+    if visible is True:
+        color = "#1a9850"
+    elif visible is False:
+        color = "#d73027"
+    else:
+        color = "#2563eb"
+    return {
+        "type": "Feature",
+        "geometry": {
+            "type": "LineString",
+            "coordinates": [
+                [float(a["E"]), float(a["N"])],
+                [float(b["E"]), float(b["N"])],
+            ],
+        },
+        "properties": {
+            "layer": "observations",
+            "kind": kind,
+            "source": source,
+            "status": status,
+            "visible": visible,
+            "color": color,
+            **properties,
+        },
+    }
+
+
 def build_observation_geojson(project: dict) -> dict:
+    """观测/通视线 GeoJSON。
+
+    有方案观测时按观测类型绘制：距离为实线，角度在测站处画两条方向射线。
+    同时保留未作为设计观测的 DEM 点对（遮挡/临界）作为通视检查线。
+    """
     points = {p["name"]: p for p in project.get("points", [])}
-    features = []
-    for item in project.get("visibility", []):
-        a = points.get(item.get("from"))
-        b = points.get(item.get("to"))
-        if a is None or b is None:
-            continue
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [
-                        [float(a["E"]), float(a["N"])],
-                        [float(b["E"]), float(b["N"])],
-                    ],
-                },
-                "properties": {
-                    "layer": "observations",
-                    "from": item.get("from"),
-                    "to": item.get("to"),
-                    "status": item.get("status"),
-                    "visible": bool(item.get("visible", False)),
-                    "distance_m": float(item.get("distance_m", 0.0)),
-                    "min_clearance_m": (
-                        None
-                        if item.get("min_clearance_m") is None
-                        else float(item.get("min_clearance_m"))
-                    ),
-                    "min_distance_m": (
-                        None
-                        if item.get("min_distance_m") is None
-                        else float(item.get("min_distance_m"))
-                    ),
-                    "obstruction": item.get("obstruction"),
-                    "samples": int(item.get("samples", 0)),
-                    "nodata_count": int(item.get("nodata_count", 0)),
-                    "color": "#1a9850" if item.get("visible") else "#d73027",
-                },
-            }
-        )
+    features: list[dict] = []
+    observations = list(project.get("observations") or [])
+    if observations:
+        covered: set[tuple[str, str]] = set()
+        for item in observations:
+            kind = str(item.get("kind") or "")
+            if kind == "distance":
+                a = points.get(item.get("from"))
+                b = points.get(item.get("to"))
+                if a is None or b is None:
+                    continue
+                covered.add(tuple(sorted((str(item.get("from")), str(item.get("to"))))))
+                features.append(
+                    _observation_feature(
+                        a,
+                        b,
+                        kind="distance",
+                        source="observation",
+                        status=item.get("status"),
+                        visible=item.get("visible"),
+                        id=item.get("id"),
+                        **{
+                            "from": item.get("from"),
+                            "to": item.get("to"),
+                            "distance_m": float(item.get("distance_m") or item.get("value_m") or 0.0),
+                            "min_clearance_m": item.get("min_clearance_m"),
+                            "min_distance_m": item.get("min_distance_m"),
+                            "obstruction": item.get("obstruction"),
+                            "samples": int(item.get("samples") or 0),
+                            "nodata_count": int(item.get("nodata_count") or 0),
+                            "r_i": item.get("r_i"),
+                            "mdb": item.get("mdb"),
+                            "mdb_unit": item.get("mdb_unit"),
+                        },
+                    )
+                )
+            elif kind == "angle":
+                station = points.get(item.get("station"))
+                rear = points.get(item.get("backsight"))
+                front = points.get(item.get("foresight"))
+                if station is None or rear is None or front is None:
+                    continue
+                for target, role in ((rear, "rear"), (front, "front")):
+                    features.append(
+                        _observation_feature(
+                            station,
+                            target,
+                            kind="angle",
+                            source="observation",
+                            status="observed",
+                            visible=None,
+                            id=item.get("id"),
+                            **{
+                                "from": item.get("station"),
+                                "to": target.get("name"),
+                                "role": role,
+                                "backsight": item.get("backsight"),
+                                "station": item.get("station"),
+                                "foresight": item.get("foresight"),
+                                "value_deg": item.get("value_deg"),
+                                "distance_m": 0.0,
+                                "r_i": item.get("r_i"),
+                                "mdb": item.get("mdb"),
+                                "mdb_unit": item.get("mdb_unit"),
+                            },
+                        )
+                    )
+        for item in project.get("visibility", []):
+            key = tuple(sorted((str(item.get("from")), str(item.get("to")))))
+            if key in covered:
+                continue
+            a = points.get(item.get("from"))
+            b = points.get(item.get("to"))
+            if a is None or b is None:
+                continue
+            features.append(
+                _observation_feature(
+                    a,
+                    b,
+                    kind="visibility",
+                    source="visibility",
+                    status=item.get("status"),
+                    visible=bool(item.get("visible", False)),
+                    **{
+                        "from": item.get("from"),
+                        "to": item.get("to"),
+                        "distance_m": float(item.get("distance_m", 0.0)),
+                        "min_clearance_m": item.get("min_clearance_m"),
+                        "min_distance_m": item.get("min_distance_m"),
+                        "obstruction": item.get("obstruction"),
+                        "samples": int(item.get("samples", 0)),
+                        "nodata_count": int(item.get("nodata_count", 0)),
+                    },
+                )
+            )
+    else:
+        for item in project.get("visibility", []):
+            a = points.get(item.get("from"))
+            b = points.get(item.get("to"))
+            if a is None or b is None:
+                continue
+            features.append(
+                _observation_feature(
+                    a,
+                    b,
+                    kind="visibility",
+                    source="visibility",
+                    status=item.get("status"),
+                    visible=bool(item.get("visible", False)),
+                    **{
+                        "from": item.get("from"),
+                        "to": item.get("to"),
+                        "distance_m": float(item.get("distance_m", 0.0)),
+                        "min_clearance_m": item.get("min_clearance_m"),
+                        "min_distance_m": item.get("min_distance_m"),
+                        "obstruction": item.get("obstruction"),
+                        "samples": int(item.get("samples", 0)),
+                        "nodata_count": int(item.get("nodata_count", 0)),
+                    },
+                )
+            )
     return {
         "type": "FeatureCollection",
         "name": "observations",
-        "crs": {"type": "name", "properties": {"name": project.get("dem", {}).get("crs", "EPSG:32650")}},
+        "crs": {
+            "type": "name",
+            "properties": {"name": project.get("dem", {}).get("crs", "EPSG:32650")},
+        },
         "features": features,
     }
 
@@ -303,7 +433,7 @@ def build_layers(project: dict, dem: DEM, *, contour_interval: float = 50.0) -> 
             },
             {
                 "id": "observations",
-                "title": "观测线（通视 / 遮挡）",
+                "title": "观测线（距离/角度 · 通视/遮挡）",
                 "kind": "geojson",
                 "geojson": build_observation_geojson(project),
             },

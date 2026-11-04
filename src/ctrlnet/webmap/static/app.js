@@ -12,6 +12,9 @@
     profileLayer: null,
     lastProfile: null,
     controlsBound: false,
+    togglesBound: false,
+    scenarios: [],
+    selectedScenario: null,
   };
 
   const map = L.map("map", {
@@ -85,21 +88,45 @@
     node.textContent = text;
   }
 
-  function renderTopStats(summary) {
+  function renderTopStats(summary, scenario) {
     const stats = [
       [summary.n_points, "控制点"],
-      [summary.n_visible + " / " + summary.n_pairs, "通视点对"],
       [summary.n_observations, "设计观测"],
       [fmt(summary.max_mp_mm, 2) + " mm", "最大 mp"],
+      [summary.min_r === null || summary.min_r === undefined ? "—" : fmt(summary.min_r, 3), "最小 r_i"],
     ];
     document.getElementById("top-stats").innerHTML = stats
       .map(function (item) {
         return '<div class="stat"><b>' + esc(item[0]) + "</b><span>" + esc(item[1]) + "</span></div>";
       })
       .join("");
+    const dem = summary.dem || {};
+    const shape = (dem.shape || []).join("×");
+    const resolution = dem.resolution_m ? dem.resolution_m[0] : null;
     document.getElementById("project-sub").textContent =
-      summary.name + " · CRS " + summary.crs + " · DEM " + summary.dem.shape.join("×") +
-      " @ " + fmt(summary.dem.resolution_m[0], 0) + " m";
+      (summary.name || "CTRLNET") + " · " + (scenario ? scenario.name : "") +
+      " · CRS " + (summary.crs || "—") + " · DEM " + shape +
+      (resolution === null ? "" : " @ " + fmt(resolution, 0) + " m");
+    renderScenarioMeta(summary, scenario);
+  }
+
+  function renderScenarioMeta(summary, scenario) {
+    const node = document.getElementById("scenario-meta");
+    if (!node) return;
+    const parent = scenario && scenario.parent_id ? scenario.parent_id : "—";
+    const hash = summary.snapshot_hash ? String(summary.snapshot_hash).slice(0, 12) + "…" : "—";
+    node.innerHTML =
+      "<b>" + esc(summary.scenario_name || (scenario && scenario.name) || "—") + "</b> · v" +
+      esc(summary.scenario_version || (scenario && scenario.version) || 1) +
+      "<br>观测 " + fmtInt(summary.n_observations) +
+      " · 点数 " + fmtInt(summary.n_points) +
+      " · 固定 " + fmtInt(summary.n_fixed) +
+      "<br>max mp <b>" + fmt(summary.max_mp_mm, 2) + " mm</b> · min r_i " +
+      (summary.min_r === null || summary.min_r === undefined ? "—" : fmt(summary.min_r, 3)) +
+      "<br>通视 " + fmtInt(summary.n_visible) + " / " + fmtInt(summary.n_pairs) +
+      " · 冗余 " + fmtInt(summary.redundancy) +
+      '<br><span class="muted-line">父方案 ' + esc(parent) +
+      " · 快照 " + esc(hash) + "</span>";
   }
 
   function styleContours(feature) {
@@ -114,13 +141,28 @@
   }
 
   function styleObservations(feature) {
-    const visible = feature.properties.visible;
+    const props = feature.properties || {};
+    if (props.kind === "angle") {
+      return {
+        pane: "obsPane", color: "#2563eb", weight: 1.0,
+        opacity: 0.42, dashArray: "2 4",
+      };
+    }
+    if (props.kind === "visibility") {
+      return {
+        pane: "obsPane",
+        color: props.visible ? "#16a34a" : "#dc2626",
+        weight: 1.6, opacity: 0.72,
+        dashArray: props.visible ? null : "5 5",
+      };
+    }
+    const visible = props.visible;
     return {
       pane: "obsPane",
-      color: visible ? "#16a34a" : "#dc2626",
-      weight: visible ? 2.2 : 2.0,
+      color: visible === true ? "#16a34a" : (visible === false ? "#dc2626" : "#0ea5e9"),
+      weight: visible === true ? 2.2 : 2.0,
       opacity: 0.92,
-      dashArray: visible ? null : "7 5",
+      dashArray: visible === false ? "7 5" : null,
     };
   }
 
@@ -172,37 +214,69 @@
       "</dl>";
   }
 
+  function observationStatus(props) {
+    if (props.kind === "angle") return { text: "设计角度", tag: "tag-angle" };
+    if (props.kind === "visibility") {
+      return props.visible
+        ? { text: "通视（未作为设计观测）", tag: "tag-ok" }
+        : { text: props.status === "marginal" ? "临界" : "遮挡", tag: "tag-bad" };
+    }
+    if (props.visible === true) return { text: "通视", tag: "tag-ok" };
+    if (props.visible === false) return { text: "遮挡", tag: "tag-bad" };
+    return { text: "设计观测", tag: "tag-observed" };
+  }
+
   function observationPopup(props) {
-    const statusText = props.visible ? "通视" : (props.status === "marginal" ? "临界" : "遮挡");
-    const tag = props.visible ? "tag-ok" : "tag-bad";
-    return "<h3>" + esc(props.from) + " – " + esc(props.to) +
-      '<span class="tag ' + tag + '">' + statusText + "</span></h3>" +
-      '<div class="kv">' +
-      "<span>平距</span><span>" + fmt(props.distance_m / 1000, 3) + " km</span>" +
-      "<span>最小净空</span><span>" + fmt(props.min_clearance_m, 2) + " m</span>" +
-      "<span>位置</span><span>" + fmt(props.min_distance_m, 1) + " m 处</span>" +
-      (props.obstruction
-        ? "<span>遮挡点</span><span>E " + fmt(props.obstruction.E, 1) + ", N " +
-          fmt(props.obstruction.N, 1) + ", H " + fmt(props.obstruction.elevation_m, 2) + " m</span>"
-        : "<span>剖面</span><span>" + fmtInt(props.samples) + " 个采样点</span>") +
-      "</div>";
+    const status = observationStatus(props);
+    const title = props.kind === "angle"
+      ? "∠" + esc(props.backsight) + "-" + esc(props.station) + "-" + esc(props.foresight)
+      : esc(props.from) + " – " + esc(props.to);
+    let kv = "";
+    if (props.kind === "angle") {
+      kv = "<span>观测值</span><span>" + fmt(props.value_deg, 5) + "°</span>" +
+        "<span>r_i</span><span>" + fmt(props.r_i, 4) + "</span>" +
+        "<span>MDB</span><span>" + fmt(props.mdb, 3) + " " + esc(props.mdb_unit || "") + "</span>";
+    } else {
+      kv = "<span>平距</span><span>" + fmt(props.distance_m / 1000, 3) + " km</span>" +
+        "<span>最小净空</span><span>" + fmt(props.min_clearance_m, 2) + " m</span>" +
+        "<span>位置</span><span>" + fmt(props.min_distance_m, 1) + " m 处</span>" +
+        (props.obstruction
+          ? "<span>遮挡点</span><span>E " + fmt(props.obstruction.E, 1) + ", N " +
+            fmt(props.obstruction.N, 1) + ", H " + fmt(props.obstruction.elevation_m, 2) + " m</span>"
+          : "<span>剖面</span><span>" + fmtInt(props.samples) + " 个采样点</span>") +
+        "<span>r_i / MDB</span><span>" + fmt(props.r_i, 4) + " / " +
+        fmt(props.mdb, 3) + " " + esc(props.mdb_unit || "") + "</span>";
+    }
+    return "<h3>" + title + '<span class="tag ' + status.tag + '">' + status.text + "</span></h3>" +
+      '<div class="kv">' + kv + "</div>";
   }
 
   function observationInspector(props) {
-    const statusText = props.visible ? "通视" : (props.status === "marginal" ? "临界" : "遮挡");
-    const tag = props.visible ? "tag-ok" : "tag-bad";
-    return "<h3>" + esc(props.from) + " – " + esc(props.to) +
-      '<span class="tag ' + tag + '">' + statusText + "</span></h3>" +
-      '<dl class="kv">' +
-      "<dt>平距</dt><dd>" + fmt(props.distance_m / 1000, 3) + " km</dd>" +
-      "<dt>最小净空</dt><dd>" + fmt(props.min_clearance_m, 2) + " m</dd>" +
-      "<dt>最小位置</dt><dd>距起点 " + fmt(props.min_distance_m, 1) + " m</dd>" +
-      "<dt>采样 / 无效</dt><dd>" + fmtInt(props.samples) + " / " + fmtInt(props.nodata_count) + "</dd>" +
-      (props.obstruction
-        ? "<dt>遮挡点</dt><dd>E " + fmt(props.obstruction.E, 1) + ", N " + fmt(props.obstruction.N, 1) +
-          ", H " + fmt(props.obstruction.elevation_m, 2) + " m</dd>"
-        : "") +
-      "</dl><p class=\"muted\">点击剖面按钮或在剖面模式下点击地图两点，查看详细曲线。</p>";
+    const status = observationStatus(props);
+    const title = props.kind === "angle"
+      ? "∠" + esc(props.backsight) + "-" + esc(props.station) + "-" + esc(props.foresight)
+      : esc(props.from) + " – " + esc(props.to);
+    let body = "";
+    if (props.kind === "angle") {
+      body = "<dt>观测值</dt><dd>" + fmt(props.value_deg, 5) + "°</dd>" +
+        "<dt>测站</dt><dd>" + esc(props.station) + "</dd>" +
+        "<dt>r_i</dt><dd>" + fmt(props.r_i, 4) + "</dd>" +
+        "<dt>MDB</dt><dd>" + fmt(props.mdb, 3) + " " + esc(props.mdb_unit || "") + "</dd>";
+    } else {
+      body = "<dt>平距</dt><dd>" + fmt(props.distance_m / 1000, 3) + " km</dd>" +
+        "<dt>最小净空</dt><dd>" + fmt(props.min_clearance_m, 2) + " m</dd>" +
+        "<dt>最小位置</dt><dd>距起点 " + fmt(props.min_distance_m, 1) + " m</dd>" +
+        "<dt>采样 / 无效</dt><dd>" + fmtInt(props.samples) + " / " + fmtInt(props.nodata_count) + "</dd>" +
+        "<dt>r_i / MDB</dt><dd>" + fmt(props.r_i, 4) + " / " + fmt(props.mdb, 3) +
+        " " + esc(props.mdb_unit || "") + "</dd>" +
+        (props.obstruction
+          ? "<dt>遮挡点</dt><dd>E " + fmt(props.obstruction.E, 1) + ", N " +
+            fmt(props.obstruction.N, 1) + ", H " + fmt(props.obstruction.elevation_m, 2) + " m</dd>"
+          : "");
+    }
+    return "<h3>" + title + '<span class="tag ' + status.tag + '">' + status.text + "</span></h3>" +
+      '<dl class="kv">' + body + "</dl>" +
+      "<p class=\"muted\">点击剖面按钮或在剖面模式下点击地图两点，查看详细曲线。</p>";
   }
 
   function makePointLayer(geojson) {
@@ -232,24 +306,8 @@
     });
   }
 
-  function addLayerGroups(layersPayload) {
-    const byId = {};
-    layersPayload.layers.forEach(function (layer) { byId[layer.id] = layer; });
-
-    state.groups.hillshade = L.layerGroup();
-    const hs = byId.hillshade;
-    if (hs) {
-      const image = L.imageOverlay(hs.url, hs.bounds, {
-        pane: "hillshadePane", opacity: hs.opacity || 0.95, interactive: false,
-      });
-      state.groups.hillshade.addLayer(image);
-    }
-
-    state.groups.contours = L.geoJSON(byId.contours.geojson, {
-      pane: "contourPane", style: styleContours, interactive: false,
-    });
-
-    state.groups.ellipses = L.geoJSON(byId.ellipses.geojson, {
+  function makeEllipseLayer(geojson) {
+    return L.geoJSON(geojson, {
       pane: "ellipsePane", style: styleEllipses,
       onEachFeature: function (feature, layer) {
         const props = feature.properties;
@@ -268,8 +326,10 @@
         });
       },
     });
+  }
 
-    state.groups.observations = L.geoJSON(byId.observations.geojson, {
+  function makeObservationLayer(geojson) {
+    return L.geoJSON(geojson, {
       pane: "obsPane", style: styleObservations,
       onEachFeature: function (feature, layer) {
         const props = feature.properties;
@@ -277,57 +337,111 @@
         layer.on("click", function () { setInspector(observationInspector(props)); });
       },
     });
+  }
 
-    state.groups.points = makePointLayer(byId.points.geojson);
+  function removeGroup(name) {
+    const group = state.groups[name];
+    if (group && map.hasLayer(group)) map.removeLayer(group);
+  }
+
+  function applyScenarioLayers(layersPayload) {
+    const byId = {};
+    layersPayload.layers.forEach(function (layer) { byId[layer.id] = layer; });
+    removeGroup("observations");
+    removeGroup("ellipses");
+    removeGroup("points");
+    if (byId.observations) {
+      state.groups.observations = makeObservationLayer(byId.observations.geojson);
+    }
+    if (byId.ellipses) {
+      state.groups.ellipses = makeEllipseLayer(byId.ellipses.geojson);
+    }
+    if (byId.points) {
+      state.groups.points = makePointLayer(byId.points.geojson);
+    }
+    const checks = {
+      observations: document.getElementById("lyr-observations"),
+      ellipses: document.getElementById("lyr-ellipses"),
+      points: document.getElementById("lyr-points"),
+    };
+    Object.keys(checks).forEach(function (key) {
+      const input = checks[key];
+      if (input && input.checked && state.groups[key]) state.groups[key].addTo(map);
+    });
+  }
+
+  function addLayerGroups(layersPayload) {
+    const byId = {};
+    layersPayload.layers.forEach(function (layer) { byId[layer.id] = layer; });
+
+    state.groups.hillshade = L.layerGroup();
+    const hs = byId.hillshade;
+    if (hs) {
+      const image = L.imageOverlay(hs.url, hs.bounds, {
+        pane: "hillshadePane", opacity: hs.opacity || 0.95, interactive: false,
+      });
+      state.groups.hillshade.addLayer(image);
+    }
+
+    state.groups.contours = L.geoJSON(byId.contours.geojson, {
+      pane: "contourPane", style: styleContours, interactive: false,
+    });
+
     state.groups.scan = L.layerGroup();
     state.groups.gcp = L.layerGroup();
 
-    [state.groups.hillshade, state.groups.contours, state.groups.ellipses,
-      state.groups.observations, state.groups.points, state.groups.scan, state.groups.gcp]
+    [state.groups.hillshade, state.groups.contours, state.groups.scan, state.groups.gcp]
       .forEach(function (group) { group.addTo(map); });
 
     state.tempLayer = L.layerGroup().addTo(map);
     state.profileLayer = L.layerGroup().addTo(map);
-
+    applyScenarioLayers(layersPayload);
     bindLayerToggles();
   }
 
   function bindLayerToggles() {
+    if (state.togglesBound) return;
+    state.togglesBound = true;
     const mapping = {
-      "lyr-hillshade": state.groups.hillshade,
-      "lyr-contours": state.groups.contours,
-      "lyr-observations": state.groups.observations,
-      "lyr-ellipses": state.groups.ellipses,
-      "lyr-points": state.groups.points,
-      "lyr-scan": state.groups.scan,
-      "lyr-gcp": state.groups.gcp,
+      "lyr-hillshade": "hillshade",
+      "lyr-contours": "contours",
+      "lyr-observations": "observations",
+      "lyr-ellipses": "ellipses",
+      "lyr-points": "points",
+      "lyr-scan": "scan",
+      "lyr-gcp": "gcp",
     };
     Object.keys(mapping).forEach(function (id) {
       const input = document.getElementById(id);
-      const group = mapping[id];
       input.addEventListener("change", function () {
+        const group = state.groups[mapping[id]];
+        if (!group) return;
         if (input.checked) group.addTo(map); else map.removeLayer(group);
       });
     });
   }
 
-  function fitInitialView(project) {
-    const dem = project.summary.dem.bounds_native;
-    const bounds = [[dem[1], dem[0]], [dem[3], dem[2]]];
-    const points = project.points || [];
-    if (points.length) {
+  function fitScenarioView(points, maxZoom) {
+    if (points && points.length) {
       const lats = points.map(function (p) { return p.N; });
       const lngs = points.map(function (p) { return p.E; });
       map.fitBounds([[Math.min.apply(null, lats), Math.min.apply(null, lngs)],
         [Math.max.apply(null, lats), Math.max.apply(null, lngs)]], {
         paddingTopLeft: [330, 120],
         paddingBottomRight: [410, 70],
-        maxZoom: 4,
+        maxZoom: maxZoom === undefined ? 6 : maxZoom,
       });
-    } else {
-      map.fitBounds(bounds, { padding: [20, 20] });
     }
-    map.setMaxBounds(L.latLngBounds(bounds).pad(0.6));
+  }
+
+  function fitInitialView(project) {
+    const summary = project.summary || {};
+    const dem = (summary.dem && summary.dem.bounds_native) || null;
+    if (dem) {
+      const bounds = [[dem[1], dem[0]], [dem[3], dem[2]]];
+      map.setMaxBounds(L.latLngBounds(bounds).pad(0.6));
+    }
+    fitScenarioView(project.points || [], 6);
     window.setTimeout(function () { map.invalidateSize(); }, 80);
   }
 
@@ -589,10 +703,74 @@
       });
   }
 
+  function currentScenario() {
+    return (state.scenarios || []).filter(function (scenario) {
+      return scenario.id === state.selectedScenario;
+    })[0] || null;
+  }
+
+  function buildScenarioOptions() {
+    const select = document.getElementById("scenario-select");
+    select.innerHTML = (state.scenarios || []).map(function (scenario) {
+      return '<option value="' + esc(scenario.id) + '">' + esc(scenario.name) +
+        " · v" + esc(scenario.version) + " · " + esc(scenario.n_observations) + " obs</option>";
+    }).join("");
+    if (state.selectedScenario) select.value = state.selectedScenario;
+  }
+
+  function updateReportLinks() {
+    const sid = state.selectedScenario || "";
+    const query = "?scenario=" + encodeURIComponent(sid);
+    document.getElementById("report-html").href = "/api/report" + query + "&format=html";
+    document.getElementById("report-md").href = "/api/report" + query + "&format=md";
+    document.getElementById("report-docx").href = "/api/report" + query + "&format=docx";
+  }
+
+  async function switchScenario(scenarioId) {
+    const select = document.getElementById("scenario-select");
+    const previous = state.selectedScenario;
+    select.disabled = true;
+    document.getElementById("scenario-meta").textContent = "正在切换方案…";
+    try {
+      const payload = await getJSON("/api/scenario/" + encodeURIComponent(scenarioId));
+      const layers = await getJSON("/api/layers?scenario=" + encodeURIComponent(scenarioId));
+      state.selectedScenario = scenarioId;
+      state.project.selected_scenario = scenarioId;
+      state.project.summary = payload.summary;
+      state.project.points = payload.points;
+      state.project.observations = payload.observations;
+      state.project.visibility = payload.visibility;
+      state.project.analysis = payload.analysis;
+      state.project.network = payload.network;
+      state.project.snapshot_hash = payload.snapshot_hash;
+      state.layers = layers;
+      state.lastPayload = payload;
+      renderTopStats(payload.summary, payload.scenario);
+      applyScenarioLayers(layers);
+      fitScenarioView(payload.points, 6);
+      updateReportLinks();
+      document.getElementById("status-mode").textContent =
+        "方案：" + payload.scenario.name + " · v" + payload.scenario.version;
+      setInspectorMuted("已切换方案，点击点/观测/椭圆查看精度、可靠性与通视信息。");
+      window.ctrlnetScenarioReady = scenarioId;
+      return payload;
+    } catch (error) {
+      state.selectedScenario = previous;
+      if (previous) select.value = previous;
+      showError("方案切换失败：" + error.message);
+      throw error;
+    } finally {
+      select.disabled = false;
+    }
+  }
+
   function bindButtons() {
     document.getElementById("reload-registration").addEventListener("click", function () {
       document.getElementById("registration-status").textContent = "重新载入示例影像并配准…";
       loadRegistration().catch(function (error) { showError(error.message); });
+    });
+    document.getElementById("scenario-select").addEventListener("change", function (event) {
+      switchScenario(event.target.value).catch(function () { /* 已提示 */ });
     });
   }
 
@@ -600,22 +778,28 @@
     try {
       const project = await getJSON("/api/project");
       state.project = project;
-      renderTopStats(project.summary);
+      state.scenarios = project.scenarios || [];
+      state.selectedScenario = project.selected_scenario;
+      buildScenarioOptions();
+      renderTopStats(project.summary, currentScenario());
       fitInitialView(project);
       bindMapEvents();
-      const layers = await getJSON("/api/layers");
+      const layers = await getJSON("/api/layers?scenario=" + encodeURIComponent(state.selectedScenario));
       state.layers = layers;
       addLayerGroups(layers);
       bindButtons();
+      updateReportLinks();
       await loadRegistration();
       document.getElementById("loading").classList.add("hidden");
       window.ctrlnetApp = {
         showProfile: showProfile,
         loadRegistration: loadRegistration,
+        switchScenario: switchScenario,
         state: state,
         map: map,
       };
       window.ctrlnetBooted = true;
+      window.ctrlnetScenarioReady = state.selectedScenario;
       if (!window.ctrlnetReady) {
         window.setTimeout(function () { window.ctrlnetReady = true; }, 900);
       }

@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--host", default="127.0.0.1", help="仅允许回环地址，默认 127.0.0.1")
     parser.add_argument("--port", type=int, default=8765, help="端口，默认 8765")
-    parser.add_argument("--project", type=Path, default=None, help="terrain_project.json 路径")
+    parser.add_argument("--project", type=Path, default=None, help="SQLite 工程路径（data/sample/demo_project.sqlite）")
     parser.add_argument("--log-level", default="info", help="uvicorn 日志级别")
     return parser
 

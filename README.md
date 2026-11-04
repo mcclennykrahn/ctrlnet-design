@@ -3,7 +3,7 @@
 `ctrlnet` 是一个纯 Python 的平面/高程控制网**设计态（先验）**计算核心，并附带
 可选的本地只读网页地图（FastAPI + 离线 Leaflet），
 实现 [`docs/redesign_plan.md`](docs/redesign_plan.md) 中“平面控制网精度估算与优化
-设计”重设计方案的 MVP 与 P1/P2 部分能力：
+设计”重设计方案的 MVP、P1–P5 部分能力与 C1–C4 增量：
 
 - 平面网：距离、方向、角度、二维 GNSS 基线、坐标伪观测；
 - 平面基准：固定基准、加权基准、自由网/最小约束与秩亏诊断；
@@ -23,12 +23,21 @@
 - 方案对比、贪心/局部搜索/精确分支定界观测优化（A/D/E/max_mp/最弱边），
   支持观测成本 + 测站首次使用固定成本，并提供 SciPy MILP 线性代理近似；
 - 第 13 节黄金算例的精度与可靠性回归；
-- 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告。
+- 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告；
+- SQLite 工程库（`store.py`）：`projects / points / observations / scenarios /
+  snapshots / results`，方案版本号与父方案、规范化 JSON 快照 + SHA-256
+  `input_hash`、按哈希缓存计算结果；
+- 设计报告（`reportgen.py`）：工程概况、点/观测清单、先验精度模型、基准、
+  点位精度与误差椭圆、边相对精度、可靠性、方案对比、优化建议、通视结果与图表，
+  输出 Markdown / 自包含 HTML / 可选 DOCX（pandoc）；
+- 网页方案切换与报告下载：第 13 节基准/增补、DEM 全部通视边/优化方案，
+  切换后刷新点、观测、椭圆与统计；`/api/report` 返回 HTML/Markdown/DOCX。
 
 数值约定：内部长度/高程单位为米、角度/方向为弧度；显示时距离/高差用 mm，
 角度用角秒。DEM 计算使用米制局部 UTM 坐标。项目以设计阶段先验精度估算为主，
 C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不做 geoid/高程异常转换
-（`height_type` 仅作为属性字段），也不实现完整工程数据库。
+（`height_type` 仅作为属性字段）。C4 起提供单工程只读 SQLite 持久化、快照/
+结果缓存与报告下载，但尚未实现多工程编辑、并发写入与权限管理。
 
 ## 1. 与 docs 方案的对应关系
 
@@ -45,16 +54,18 @@ C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不�
 | §5.7 DEM 通视：双线性采样、剖面、曲率/折光、四态判定 | `terrain.py`；`DEM`、`profile`、`intervisibility` | ✅ P1/B2 |
 | §5.7 地形渲染：晕渲、等高线 | `terrain.py`；`hillshade`、`contours` | ✅ P1/B2 |
 | §5.2.7 地图/地形图配准：6 参数仿射、控制/检查点、残差 RMS | `registration.py`；`register_affine`/`register_image`、世界文件 | ✅ P1/B3 |
-| §7 接口：图层、剖面、晕渲、配准资源 | `webmap/app.py`；本地 FastAPI `/api/*` | ✅ P1/B3（只读单工程） |
-| §8 界面：地图、图层、属性、剖面图 | `webmap/static/`；Leaflet `CRS.Simple` + SVG 剖面 | ✅ P1/B3（演示级） |
+| §4 数据模型：Project/Point/Observation/Scenario/Snapshot/Result | `store.py`；SQLite 六表、方案版本/父方案、规范化快照与结果缓存 | ✅ C4（单工程只读） |
+| §7 接口：图层、剖面、晕渲、配准、报告资源 | `webmap/app.py`；FastAPI `/api/scenarios`、`/api/scenario/{id}`、`/api/report` 等 | ✅ C4（只读单工程） |
+| §8 界面：地图、图层、属性、剖面图、方案切换、报告 | `webmap/static/`；Leaflet `CRS.Simple` + SVG 剖面 + 方案下拉 + 报告按钮 | ✅ C4（演示级） |
 | §10.2 第 13 节黄金回归 | `examples.py`、`tests/test_section13.py` | ✅ 全部通过 |
 | §10.3 水准模块验证：闭合差、秩 1、`Σr_i`、三角高程公式 | `tests/test_leveling.py` | ✅ 全部通过 |
 | §10.3 DEM 模块验证：平面/斜面/山脊、曲率折光、插值、晕渲 | `tests/test_terrain.py` | ✅ 全部通过 |
 | 数据模型（点、观测、网、方案） | `model.py`；不可变计算入口，直接构造 `Network`/`Scenario` | ✅ MVP |
-| 报告与图件 | `report.py`、`plot.py`、`scripts/run_demo.py` | ✅ MVP |
+| 工程持久化 / 快照 / 结果缓存 | `store.py`；SQLite、`input_hash`、`get_or_compute_result` | ✅ C4 |
+| 报告与图件 | `report.py`（文本表）、`reportgen.py`（Markdown/HTML/DOCX）、`plot.py`、`scripts/run_demo.py` | ✅ C4 |
 | 地图/离线底图/MBTiles、扫描图配准 | `webmap/` 的单工程 DEM imageOverlay、扫描图配准与半透明叠加；MBTiles/矢量瓦片未实现 | ⚠️ 部分（B3） |
 | GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3） |
-| FastAPI/数据库/工程包/快照持久化 | `webmap/app.py` 只读 FastAPI 服务；无数据库、工程包与快照 | ⚠️ 部分（B3） |
+| FastAPI/数据库/工程包/快照持久化 | `store.py` + `webmap/app.py`：SQLite 单工程、方案快照/结果缓存；工程包（zip/manifest）、多工程写入、迁移框架未实现 | ⚠️ 部分（C4） |
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
 | geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
 | GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
@@ -117,10 +128,16 @@ cd /workspace/ctrlnet-design
   `marginal`/NoData `unknown` 四态、晕渲范围 `[0,1]` 与等高线冒烟测试；
 - `tests/test_registration.py`：已知仿射精确恢复、加噪 RMS 合理性、少于 3 点/
   共线/非法权值报错、PNG 配准与 `.pgw`/`.tfw` 世界文件往返；
+- `tests/test_store.py`：SQLite 保存/读回往返、规范化 JSON、快照确定性、
+  同一 `input_hash` 结果缓存、重新打开数据库结果一致、父方案版本、
+  修改/追加观测后哈希变化；
+- `tests/test_report.py`：Markdown 12 个章节、HTML base64 自包含、方案对比、
+  DOCX（有 pandoc 时）、CLI 与未知方案错误；
 - `tests/test_webmap.py`：TestClient 覆盖页面、离线 Leaflet 静态资源、
-  `/api/project`、`/api/layers`、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
+  `/api/project`、`/api/scenarios`、`/api/scenario/{id}`、`/api/layers` 方案切换、
+  `/api/report` HTML/MD/DOCX、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`93 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
+预期结果：`114 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -133,7 +150,10 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
 .venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
 .venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
-.venv/bin/ctrlnet-web                          # B3 本地网页地图（127.0.0.1:8765）
+.venv/bin/python scripts/build_demo_project.py # C4 生成 SQLite 演示工程
+.venv/bin/python -m ctrlnet.report \
+  --project data/sample/demo_project.sqlite --out outputs/report  # C4 设计报告
+.venv/bin/ctrlnet-web                          # C4 本地网页地图（127.0.0.1:8765）
 # 或：.venv/bin/python -m ctrlnet.webmap --port 8765
 ```
 
@@ -143,8 +163,14 @@ cd /workspace/ctrlnet-design
 Copernicus GLO-30 子区域上选 7 个高地控制点，做全部 21 对通视分析，并用通视
 距离/角度边构网，输出地形图、剖面图、CSV、误差椭圆图与示例工程 JSON。
 `make_scan_sample.py` 生成 `data/sample/scan_sample.png` 与 4 对控制点/2 个检查点
-元数据；`ctrlnet-web` 启动只绑定回环地址的网页地图，浏览器访问
-`http://127.0.0.1:8765/`。
+元数据；`build_demo_project.py` 把第 13 节两方案与 DEM 全部通视边/优化方案写入
+`data/sample/demo_project.sqlite`；`python -m ctrlnet.report` 生成设计报告；
+`ctrlnet-web` 启动只绑定回环地址的网页地图，浏览器访问
+`http://127.0.0.1:8765/`，可在左栏切换方案并下载报告。
+
+报告生成命令也支持 `--scenario s13-added`（按 id 或名称）、`--title`、
+`--confidence`、`--no-docx` 与 `--basename`；默认输出
+`outputs/report/design_report.md`、`.html`、`.docx` 与 `assets/*.png`。
 
 Notebook 与脚本同源（`scripts/build_notebook.py` 从脚本的 `# %%` 单元生成），
 已执行版本在 `notebooks/demo.ipynb`，kernel 名为 `ctrlnet-venv`。重新生成并执行：
@@ -200,8 +226,16 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `intervisibility_profiles.png` | 6 条代表性剖面：地形、两端连线、曲率/折光视线、遮挡点与最小净空 |
 | `intervisibility.csv` | 全部点对的 `status/visible/min_clearance`、遮挡位置、仪器高/目标高、`k/R`、采样数 |
 | `dem_network_ellipses.png` | 只用通视距离/角度边的平面网 95% 误差椭圆叠加在晕渲图上（图题注明放大倍数） |
-| `webmap_screenshot.png` | B3 本地网页地图首屏：DEM 晕渲/等高线/观测线/误差椭圆、配准影像与 4 点 RMS |
-| `webmap_profile_screenshot.png` | B3 网页剖面：P1→P6 地形线、曲率折光视线、遮挡点与净空 |
+| `webmap_screenshot.png` | C4 本地网页地图首屏：方案下拉、报告按钮、DEM 晕渲/等高线、全部通视边与椭圆 |
+| `webmap_scenario_screenshot.png` | C4 切换到“DEM 优化方案（预算 12）”后：点/观测/椭圆/统计刷新 |
+| `webmap_profile_screenshot.png` | B3 网页剖面：P1→P6 地形线、曲率折光视线、遮挡点与净空（历史截图） |
+| `report/design_report.md` | C4 设计报告 Markdown：工程概况、点/观测、精度、椭圆、边、可靠性、对比、建议、通视、图表 |
+| `report/design_report.html` | C4 自包含 HTML（PNG 以 base64 内嵌，可离线打开） |
+| `report/design_report.docx` | C4 DOCX（本机 pandoc 转换；失败自动跳过） |
+| `report/assets/design_network.png` | 报告网图与 95% 误差椭圆 |
+| `report/assets/design_reliability.png` | 报告可靠性 `r_i` 柱状图与 0.1/0.3 阈值线 |
+| `report/assets/design_scenario_comparison.png` | 报告方案对比：各方案最大点位中误差 |
+| `report/assets/design_visibility.png` | 报告通视最小净空图（通视绿/遮挡红） |
 
 图件中如检测不到中文字体，会自动退回英文标签，避免方框乱码；本机有 Noto CJK
 字体时使用中文。误差椭圆在网图中做了 1000 倍放大，图题中已注明。
@@ -401,79 +435,102 @@ cs = contours(dem, levels=20)                       # Matplotlib QuadContourSet
 UTM E/N / 高程 / 固定标志、`σE/σN/mp`、95% 椭圆半轴与方位、通视距离/角度
 观测、全部点对的通视状态与遮挡位置、DEM 来源/版本/垂直基准及 k/R/阈值。
 
-## 9. 本地网页地图（B3）
+## 9. 本地网页地图与方案切换（C4）
 
 ### 9.1 启动与安全边界
 
-网页地图是**只读单工程演示**，不写回工程、不需要账号，也不应暴露到公网。
-服务只允许绑定回环地址（默认 `127.0.0.1:8765`），启动入口有两个：
+网页地图是**只读单工程演示**，数据来自 `data/sample/demo_project.sqlite`，
+不写回工程、不需要账号，也不应暴露到公网。服务只允许绑定回环地址
+（默认 `127.0.0.1:8765`），启动入口有两个：
 
 ```bash
 cd /workspace/ctrlnet-design
 .venv/bin/pip install -e ".[test,webmap]"
+.venv/bin/python scripts/build_demo_project.py   # 可选：重建 SQLite 演示工程
 
 .venv/bin/ctrlnet-web --port 8765
 # 等价：.venv/bin/python -m ctrlnet.webmap --port 8765
-# 指定其他工程：--project /path/to/terrain_project.json
+# 指定其他 SQLite 工程：--project /path/to/demo_project.sqlite
+# 也可用环境变量 CTRLNET_DB
 ```
 
 浏览器访问 `http://127.0.0.1:8765/`。`--host` 仅接受 `127.0.0.1`、`localhost`
 和 `::1`；传入公网地址会直接拒绝启动。FastAPI 的 OpenAPI 文档在
-`/api/docs`，但页面本身不依赖外部 CDN 或在线底图。
+`/api/docs`，页面本身不依赖外部 CDN 或在线底图。
 
 前端 Leaflet 1.9.4 的 JS/CSS/图标已放在
 `src/ctrlnet/webmap/static/leaflet/`（含 MIT LICENSE），随 wheel 一起打包；
 页面只请求本机 `/static`、`/api` 和本机 PNG，不访问 `unpkg`、Google Fonts
 或任何瓦片服务，因此断网可用。
 
-### 9.2 页面与图层
+### 9.2 方案切换、页面与图层
 
-页面采用 Leaflet `CRS.Simple`，直接把样例 DEM 的 UTM 50N 米制 `(E,N)` 作为
-地图坐标，避免在浏览器里重复做投影。默认视图覆盖 `data/sample/terrain_project.json`
-的 7 个控制点，图层顺序与方案 §8 一致（底图→地形→控制网→结果）：
+`demo_project.sqlite` 包含四个方案：
+
+| 方案 id | 名称 | 内容 |
+|---|---|---|
+| `s13-base` | 第 13 节基准方案 | A/B 固定、C/D 待定，5 距离 + 2 角度；几何与黄金算例一致，仅整体平移到 DEM 范围 |
+| `s13-added` | 第 13 节增补方案 | 父方案 `s13-base`，增加角 D-C-A |
+| `dem-all` | DEM 全部通视边 | 7 点，16 条通视距离 + 60 个通视水平角（76 观测） |
+| `dem-opt` | DEM 优化方案（预算 12） | 全部 16 条通视距离 + 9 个优化选出的通视角度（25 观测） |
+
+左栏“方案切换”下拉框调用 `/api/scenario/{id}` 与 `/api/layers?scenario=`，
+切换后重新绘制控制点、观测线、误差椭圆、左上统计与方案元数据（观测数、
+max mp、min r_i、通视对数、冗余数、父方案、快照哈希），并把视图缩放到该方案
+点集。顶部“下载报告”按钮按当前方案下载 HTML，旁边 MD/DOCX 提供其他格式。
+
+页面采用 Leaflet `CRS.Simple`，直接把样板 DEM 的 UTM 50N 米制 `(E,N)` 作为
+地图坐标，避免在浏览器里重复做投影。图层顺序与方案 §8 一致
+（底图→地形→控制网→结果）：
 
 | 图层 | 来源/样式 | 交互 |
 |---|---|---|
 | DEM 晕渲 + 分层设色 | `terrain.hillshade` + 高程调色板，后端渲染为 PNG imageOverlay | 透明度/开关 |
 | 等高线 | `contours()` 提取 50 m 等高线，输出 GeoJSON LineString；每 5 条加粗 | 开关 |
-| 观测线 | `visibility` 的 21 对点；通视绿色实线、遮挡红色虚线 | 点击显示平距、最小净空、遮挡点坐标/高程 |
-| 95% 误差椭圆 | 以 `ellipse_95` 的 a/b/方位角生成多边形，图上放大 50 000× | 点击显示半轴 mm、方位角、置信度与放大倍数 |
+| 观测线 | 方案距离（通视绿/遮挡红/无通视蓝）、角度两条蓝色虚线射线、未作为设计观测的遮挡检查线 | 点击显示平距、净空、遮挡点、r_i/MDB 或角度值 |
+| 95% 误差椭圆 | 以 `ellipse_95` 的 a/b/方位角生成多边形；放大倍数按方案网形范围自适应 | 点击显示半轴 mm、方位角、置信度与放大倍数 |
 | 控制点 | 固定点三角形、待定点空心圆，永久点名标签 | 点击显示 E/N、经纬度、DEM 高程、σE/σN、mp、椭圆 |
 | 配准影像 | 后端按 4 点仿射重采样后的半透明 RGBA PNG | 开关；控制点/检查点有独立符号与残差提示 |
 
 页面点击地图两点即可请求 `/api/profile`，右侧绘制 SVG 剖面：地形填充、
 两端连线、曲率/折光视线、红色遮挡点、最小净空和采样数。也可以点击观测线
-查看同一信息；示例截图用 `P1→P6`（遮挡，最小净空约 −51.31 m）。
+查看同一信息；`P1→P6` 为遮挡示例（最小净空约 −51.31 m）。
 
 ### 9.3 本地 API
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/project` | 工程元数据、点、观测、通视结果、DEM 摘要与 API 入口 |
-| GET | `/api/layers` | 图层清单；等高线/观测线/椭圆/控制点以 GeoJSON 内联返回 |
+| GET | `/api/project?scenario=` | 工程/方案元数据、点、观测、通视、统计、快照哈希与 API 入口 |
+| GET | `/api/scenarios` | 方案列表：id、名称、版本、父方案、观测数 |
+| GET | `/api/scenario/{id}` | 单方案详情：点精度/椭圆、观测/可靠性、通视、统计 |
+| GET | `/api/layers?scenario=` | 图层清单；等高线/观测线/椭圆/控制点以 GeoJSON 内联返回 |
 | GET | `/api/overlay/hillshade.png` | DEM 晕渲 + 分层设色 PNG（NoData 透明） |
 | GET | `/api/profile?from=&to=` | `from`/`to` 可点名（如 `P1`）或 `E,N`；返回剖面、视线、净空、遮挡 JSON |
+| GET | `/api/report?scenario=&format=` | 设计报告：`html`（自包含，默认）、`md`、`docx`；带下载文件名 |
+| GET | `/api/report.md?scenario=` | Markdown 报告快捷入口 |
+| GET | `/api/report.docx?scenario=` | DOCX 报告快捷入口（pandoc 不可用时 503） |
 | GET | `/api/registration/demo` | 4 对控制点拟合结果、逐点残差、RMS、检查点 RMS、叠加范围 |
 | GET | `/api/registration/demo/image.png` | 示例扫描图原始 PNG |
 | GET | `/api/registration/demo/overlay.png` | 配准后重采样的半透明叠加 PNG |
 | GET | `/api/health` | 健康检查，截图/部署探活使用 |
 
-实现中 DEM、等高线、晕渲 PNG 与配准叠加均进程内缓存；首次请求做计算，
-后续请求直接复用。`/api/layers` 的等高线数据约 3.5 万个顶点，适合单工程本地
-浏览；更大范围应改为矢量瓦片并按视窗加载。
+实现中 DEM、等高线、晕渲 PNG、方案图层与报告均进程内缓存；结果由
+`get_or_compute_result` 按 `input_hash` 从 SQLite `results` 表读取。首次请求
+做计算，后续直接复用。`/api/layers` 的等高线数据约 3.5 万个顶点，适合单工程
+本地浏览；更大范围应改为矢量瓦片并按视窗加载。
 
 ### 9.4 截图
 
-`outputs/webmap_screenshot.png` 为首屏（1440×900，Chromium 无头），
-`outputs/webmap_profile_screenshot.png` 为调用 `showProfile('P1','P6')` 后的
-剖面页。截图命令可用：
+`outputs/webmap_screenshot.png` 为首屏（1440×900，Chromium 无头），显示
+方案下拉与“下载报告”按钮；`outputs/webmap_scenario_screenshot.png` 为切换到
+`dem-opt` 后的方案页。截图命令可用：
 
 ```bash
 # 终端 1
 .venv/bin/ctrlnet-web --port 8765
 # 终端 2：Playwright 已装在 /workspace/venvs/lab 时
 /workspace/venvs/lab/bin/python scripts/capture_webmap_screenshots.py
-# 可传 --url/--profile-from/--profile-to；脚本不会启动或关闭服务
+# 可传 --url/--scenario；脚本只访问 127.0.0.1，不启动或关闭服务
 ```
 
 当前网页地图的边界：单工程只读、无工程树/编辑/保存、无 MBTiles/XYZ 矢量
@@ -750,22 +807,26 @@ ctrlnet-design/
 │   ├── leveling.py            # 1D 水准/高程网、三角高程、高程可靠性、路线图
 │   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
 │   ├── registration.py        # 六参数仿射、残差/RMS、世界文件
+│   ├── store.py               # C4 SQLite 工程库、快照 input_hash、结果缓存
+│   ├── reportgen.py           # C4 Markdown/自包含 HTML/DOCX 设计报告
 │   ├── webmap/                # 本地 FastAPI 服务 + 离线 Leaflet 页面
-│   │   ├── app.py             # /api/project、/api/layers、/api/profile 等
-│   │   ├── state.py           # 工程/DEM/图层/配准叠加缓存
-│   │   ├── render.py          # 晕渲 PNG、等高线 GeoJSON、影像重采样
+│   │   ├── app.py             # /api/scenarios、/api/scenario、/api/report 等
+│   │   ├── state.py           # SQLite 方案/DEM/图层/报告/配准缓存
+│   │   ├── render.py          # 晕渲 PNG、等高线/观测 GeoJSON、影像重采样
 │   │   └── static/            # index.html、app.js、style.css、leaflet/
 │   ├── compare.py             # 方案对比
 │   ├── optimize.py            # 贪心/局部搜索/精确分支定界/MILP 代理
 │   ├── plot.py                # 网图与椭圆
-│   ├── report.py              # 中文表格
+│   ├── report.py              # 中文表格 + `python -m ctrlnet.report` 入口
 │   └── examples.py            # 第 13 节两方案
-├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、Web API
+├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、存储、报告、Web API
 │   ├── test_exact_optimizer.py # C2 分支定界/穷举/预算/设站成本/五准则/MILP
 │   ├── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
 │   ├── test_robust.py         # 模拟观测/高斯-牛顿/粗差探测/稳健估计
 │   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
-│   └── test_webmap.py         # FastAPI TestClient 与离线静态资源
+│   ├── test_store.py          # C4 SQLite 往返/快照哈希/结果缓存/方案版本
+│   ├── test_report.py         # C4 Markdown/HTML/DOCX/章节/图表/CLI
+│   └── test_webmap.py         # 方案切换、图层、报告 API 与离线静态资源
 ├── scripts/
 │   ├── run_demo.py            # 平面网演示主脚本
 │   ├── run_leveling_demo.py   # 水准/三角高程演示
@@ -774,18 +835,21 @@ ctrlnet-design/
 │   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
 │   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
-│   ├── capture_webmap_screenshots.py  # Playwright 无头截图
+│   ├── build_demo_project.py  # C4 生成 demo_project.sqlite（4 方案）
+│   ├── capture_webmap_screenshots.py  # Playwright 无头截图（首屏/方案切换）
 │   └── build_notebook.py      # 由脚本生成 notebook
 ├── data/
 │   ├── cache/                 # DEM 原始大文件（gitignore）
 │   └── sample/
 │       ├── dem_sample.tif     # 289×374、30 m 裁剪样本（约 0.3 MB）
 │       ├── dem_sample.json    # 来源/CRS/垂直基准/范围/校验和
-│       ├── terrain_project.json  # 网页地图示例工程
+│       ├── terrain_project.json  # B2 DEM 示例工程（报告/网页的 DEM 元数据源）
+│       ├── demo_project.sqlite   # C4 SQLite 工程（约 108 KiB，4 个方案）
 │       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
 │       └── registration_demo.json  # 4 控制点 + 2 检查点 + 已知仿射
 ├── notebooks/demo.ipynb       # 已执行的演示 notebook
 ├── outputs/                   # 图件、CSV、网页截图、results.md（提交）
+│   └── report/                # C4 design_report.md/html/docx + assets/*.png
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -825,8 +889,132 @@ ctrlnet-design/
   需要时用 `existing_stations` 显式声明。MILP 为线性代理近似，不能替代
   精确解或最终平差复算。
 - 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
-  3D 联合、数据库、多工程与编辑。
+  3D 联合、跨基线完整 VCV 与 Helmert 基准。
+- C4 SQLite 工程库为**单工程只读演示**：`projects/points/observations/scenarios/
+  snapshots/results` 六表已实现，支持方案版本/父方案、规范化快照与
+  `input_hash` 结果缓存；尚未实现多工程编辑、并发写锁、迁移框架
+  （Alembic/schema_version 升级）、审计与工程包（zip/manifest）。
+- 报告为设计态报告：HTML 中图片 base64 内嵌；Markdown 使用 `assets/` 相对路径；
+  DOCX 依赖本机 pandoc，失败时自动跳过。未实现 PDF、报告模板选择与签名。
+- 网页地图报告由 SQLite 结果实时生成并在进程内缓存；方案切换只读，不写回数据库。
 - 网页地图只绑定回环地址，无鉴权、只读单工程；扫描图配准为 6 参数仿射，
   未实现多项式/TPS/RPC、影像裁切持久化与任意客户端旋转 warp。
 - MBTiles/矢量瓦片/在线底图未实现；当前 DEM 以单张 imageOverlay 叠加，
   大范围浏览需改为按视窗渲染的 XYZ 瓦片。
+
+## 15. 工程持久化、设计报告与方案切换（C4）
+
+### 15.1 SQLite 工程库
+
+`src/ctrlnet/store.py` 只用标准库 `sqlite3`，表结构与重设计方案 §4.5 对应：
+
+| 表 | 关键字段 | 说明 |
+|---|---|---|
+| `projects` | id、name、schema_version、crs、metadata_json | 工程身份与 CRS |
+| `points` | project_id、name、e/n、fixed、sigma_e/n、elevation/lon/lat | 工程级点表 |
+| `scenarios` | id、project_id、name、version、parent_id、metadata_json | 方案版本与父方案 |
+| `observations` | id、scenario_id、kind、ordinal、enabled、payload_json | 按方案保存观测 |
+| `snapshots` | id、scenario_id、input_hash UNIQUE、payload_json | 规范化输入快照 |
+| `results` | input_hash PK、result_json、options_json | 按输入哈希缓存结果 |
+
+方案通过 `metadata.points` 选择本方案使用的点集，因此同一工程可同时容纳
+第 13 节 4 点网与 DEM 7 点网。模块级 API：
+
+```python
+from ctrlnet.store import (
+    save_project, load_project, create_scenario, list_scenarios,
+    snapshot, get_or_compute_result, update_observations,
+)
+
+project = load_project("data/sample/demo_project.sqlite")
+child = create_scenario(db, "增补", parent_id="s13-base")   # version=2
+snap = snapshot(db, "s13-added")                            # 规范化 JSON + SHA-256
+result = get_or_compute_result(db, "s13-added")             # 命中 results 缓存
+```
+
+`ProjectStore` 类提供同名方法；`get_or_compute_result` 首次计算也先写入
+`results` 再从 JSON 反序列化返回，因此首次与重新打开数据库后读取逐位一致。
+同一 `input_hash` 只计算一次；修改/追加观测后快照哈希变化，旧结果保留为历史。
+
+### 15.2 快照与结果缓存
+
+快照结构包含 `schema_version`、工程/网元数据、`parameter_order`、点、观测、
+随机模型与 `engine.options`；`canonical_json` 对键排序、浮点按 15 位有效数字
+规范化，拒绝 NaN/Inf，再计算 SHA-256。结果包含：
+
+- `network`：点数、观测数、参数数、秩、冗余数、条件数、参数顺序；
+- `points`：σE/σN、mp、标准/置信椭圆 a/b/方位角；
+- `edges`：边长、σs、相对精度分母；
+- `observations`：r_i、MDB（mm/角秒）、外部可靠性最大分量与影响点；
+- `reliability` 与 `summary`：min r_i、max MDB、最弱点/边、快照哈希。
+
+### 15.3 设计报告
+
+```bash
+.venv/bin/python -m ctrlnet.report \
+  --project data/sample/demo_project.sqlite --out outputs/report
+# 可选：--scenario s13-added --title "..." --confidence 0.95 --no-docx
+```
+
+`src/ctrlnet/reportgen.py` 生成：
+
+1. 工程概况与数据版本（快照哈希、引擎版本、生成时间）；
+2. 点与观测清单、先验精度模型、基准；
+3. 点位精度/误差椭圆表、边相对精度表；
+4. 可靠性（r_i / MDB / 外部）与汇总；
+5. 方案对比（全部方案 + 父方案差异）；
+6. 优化建议（最弱点/边、r_i/MDB/外部阈值、优化元数据）；
+7. DEM 通视结果表；
+8. 网图、可靠性图、方案对比图、通视净空图；
+9. 复现命令与结果缓存说明。
+
+Markdown 图片使用 `assets/` 相对路径；HTML 把 PNG 以 base64 内嵌，单文件可
+离线打开；DOCX 通过本机 pandoc 从 Markdown 转换，pandoc 缺失或失败时跳过并
+在 CLI 输出原因。`/api/report` 复用同一生成器，按方案缓存 HTML/MD/DOCX。
+
+### 15.4 网页方案切换与报告下载
+
+`data/sample/demo_project.sqlite` 由 `scripts/build_demo_project.py` 生成，
+含 `s13-base`、`s13-added`、`dem-all`、`dem-opt` 四个方案。网页新增：
+
+- 左栏方案下拉：`GET /api/scenarios` 填充，切换调用 `/api/scenario/{id}` 与
+  `/api/layers?scenario=`，刷新点、观测、椭圆、统计与视图范围；
+- 顶部报告按钮：`GET /api/report?scenario=...&format=html` 下载自包含 HTML；
+  相邻 MD/DOCX 按钮下载其他格式；
+- 观测图层同时显示距离、角度射线与未作为设计观测的遮挡检查线；
+- 方案元数据面板显示版本、父方案、观测数、max mp、min r_i、通视对数、
+  冗余数与快照哈希。
+
+### 15.5 测试与演示
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python scripts/build_demo_project.py
+.venv/bin/python -m ctrlnet.report --project data/sample/demo_project.sqlite \
+  --out outputs/report
+```
+
+`tests/test_store.py` 验证保存/读取往返、快照确定性、同一哈希缓存、修改观测
+后哈希变化、父方案版本与结果重新打开一致；`tests/test_report.py` 验证 Markdown
+章节、HTML base64 自包含、DOCX（有 pandoc 时）与 CLI；`tests/test_webmap.py`
+验证四方案列表、方案切换后的点/观测/椭圆/统计、图层 GeoJSON 与报告 API。
+
+## 16. 路线图完成度
+
+以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4 增量对照：
+
+| 阶段/能力 | 状态 | 已实现 | 未完成 |
+|---|---|---|---|
+| P0 基线/架构、§13 黄金回归 | ✅ 已完成 | `examples.py`、`tests/test_section13.py`、文档与目录 | — |
+| P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | 投影全链路、跨带 |
+| P2 水准/高程（B1） | ✅ 已完成 | 1D 水准、路线/环、三角高程、高程可靠性 | geoid、正常高/大地高转换 |
+| P2 GNSS（C3） | ❌ 未完成 | 仅二维基线（2×2 VCV） | 3D ECEF/ENU、跨基线完整 VCV、Helmert、LandXML |
+| P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
+| P3 投影归算 | ⚠️ 部分 | 局部 UTM 50N、DEM 米制坐标 | 投影尺度、子午线收敛角、grid/ground、跨带 |
+| P4 观测优化（C2） | ✅ 小规模精确 | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理 | Pareto 前沿、大规模 MICP、成本模型持久化 |
+| C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计、工程包 |
+| C4 设计报告 | ✅ 已完成 | Markdown、自包含 HTML、DOCX（pandoc）、图表与方案对比 | PDF、模板选择、签名 |
+| C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
+| P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
+| 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
+| VCE、3D 联合、多用户 | ❌ 未完成 | — | Helmert/VCE、3D 联合平差、多用户与权限 |

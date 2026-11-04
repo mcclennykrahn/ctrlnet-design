@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 from .adjustment import AdjustmentResult
 from .model import Network, Scenario
@@ -157,10 +157,22 @@ def report(*args: Any, **kwargs: Any) -> str:
     return format_report(*args, **kwargs)
 
 
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """命令行入口：``python -m ctrlnet.report --project ... --out ...``。"""
+    from .reportgen import main as _main
+
+    return _main(argv)
+
+
 __all__ = [
     "format_precision_table",
     "format_edge_table",
     "format_reliability_table",
     "format_report",
     "report",
+    "main",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
