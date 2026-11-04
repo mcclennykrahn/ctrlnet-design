@@ -228,6 +228,7 @@ def _observation_model_data(row: Mapping[str, Any]) -> Dict[str, Any]:
                 "to": str(pick("to")),
                 "a_m": float(pick("a", "a_m", "sigma_a_m", default=0.002)),
                 "b_ppm": float(pick("b_ppm", "sigma_b_ppm", default=2.0)),
+                "sigma_model": str(pick("sigma_model", default="quadrature")),
             }
         )
         value = pick("value_m", "value")
@@ -290,6 +291,7 @@ def observation_to_model(data: Mapping[str, Any]) -> Any:
             data["to"],
             a=float(data.get("a_m", data.get("a", 0.002))),
             b_ppm=float(data.get("b_ppm", 2.0)),
+            sigma_model=str(data.get("sigma_model", "quadrature")),
         )
     if kind == "angle":
         return Angle(

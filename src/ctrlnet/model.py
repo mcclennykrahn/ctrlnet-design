@@ -80,13 +80,19 @@ class Point:
 class Distance(Observation):
     """两点间平距观测。
 
-    先验标准差：``sigma(s) = sqrt(a^2 + (b_ppm * 1e-6 * s)^2)``，单位米。
+    先验标准差（单位米）由 ``sigma_model`` 选择：
+
+    - ``"quadrature"``（默认，平方和）：``sqrt(a^2 + (b_ppm * 1e-6 * s)^2)``；
+    - ``"linear"``（论文式 3-37，线性相加）：``a + b_ppm * 1e-6 * s``。
+
+    其中 ``a`` 为固定误差（米），``b_ppm`` 为比例误差（ppm）。
     """
 
     frm: PointRef
     to: PointRef
     a: float = 0.002
     b_ppm: float = 2.0
+    sigma_model: str = "quadrature"
 
     kind = "distance"
 
@@ -95,6 +101,10 @@ class Distance(Observation):
         self.to = point_name(self.to)
         self.a = float(self.a)
         self.b_ppm = float(self.b_ppm)
+        model = str(self.sigma_model).strip().lower()
+        if model not in ("quadrature", "linear"):
+            raise ValueError("sigma_model 只能是 'quadrature' 或 'linear'")
+        self.sigma_model = model
 
     @property
     def label(self) -> str:
@@ -104,10 +114,14 @@ class Distance(Observation):
         return (self.frm, self.to)
 
     def sigma(self, s: float) -> float:
-        return hypot(self.a, self.b_ppm * 1e-6 * abs(s))
+        scale = self.b_ppm * 1e-6 * abs(s)
+        if self.sigma_model == "linear":
+            return self.a + scale
+        return hypot(self.a, scale)
 
     def variance(self, s: float) -> float:
-        return self.a * self.a + (self.b_ppm * 1e-6 * s) ** 2
+        sigma = self.sigma(s)
+        return sigma * sigma
 
 
 @dataclass

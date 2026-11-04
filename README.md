@@ -36,6 +36,12 @@
   输出 Markdown / 自包含 HTML / 可选 DOCX（pandoc）；
 - 网页方案切换与报告下载：第 13 节基准/增补、DEM 全部通视边/优化方案，
   切换后刷新点、观测、椭圆与统计；`/api/report` 返回 HTML/Markdown/DOCX。
+- 论文第 3–5 章约定（`thesis.py`）：CGCS2000/WGS84 3° 带高斯正反算、
+  椭球面距离/方位、表 3-1 等级、σS=a+bS 线性测距先验、测角网 P=I 的
+  mm²/(″)² 精度估算、误差椭圆、坐标/角度拓扑文本导入导出；
+- 论文算例复现（`thesis_examples.py`）：算例 1 的 Qxx/Qyy/最弱点、图 5-7
+  边长分母反推，算例 2 的近似 Qxx/Qyy；网页数据在
+  `data/sample/thesis_example1.json`、`thesis_example2.json`。
 
 数值约定：内部长度/高程单位为米、角度/方向为弧度；显示时距离/高差用 mm，
 角度用角秒。DEM 计算使用米制局部 UTM 坐标。项目以设计阶段先验精度估算为主，
@@ -864,6 +870,8 @@ ctrlnet-design/
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
 │   ├── build_demo_project.py  # C4 生成 demo_project.sqlite（4 方案）
 │   ├── capture_webmap_screenshots.py  # Playwright 无头截图（首屏/方案切换）
+│   ├── build_thesis_samples.py  # 生成论文算例 JSON
+│   ├── run_thesis_demo.py     # 论文算例演示/CSV/网图
 │   └── build_notebook.py      # 由脚本生成 notebook
 ├── data/
 │   ├── cache/                 # DEM 原始大文件（gitignore）
@@ -874,6 +882,8 @@ ctrlnet-design/
 │       ├── terrain_project.json  # B2 DEM 示例工程（报告/网页的 DEM 元数据源）
 │       ├── demo_project.sqlite   # C4 SQLite 工程（约 108 KiB，4 个方案）
 │       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
+│       ├── thesis_example1.json  # 论文算例 1（点/线/角/拓扑/公布值/计算值）
+│       ├── thesis_example2.json  # 论文算例 2 近似版
 │       └── registration_demo.json  # 4 控制点 + 2 检查点 + 已知仿射
 ├── notebooks/demo.ipynb       # 已执行的演示 notebook
 ├── outputs/                   # 图件、CSV、网页截图、results.md（提交）
@@ -1144,7 +1154,95 @@ H, sigma_H = fit.normal_height(824.26, 20.7, -1860.7, sigma_h=0.004)
 测试覆盖：`tests/test_gnss.py` 的坐标往返、已知 ENU、协方差旋转、解析 `Cx`、
 联合精度不劣化、ζ 参数恢复与 EGM96 插值。第 13 节黄金期望值未修改。
 
-## 17. 路线图完成度
+## 17. 论文算法与算例复现（D1）
+
+本节实现 `docs/target/target_spec.md` 第 3 节的论文约定，并与现有平差引擎并存。
+所有计算离线完成，不访问任何在线瓦片/地图 API。
+
+### 17.1 快速开始
+
+```python
+from ctrlnet.thesis import (
+    gauss_forward, gauss_inverse, distance_sigma_mm, build_angle_network,
+    error_ellipse, export_coordinate_text, export_angle_topology,
+)
+
+x, y = gauss_forward(34.2, 117.2)                 # CM 117°E，y 含 500 km
+lat, lon = gauss_inverse(x, y, lon_hint=117.2)
+sigma = distance_sigma_mm(544.8431, a_mm=15, b_ppm=20, model="linear")
+```
+
+测距先验在 `Distance` 上也可选：
+
+```python
+from ctrlnet.model import Distance
+d = Distance("1", "2", a=0.015, b_ppm=20.0, sigma_model="linear")
+```
+
+### 17.2 论文约定
+
+- **高斯投影**：Krüger n⁶ 级数，CGCS2000（默认）/WGS84，3° 带自动或指定
+  中央子午线，东坐标 +500 km；正反算往返 <1e-6 m，已用 PROJ 离线核对。
+- **测角网**：式 3-22，`ρ″=206265`、坐标改正以 mm 计，`P=I`；
+  `Q=(BᵀPB)⁻¹` 为 mm²/(″)²，`M=Mw·sqrt(Qxx+Qyy)` 为 mm。
+- **论文截图口径**：`Q_paper = Q_mm2/100`（实际为 cm²/(″)²），
+  `ThesisNetworkResult` 同时提供 `q_mm2` 与 `paper_q()`；`M` 的 cm/mm
+  10 倍口径差见 `docs/target/reproduction.md`。
+- **误差椭圆**：式 3-38/3-39，`E/F` 与 `φE`；用 `atan2` 保证象限正确。
+- **角度拓扑**：论文三元组按数值验证为 `(测站, 后视, 前视)`；解析/导出
+  默认 `order="station_first"`，并支持 `"backsight_first"`。已知点 8/9
+  记为 -1/-2。
+- **文本**：坐标导出为 `点1；x，y` 逐行；支持解析回读。
+
+### 17.3 算例 1（9 点测角网）
+
+14 个已给角、`Mw=10″`：
+
+| 量 | 严格 mm² 口径 | 论文截图口径 |
+|---|---:|---:|
+| Qxx(1) | 65.0191 | **0.6502** |
+| Qyy(1) | 30.3890 | **0.3039** |
+| 最弱点 | 1 | 1 |
+| M1 | 97.677 mm | 9.768（论文标 0.97 cm） |
+
+图 5-7 的边长相对中误差分母反推为 `D = S / 0.01 m = 100·S`；17 条中 14 条
+完全一致，线 1/3/6 差 0.2/0.2/2.0 m，正好对应线库距离的截图转录差。
+
+正文称 19 个角，但公布 Q 精确等于 14 个角的满秩解；补 5 个真实角只会改善
+Q（穷举 C(13,5) 最佳为 0.4740/0.2473）。27 角优化的新增角未公布，13 元
+子集搜索最佳为 0.4129/0.1942，均不能精确复现，测试中标 `xfail` 并注明原因。
+完整记录见 [`docs/target/reproduction.md`](docs/target/reproduction.md)。
+
+### 17.4 算例 2（9 点边角网，近似）
+
+点位未公布，用 17 条线库边的距离/方位角以 soft-L1 重建局部坐标（残差约
+2 cm）。在 3 分钟上限内搜索“10 边 + 11 角”，二级参数 `a=15 mm`、
+`b=20 ppm`、`σS=a+bS`、`P=σ0²/σS²`（取 `σ0=10`），得到点 7 为最弱点：
+
+| 量 | 本仓库 | 论文公布 |
+|---|---:|---:|
+| Qxx(7)（论文口径） | 0.17153 | 0.1715 |
+| Qyy(7)（论文口径） | 0.15748 | 0.1575 |
+| M7（论文数值口径） | 5.736 | 0.57 cm=5.7 mm |
+
+观测选择与 σ0 是必要的近似假设，故只声称 4 位小数近似复现。
+
+### 17.5 命令与输出
+
+```bash
+.venv/bin/python scripts/build_thesis_samples.py
+.venv/bin/python scripts/run_thesis_demo.py
+.venv/bin/python -m pytest -q tests/test_thesis.py
+```
+
+- `data/sample/thesis_example1.json`、`thesis_example2.json`：网页用点/线/
+  角/拓扑/公布值/计算值/误差椭圆。
+- `outputs/thesis_results.md`、`thesis_example1_edges.csv`、
+  `thesis_example1_network.png`：演示结果与图。
+- `tests/test_thesis.py`：投影往返、PROJ 对照、等级表、线性 σ、拓扑/坐标
+  文本往返、误差椭圆、算例黄金断言与 2 个 `xfail`。
+
+## 18. 路线图完成度
 
 以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4 增量对照：
 
