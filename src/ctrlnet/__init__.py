@@ -4,7 +4,7 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-from .exceptions import CtrlnetError
+from .exceptions import CtrlnetError, RegistrationError
 from .adjustment import (
     AdjustmentResult,
     AdjustmentError,
@@ -70,6 +70,16 @@ from .reliability import (
     w_test,
 )
 
+from .registration import (
+    ControlPoint,
+    RegistrationResult,
+    read_world_file,
+    register_affine,
+    register_image,
+    transform_points,
+    world_file_path,
+    write_world_file,
+)
 from .terrain import (
     DEFAULT_CLEARANCE,
     DEFAULT_INSTRUMENT_HEIGHT,
@@ -137,6 +147,7 @@ __all__ = [
     "AdjustmentResult",
     "AdjustmentError",
     "CtrlnetError",
+    "RegistrationError",
     "RankDeficientError",
     "InvalidGeometryError",
     "InvalidPrecisionError",
@@ -216,6 +227,17 @@ from .report import (
     format_report,
     report,
 )
+
+__all__ += [
+    "ControlPoint",
+    "RegistrationResult",
+    "register_affine",
+    "register_image",
+    "read_world_file",
+    "write_world_file",
+    "world_file_path",
+    "transform_points",
+]
 
 __all__ += [
     "AffineTransform",

@@ -13,9 +13,24 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
+test = [
+    "pytest>=7",
+    "httpx>=0.27",
+    "fastapi>=0.110",
+    "pillow>=10",
+    "rasterio>=1.3",
+]
 demo = ["ipykernel>=6", "nbconvert>=7", "nbformat>=5"]
 terrain = ["rasterio>=1.3"]
+webmap = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pillow>=10",
+    "rasterio>=1.3",
+]
+
+[project.scripts]
+ctrlnet-web = "ctrlnet.webmap.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -23,6 +38,17 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["ctrlnet*"]
+
+[tool.setuptools.package-data]
+"ctrlnet.webmap" = [
+    "static/*.html",
+    "static/*.css",
+    "static/*.js",
+    "static/leaflet/*.js",
+    "static/leaflet/*.css",
+    "static/leaflet/LICENSE",
+    "static/leaflet/images/*.png",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

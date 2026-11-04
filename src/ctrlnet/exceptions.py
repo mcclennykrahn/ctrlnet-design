@@ -45,10 +45,15 @@ class InvalidGeometryError(AdjustmentError):
     """几何退化（重合点、零长度边、无法定义的角等）。"""
 
 
+class RegistrationError(CtrlnetError, ValueError):
+    """影像仿射配准失败（控制点不足、共线、坐标非法等）。"""
+
+
 __all__ = [
     "CtrlnetError",
     "AdjustmentError",
     "RankDeficientError",
     "InvalidPrecisionError",
     "InvalidGeometryError",
+    "RegistrationError",
 ]

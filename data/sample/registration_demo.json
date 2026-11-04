@@ -1,0 +1,103 @@
+{
+  "schema": "ctrlnet.registration_demo/1",
+  "generated_by": "scripts/make_scan_sample.py",
+  "description": "示例扫描地形图 + 4 对控制点 + 2 个独立检查点",
+  "image": "scan_sample.png",
+  "image_width": 780,
+  "image_height": 820,
+  "pixel_convention": "origin at upper-left pixel corner, col right, row down",
+  "source_affine": [
+    10.0,
+    1.0,
+    414400.0,
+    -0.8,
+    -12.0,
+    4427200.0
+  ],
+  "source_affine_convention": "E=a*col+b*row+c, N=d*col+e*row+f",
+  "source_affine_note": "生成扫描图时使用的已知仿射；配准时只使用 control_points",
+  "control_points": [
+    {
+      "label": "P1",
+      "col": 47.466,
+      "row": 487.669,
+      "E": 415358.434954206,
+      "N": 4421306.613385118,
+      "nominal_col": 47.046,
+      "nominal_row": 487.979,
+      "pixel_offset": [
+        0.42,
+        -0.31
+      ]
+    },
+    {
+      "label": "P2",
+      "col": 360.286,
+      "row": 352.353,
+      "E": 418358.434954206,
+      "N": 4422686.613385118,
+      "nominal_col": 360.636,
+      "nominal_row": 352.073,
+      "pixel_offset": [
+        -0.35,
+        0.28
+      ]
+    },
+    {
+      "label": "P6",
+      "col": 479.98,
+      "row": 332.017,
+      "E": 419528.434954206,
+      "N": 4422836.613385118,
+      "nominal_col": 479.68,
+      "nominal_row": 331.637,
+      "pixel_offset": [
+        0.3,
+        0.38
+      ]
+    },
+    {
+      "label": "P7",
+      "col": 331.927,
+      "row": 726.129,
+      "E": 418448.434954206,
+      "N": 4418216.613385118,
+      "nominal_col": 332.197,
+      "nominal_row": 726.469,
+      "pixel_offset": [
+        -0.27,
+        -0.34
+      ]
+    }
+  ],
+  "check_points": [
+    {
+      "label": "P3",
+      "col": 31.682,
+      "row": 643.829,
+      "E": 415358.434954206,
+      "N": 4419446.613385118,
+      "nominal_col": 31.442,
+      "nominal_row": 644.019,
+      "pixel_offset": [
+        0.24,
+        -0.19
+      ]
+    },
+    {
+      "label": "P4",
+      "col": 189.315,
+      "row": 443.703,
+      "E": 416738.434954206,
+      "N": 4421726.613385118,
+      "nominal_col": 189.495,
+      "nominal_row": 443.483,
+      "pixel_offset": [
+        -0.18,
+        0.22
+      ]
+    }
+  ],
+  "opacity": 0.48,
+  "crs": "EPSG:32650"
+}

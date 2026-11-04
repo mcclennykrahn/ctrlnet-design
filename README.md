@@ -1,6 +1,7 @@
 # ctrlnet — 平面/高程控制网精度估算与优化设计（MVP 计算核心）
 
-`ctrlnet` 是一个纯 Python、无 GUI 的平面/高程控制网**设计态（先验）**计算核心，
+`ctrlnet` 是一个纯 Python 的平面/高程控制网**设计态（先验）**计算核心，并附带
+可选的本地只读网页地图（FastAPI + 离线 Leaflet），
 实现 [`docs/redesign_plan.md`](docs/redesign_plan.md) 中“平面控制网精度估算与优化
 设计”重设计方案的 MVP 与 P1/P2 部分能力：
 
@@ -13,6 +14,8 @@
 - 三角高程：斜距/平距 + 天顶距、仪器高/目标高、曲率折光改正与误差传播；
 - DEM 地形：GeoTIFF 读取、双线性采样、剖面、曲率/折光通视、晕渲与等高线；
 - 通视约束网：只用通视的距离/角度边做平面平差，并把 95% 误差椭圆叠加到晕渲图；
+- 本地网页地图：FastAPI + 包内离线 Leaflet，晕渲/等高线/控制点/观测线/误差椭圆与两点剖面；
+- 六参数仿射影像配准：最小二乘、逐点残差/RMS、`.pgw`/`.tfw` 世界文件与网页 4 点配准演示；
 - 方案对比、贪心观测增补优化（最大 `mp`、trace、最弱边）；
 - 第 13 节黄金算例的精度与可靠性回归；
 - 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告。
@@ -35,14 +38,17 @@
 | §5.2 坐标与投影：局部 UTM、经纬度↔米制转换 | `fetch_dem.py`、`terrain.py`；样例重投影到 EPSG:32650 | ✅ P1/B2（局部） |
 | §5.7 DEM 通视：双线性采样、剖面、曲率/折光、四态判定 | `terrain.py`；`DEM`、`profile`、`intervisibility` | ✅ P1/B2 |
 | §5.7 地形渲染：晕渲、等高线 | `terrain.py`；`hillshade`、`contours` | ✅ P1/B2 |
+| §5.2.7 地图/地形图配准：6 参数仿射、控制/检查点、残差 RMS | `registration.py`；`register_affine`/`register_image`、世界文件 | ✅ P1/B3 |
+| §7 接口：图层、剖面、晕渲、配准资源 | `webmap/app.py`；本地 FastAPI `/api/*` | ✅ P1/B3（只读单工程） |
+| §8 界面：地图、图层、属性、剖面图 | `webmap/static/`；Leaflet `CRS.Simple` + SVG 剖面 | ✅ P1/B3（演示级） |
 | §10.2 第 13 节黄金回归 | `examples.py`、`tests/test_section13.py` | ✅ 全部通过 |
 | §10.3 水准模块验证：闭合差、秩 1、`Σr_i`、三角高程公式 | `tests/test_leveling.py` | ✅ 全部通过 |
 | §10.3 DEM 模块验证：平面/斜面/山脊、曲率折光、插值、晕渲 | `tests/test_terrain.py` | ✅ 全部通过 |
 | 数据模型（点、观测、网、方案） | `model.py`；不可变计算入口，直接构造 `Network`/`Scenario` | ✅ MVP |
 | 报告与图件 | `report.py`、`plot.py`、`scripts/run_demo.py` | ✅ MVP |
-| 地图/离线底图/MBTiles、扫描图配准 | — | ❌ 未实现（后续 UI/GIS） |
-| GUI、工程树、地图选点、交互编辑 | — | ❌ 未实现 |
-| FastAPI/数据库/工程包/快照持久化 | — | ❌ 未实现（当前为内存对象） |
+| 地图/离线底图/MBTiles、扫描图配准 | `webmap/` 的单工程 DEM imageOverlay、扫描图配准与半透明叠加；MBTiles/矢量瓦片未实现 | ⚠️ 部分（B3） |
+| GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3） |
+| FastAPI/数据库/工程包/快照持久化 | `webmap/app.py` 只读 FastAPI 服务；无数据库、工程包与快照 | ⚠️ 部分（B3） |
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
 | geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
 | GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
@@ -51,15 +57,17 @@
 
 ## 2. 安装
 
-要求 Python ≥ 3.9。运行时依赖 `numpy>=1.24`、`matplotlib>=3.6`；测试 extra 提供
-`pytest`，演示/Notebook extra 提供 `ipykernel`、`nbconvert`、`nbformat`，DEM
-GeoTIFF 读取 extra 提供 `rasterio`。
+要求 Python ≥ 3.9。运行时依赖 `numpy>=1.24`、`matplotlib>=3.6`；`test` extra
+提供 `pytest`、`httpx`、`fastapi`、`pillow`、`rasterio`，`demo` extra 提供
+`ipykernel`、`nbconvert`、`nbformat`，`terrain` extra 提供 `rasterio`，
+`webmap` extra 提供 FastAPI/uvicorn/pillow/rasterio。
 
 ```bash
 cd /workspace/ctrlnet-design
 python3 -m venv .venv
-.venv/bin/pip install -e ".[test,demo,terrain]"   # 只跑测试可改用 ".[test]"
+.venv/bin/pip install -e ".[test,demo,terrain,webmap]"  # 只跑测试可改用 ".[test]"
 # 只跑 B2 DEM 演示：.venv/bin/pip install -e ".[test,terrain]"
+# 只跑 B3 网页地图：.venv/bin/pip install -e ".[test,webmap]"
 ```
 
 `pip install -e` 会按 `pyproject.toml` 的 `src` 布局注册 editable 包，测试和演示
@@ -92,9 +100,13 @@ cd /workspace/ctrlnet-design
   三角高程公式/球气差/斜距-平距等价/误差传播有限差分、`height_type` 属性；
 - `tests/test_terrain.py`：平面/斜面 DEM 的双线性插值精确性、剖面端点与步长、
   平地通视、高斯山脊遮挡、提高仪器高后通视、长距离曲率+折光下沉公式、
-  `marginal`/NoData `unknown` 四态、晕渲范围 `[0,1]` 与等高线冒烟测试。
+  `marginal`/NoData `unknown` 四态、晕渲范围 `[0,1]` 与等高线冒烟测试；
+- `tests/test_registration.py`：已知仿射精确恢复、加噪 RMS 合理性、少于 3 点/
+  共线/非法权值报错、PNG 配准与 `.pgw`/`.tfw` 世界文件往返；
+- `tests/test_webmap.py`：TestClient 覆盖页面、离线 Leaflet 静态资源、
+  `/api/project`、`/api/layers`、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`47 passed`。
+预期结果：`63 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -104,6 +116,9 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_leveling_demo.py
 .venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
 .venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
+.venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
+.venv/bin/ctrlnet-web                          # B3 本地网页地图（127.0.0.1:8765）
+# 或：.venv/bin/python -m ctrlnet.webmap --port 8765
 ```
 
 `run_demo.py` 打印第 13 节两方案的关键精度/可靠性表，并生成平面网图件、CSV
@@ -111,6 +126,9 @@ cd /workspace/ctrlnet-design
 观测，生成高程点 CSV、中文结果与水准路线图。`run_terrain_demo.py` 在真实
 Copernicus GLO-30 子区域上选 7 个高地控制点，做全部 21 对通视分析，并用通视
 距离/角度边构网，输出地形图、剖面图、CSV、误差椭圆图与示例工程 JSON。
+`make_scan_sample.py` 生成 `data/sample/scan_sample.png` 与 4 对控制点/2 个检查点
+元数据；`ctrlnet-web` 启动只绑定回环地址的网页地图，浏览器访问
+`http://127.0.0.1:8765/`。
 
 Notebook 与脚本同源（`scripts/build_notebook.py` 从脚本的 `# %%` 单元生成），
 已执行版本在 `notebooks/demo.ipynb`，kernel 名为 `ctrlnet-venv`。重新生成并执行：
@@ -160,6 +178,8 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `intervisibility_profiles.png` | 6 条代表性剖面：地形、两端连线、曲率/折光视线、遮挡点与最小净空 |
 | `intervisibility.csv` | 全部点对的 `status/visible/min_clearance`、遮挡位置、仪器高/目标高、`k/R`、采样数 |
 | `dem_network_ellipses.png` | 只用通视距离/角度边的平面网 95% 误差椭圆叠加在晕渲图上（图题注明放大倍数） |
+| `webmap_screenshot.png` | B3 本地网页地图首屏：DEM 晕渲/等高线/观测线/误差椭圆、配准影像与 4 点 RMS |
+| `webmap_profile_screenshot.png` | B3 网页剖面：P1→P6 地形线、曲率折光视线、遮挡点与净空 |
 
 图件中如检测不到中文字体，会自动退回英文标签，避免方框乱码；本机有 Noto CJK
 字体时使用中文。误差椭圆在网图中做了 1000 倍放大，图题中已注明。
@@ -359,7 +379,164 @@ cs = contours(dem, levels=20)                       # Matplotlib QuadContourSet
 UTM E/N / 高程 / 固定标志、`σE/σN/mp`、95% 椭圆半轴与方位、通视距离/角度
 观测、全部点对的通视状态与遮挡位置、DEM 来源/版本/垂直基准及 k/R/阈值。
 
-## 9. 目录结构
+## 9. 本地网页地图（B3）
+
+### 9.1 启动与安全边界
+
+网页地图是**只读单工程演示**，不写回工程、不需要账号，也不应暴露到公网。
+服务只允许绑定回环地址（默认 `127.0.0.1:8765`），启动入口有两个：
+
+```bash
+cd /workspace/ctrlnet-design
+.venv/bin/pip install -e ".[test,webmap]"
+
+.venv/bin/ctrlnet-web --port 8765
+# 等价：.venv/bin/python -m ctrlnet.webmap --port 8765
+# 指定其他工程：--project /path/to/terrain_project.json
+```
+
+浏览器访问 `http://127.0.0.1:8765/`。`--host` 仅接受 `127.0.0.1`、`localhost`
+和 `::1`；传入公网地址会直接拒绝启动。FastAPI 的 OpenAPI 文档在
+`/api/docs`，但页面本身不依赖外部 CDN 或在线底图。
+
+前端 Leaflet 1.9.4 的 JS/CSS/图标已放在
+`src/ctrlnet/webmap/static/leaflet/`（含 MIT LICENSE），随 wheel 一起打包；
+页面只请求本机 `/static`、`/api` 和本机 PNG，不访问 `unpkg`、Google Fonts
+或任何瓦片服务，因此断网可用。
+
+### 9.2 页面与图层
+
+页面采用 Leaflet `CRS.Simple`，直接把样例 DEM 的 UTM 50N 米制 `(E,N)` 作为
+地图坐标，避免在浏览器里重复做投影。默认视图覆盖 `data/sample/terrain_project.json`
+的 7 个控制点，图层顺序与方案 §8 一致（底图→地形→控制网→结果）：
+
+| 图层 | 来源/样式 | 交互 |
+|---|---|---|
+| DEM 晕渲 + 分层设色 | `terrain.hillshade` + 高程调色板，后端渲染为 PNG imageOverlay | 透明度/开关 |
+| 等高线 | `contours()` 提取 50 m 等高线，输出 GeoJSON LineString；每 5 条加粗 | 开关 |
+| 观测线 | `visibility` 的 21 对点；通视绿色实线、遮挡红色虚线 | 点击显示平距、最小净空、遮挡点坐标/高程 |
+| 95% 误差椭圆 | 以 `ellipse_95` 的 a/b/方位角生成多边形，图上放大 50 000× | 点击显示半轴 mm、方位角、置信度与放大倍数 |
+| 控制点 | 固定点三角形、待定点空心圆，永久点名标签 | 点击显示 E/N、经纬度、DEM 高程、σE/σN、mp、椭圆 |
+| 配准影像 | 后端按 4 点仿射重采样后的半透明 RGBA PNG | 开关；控制点/检查点有独立符号与残差提示 |
+
+页面点击地图两点即可请求 `/api/profile`，右侧绘制 SVG 剖面：地形填充、
+两端连线、曲率/折光视线、红色遮挡点、最小净空和采样数。也可以点击观测线
+查看同一信息；示例截图用 `P1→P6`（遮挡，最小净空约 −51.31 m）。
+
+### 9.3 本地 API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/project` | 工程元数据、点、观测、通视结果、DEM 摘要与 API 入口 |
+| GET | `/api/layers` | 图层清单；等高线/观测线/椭圆/控制点以 GeoJSON 内联返回 |
+| GET | `/api/overlay/hillshade.png` | DEM 晕渲 + 分层设色 PNG（NoData 透明） |
+| GET | `/api/profile?from=&to=` | `from`/`to` 可点名（如 `P1`）或 `E,N`；返回剖面、视线、净空、遮挡 JSON |
+| GET | `/api/registration/demo` | 4 对控制点拟合结果、逐点残差、RMS、检查点 RMS、叠加范围 |
+| GET | `/api/registration/demo/image.png` | 示例扫描图原始 PNG |
+| GET | `/api/registration/demo/overlay.png` | 配准后重采样的半透明叠加 PNG |
+| GET | `/api/health` | 健康检查，截图/部署探活使用 |
+
+实现中 DEM、等高线、晕渲 PNG 与配准叠加均进程内缓存；首次请求做计算，
+后续请求直接复用。`/api/layers` 的等高线数据约 3.5 万个顶点，适合单工程本地
+浏览；更大范围应改为矢量瓦片并按视窗加载。
+
+### 9.4 截图
+
+`outputs/webmap_screenshot.png` 为首屏（1440×900，Chromium 无头），
+`outputs/webmap_profile_screenshot.png` 为调用 `showProfile('P1','P6')` 后的
+剖面页。截图命令可用：
+
+```bash
+# 终端 1
+.venv/bin/ctrlnet-web --port 8765
+# 终端 2：Playwright 已装在 /workspace/venvs/lab 时
+/workspace/venvs/lab/bin/python scripts/capture_webmap_screenshots.py
+# 可传 --url/--profile-from/--profile-to；脚本不会启动或关闭服务
+```
+
+当前网页地图的边界：单工程只读、无工程树/编辑/保存、无 MBTiles/XYZ 矢量
+瓦片、无多用户与鉴权；DEM 大范围浏览和 5000+ 要素聚合未实现。
+
+## 10. 影像配准（B3）
+
+### 10.1 六参数仿射模型
+
+`src/ctrlnet/registration.py` 实现像素 `(col,row)` 到工程 `(E,N)` 的六参数仿射：
+
+```text
+E = a0 + a1·col + a2·row
+N = b0 + b1·col + b2·row
+```
+
+像素原点在左上角像素**角点**，`col` 向右、`row` 向下，像素中心为
+`(col+0.5, row+0.5)`。至少 3 对控制点；超过 3 对时按最小二乘求解，支持
+逐点相对权（内部取 `sqrt(w)`）。求解前把像素坐标中心化并归一化，用 SVD
+检查退化：若 `σ_min/σ_max < 1e-9`，判定为共线/近共线并抛出
+`RegistrationError`。检查点不参与参数求解，单独报告 RMS 与最大误差。
+
+主要 API：
+
+```python
+from ctrlnet import (
+    ControlPoint,
+    register_affine,
+    register_image,
+    read_world_file,
+    write_world_file,
+)
+
+points = [
+    ControlPoint(col, row, E, N, label="P1"),
+    # ≥3 对，建议覆盖测区四角与内部
+]
+result = register_affine(points, check_points=[])
+print(result.transform.to_tuple())   # (a,b,c,d,e,f)
+print(result.rms, result.rms_e, result.rms_n, result.max_residual)
+print(result.as_dict())              # 参数、逐点 ΔE/ΔN/平面残差、检查点 RMS
+
+# PNG → scan.pgw；GeoTIFF → scan.tfw；仅写文件时无需 Pillow
+write_world_file("scan.png", result.transform)
+register_image("scan.tif", points, write_world=True)
+print(read_world_file("scan.tfw").to_tuple())
+```
+
+世界文件使用标准 6 行：`A,D,B,E,C,F`，其中 `C/F` 是左上角**像素中心**坐标，
+即 `C=c+0.5(a+b)`、`F=f+0.5(d+e)`；`read_world_file` 会反算回角点仿射。
+PNG 对应 `.pgw`，`.tif/.tiff` 对应 `.tfw`，JPEG/BMP/GIF 也有默认扩展名。
+CRS 不写入世界文件，需由工程/`.prj` 另行保存。
+
+### 10.2 网页 4 点配准演示
+
+`scripts/make_scan_sample.py` 从真实 DEM 生成 `data/sample/scan_sample.png`
+（780×820，约 1.4 MB）：晕渲 + 50 m 等高线 + 图廓/格网，模拟无地理参考的
+扫描地形图。生成时使用已知仿射
+
+```text
+E = 10·col + 1·row + 414400
+N = -0.8·col − 12·row + 4427200
+```
+
+但演示配准只使用 `data/sample/registration_demo.json` 中的 4 对同名点
+（P1/P2/P6/P7）和少量模拟像素量测噪声（±0.3～0.4 px），另有 P3/P4 作为
+独立检查点。当前结果：
+
+- 4 个控制点拟合 6 参数，控制点平面残差 RMS **2.770 m**；
+- 逐点残差约 P1 1.28 m、P2 4.27 m、P6 3.28 m、P7 0.28 m；
+- 独立检查点 RMS **4.594 m**，大于控制点 RMS，符合检查点不参与拟合的预期；
+- 后端用拟合参数把扫描图反算到正北向 E/N 网格，NoData/图外透明，前端以
+  `opacity≈0.48` 叠加；页面同时显示控制点/检查点符号与残差。
+
+网页上的“重新载入示例扫描图”按钮只重新执行 `register_affine` 与重采样，
+不改变工程数据；这是配准演示，不是完整的影像导入/裁切/持久化流程。
+
+### 10.3 测试覆盖
+
+`tests/test_registration.py` 覆盖：已知仿射在浮点精度内恢复、加噪数据 RMS
+落在合理区间、少于 3 点与共线/重复点报错、权重非法报错、PNG 配准并输出
+`.pgw`、GeoTIFF 世界文件 `.tfw` 的写入/读取往返。`tests/test_webmap.py`
+覆盖配准演示 API 的参数数量、RMS、检查点、叠加 PNG 与前端离线资源。
+
+## 11. 目录结构
 
 ```text
 ctrlnet-design/
@@ -373,33 +550,45 @@ ctrlnet-design/
 │   ├── reliability.py         # 平面网 r_i、MDB、外部可靠性、w 检验
 │   ├── leveling.py            # 1D 水准/高程网、三角高程、高程可靠性、路线图
 │   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
+│   ├── registration.py        # 六参数仿射、残差/RMS、世界文件
+│   ├── webmap/                # 本地 FastAPI 服务 + 离线 Leaflet 页面
+│   │   ├── app.py             # /api/project、/api/layers、/api/profile 等
+│   │   ├── state.py           # 工程/DEM/图层/配准叠加缓存
+│   │   ├── render.py          # 晕渲 PNG、等高线 GeoJSON、影像重采样
+│   │   └── static/            # index.html、app.js、style.css、leaflet/
 │   ├── compare.py             # 方案对比
 │   ├── optimize.py            # 贪心增补与局部搜索
 │   ├── plot.py                # 网图与椭圆
 │   ├── report.py              # 中文表格
 │   └── examples.py            # 第 13 节两方案
-├── tests/                     # 黄金回归、秩/异常、优化、DEM 测试
-│   └── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
+├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、Web API
+│   ├── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
+│   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
+│   └── test_webmap.py         # FastAPI TestClient 与离线静态资源
 ├── scripts/
 │   ├── run_demo.py            # 平面网演示主脚本
 │   ├── run_leveling_demo.py   # 水准/三角高程演示
 │   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
 │   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
+│   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
+│   ├── capture_webmap_screenshots.py  # Playwright 无头截图
 │   └── build_notebook.py      # 由脚本生成 notebook
 ├── data/
 │   ├── cache/                 # DEM 原始大文件（gitignore）
 │   └── sample/
 │       ├── dem_sample.tif     # 289×374、30 m 裁剪样本（约 0.3 MB）
 │       ├── dem_sample.json    # 来源/CRS/垂直基准/范围/校验和
-│       └── terrain_project.json  # 网页地图示例工程
+│       ├── terrain_project.json  # 网页地图示例工程
+│       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
+│       └── registration_demo.json  # 4 控制点 + 2 检查点 + 已知仿射
 ├── notebooks/demo.ipynb       # 已执行的演示 notebook
-├── outputs/                   # 图件、CSV、results.md（提交）
+├── outputs/                   # 图件、CSV、网页截图、results.md（提交）
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
 ```
 
-## 10. 计算约定与限制
+## 12. 计算约定与限制
 
 - 设计态：`σ0=1`，`Cx=(AᵀQl⁻¹A)⁺`，不估计单位权方差，不做实测残差平差。
 - 距离先验方差：`σ²=a²+(b·10⁻⁶·s)²`；角度/方向标准差按角秒输入，内部转弧度。
@@ -423,4 +612,8 @@ ctrlnet-design/
 - DEM 样例采用局部 UTM 50N，只适用于本测区；未实现投影尺度/子午线收敛角的
   全链路 grid/ground 归算、跨带处理与 geoid 改正。
 - 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
-  3D 联合、地图/GUI/API/数据库。
+  3D 联合、数据库、多工程与编辑。
+- 网页地图只绑定回环地址，无鉴权、只读单工程；扫描图配准为 6 参数仿射，
+  未实现多项式/TPS/RPC、影像裁切持久化与任意客户端旋转 warp。
+- MBTiles/矢量瓦片/在线底图未实现；当前 DEM 以单张 imageOverlay 叠加，
+  大范围浏览需改为按视窗渲染的 XYZ 瓦片。

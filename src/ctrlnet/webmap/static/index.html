@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CTRLNET · 本地离线网页地图</title>
+  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="map" aria-label="离线地形与控制网地图"></div>
+
+  <header id="topbar">
+    <div class="brand">
+      <div class="brand-mark">CN</div>
+      <div>
+        <div class="brand-title">CTRLNET · 本地离线网页地图</div>
+        <div class="brand-sub" id="project-sub">正在载入 DEM 工程…</div>
+      </div>
+    </div>
+    <div class="top-stats" id="top-stats"></div>
+    <div class="offline-badge"><span class="dot"></span> 127.0.0.1 · 离线 Leaflet</div>
+  </header>
+
+  <aside id="left-panel" class="panel">
+    <section class="panel-section">
+      <div class="section-kicker">Layers</div>
+      <h2>图层</h2>
+      <label class="layer-row"><input type="checkbox" id="lyr-hillshade" checked>
+        <span class="swatch swatch-hillshade"></span><span>DEM 晕渲 + 分层设色</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-contours" checked>
+        <span class="swatch swatch-contour"></span><span>等高线（50 m）</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-observations" checked>
+        <span class="swatch swatch-obs"></span><span>观测线（通视 / 遮挡）</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-ellipses" checked>
+        <span class="swatch swatch-ellipse"></span><span>95% 误差椭圆（放大）</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-points" checked>
+        <span class="swatch swatch-point"></span><span>控制点（固定 / 待定）</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-scan" checked>
+        <span class="swatch swatch-scan"></span><span>配准影像（半透明）</span></label>
+      <label class="layer-row"><input type="checkbox" id="lyr-gcp" checked>
+        <span class="swatch swatch-gcp"></span><span>配准控制点 / 检查点</span></label>
+    </section>
+
+    <section class="panel-section legend">
+      <div class="section-kicker">Legend</div>
+      <div class="legend-grid">
+        <span><i class="lg-fixed"></i>固定点</span>
+        <span><i class="lg-unknown"></i>待定点</span>
+        <span><i class="lg-visible"></i>通视</span>
+        <span><i class="lg-blocked"></i>遮挡</span>
+        <span><i class="lg-ellipse"></i>95% 椭圆</span>
+        <span><i class="lg-gcp"></i>配准点</span>
+      </div>
+    </section>
+
+    <section class="panel-section registration">
+      <div class="section-kicker">Image registration</div>
+      <h2>导入影像 · 4 点仿射配准</h2>
+      <p class="muted">示例扫描地形图由已知仿射生成；网页只用 4 对同名点做最小二乘配准，再以半透明叠加。</p>
+      <div id="registration-stats" class="stat-grid">
+        <div><span class="stat-label">控制点</span><strong id="reg-n">—</strong></div>
+        <div><span class="stat-label">控制 RMS</span><strong id="reg-rms">—</strong></div>
+        <div><span class="stat-label">检查点</span><strong id="reg-check-n">—</strong></div>
+        <div><span class="stat-label">检查 RMS</span><strong id="reg-check-rms">—</strong></div>
+      </div>
+      <button id="reload-registration" class="btn">重新载入示例扫描图</button>
+      <div id="registration-status" class="mini-status">等待配准…</div>
+    </section>
+  </aside>
+
+  <aside id="right-panel" class="panel">
+    <section class="panel-section">
+      <div class="section-kicker">Profile</div>
+      <div class="profile-head">
+        <h2>DEM 剖面 / 通视</h2>
+        <span class="mode-pill" id="profile-mode">点击两点</span>
+      </div>
+      <div id="profile-summary" class="profile-summary muted">点击地图上任意两点（或调用 <code>showProfile('P1','P6')</code>）绘制地形线、曲率折光视线与净空。</div>
+      <div id="profile-chart" class="profile-chart">
+        <div class="chart-placeholder">剖面图将显示在这里</div>
+      </div>
+    </section>
+
+    <section class="panel-section">
+      <div class="section-kicker">Inspector</div>
+      <h2>对象信息</h2>
+      <div id="inspector" class="inspector muted">点击控制点、观测线或误差椭圆查看距离、净空、精度与残差。</div>
+    </section>
+
+    <section class="panel-section">
+      <div class="section-kicker">Registration summary</div>
+      <div id="registration-detail" class="detail-list muted">配准参数与残差将在此显示。</div>
+    </section>
+  </aside>
+
+  <div id="statusbar">
+    <span id="status-mode">剖面模式：点击两点</span>
+    <span id="status-coord">E — / N —</span>
+    <span id="status-scale">CRS EPSG:32650 · 单位 m</span>
+    <span class="status-attrib">DEM: Copernicus GLO-30 © ESA</span>
+  </div>
+
+  <div id="loading" class="loading"><div class="spinner"></div><span>载入 DEM 与图层…</span></div>
+  <div id="error-banner" class="error-banner" hidden></div>
+
+  <script src="/static/leaflet/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
