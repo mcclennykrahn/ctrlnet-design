@@ -1,0 +1,33 @@
+{
+  "schema": "ctrlnet.thesis.basemap/1",
+  "name": "徐州论文示例区域离线底图",
+  "offline": true,
+  "online_tiles": false,
+  "source": "Copernicus GLO-30 DEM",
+  "source_tile": "Copernicus_DSM_COG_10_N34_00_E117_00_DEM",
+  "source_url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N34_00_E117_00_DEM/Copernicus_DSM_COG_10_N34_00_E117_00_DEM.tif",
+  "source_crs": "EPSG:4326",
+  "bounds": [
+    117.1,
+    34.15,
+    117.3,
+    34.25
+  ],
+  "image": {
+    "path": "thesis_basemap.png",
+    "width": 1800,
+    "height": 900,
+    "attribution": "Copernicus DEM © ESA / 本地离线渲染"
+  },
+  "elevation_m": {
+    "min": 21.309,
+    "max": 240.843,
+    "mean": 47.557
+  },
+  "contour_interval_m": 10.0,
+  "index_contour_interval_m": 50.0,
+  "style": "浅色分层设色 + 315°/42° 晕渲 + 等高线",
+  "generated_at": "2026-11-04T15:00:50+00:00",
+  "crop_tif_cache": "data/cache/xuzhou_thesis_dem_crop.tif",
+  "note": "原始瓦片只放 data/cache/，仓库仅提交本 PNG 与 JSON；运行时不访问网络。"
+}

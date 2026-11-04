@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>控制网设计与精度估算 · 论文模式</title>
+  <link rel="stylesheet" href="/static/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="/static/thesis.css" />
+</head>
+<body>
+  <header class="thesis-topbar">
+    <div class="brand-line">
+      <span class="brand-mark">CTRLNET</span>
+      <span class="brand-title">控制网设计与精度估算</span>
+      <span class="brand-badge">论文模式 · 离线</span>
+    </div>
+    <nav class="topnav">
+      <a href="/thesis" class="active">论文模式</a>
+      <a href="/dashboard">旧仪表盘</a>
+    </nav>
+  </header>
+
+  <main class="thesis-layout">
+    <section class="map-side" aria-label="地图与原理说明">
+      <div class="map-card">
+        <div id="map"></div>
+        <div class="map-caption">
+          <span>离线底图：Copernicus GLO-30 DEM · 徐州 117.1–117.3°E / 34.15–34.25°N</span>
+          <span id="map-coord">点击地图选点</span>
+        </div>
+      </div>
+
+      <section class="principles">
+        <article>
+          <h3>#1 角度测量原理</h3>
+          <p>把地球近似为球面，用三面角余弦公式由两点经纬度求球面距离与方位角；再由球面正弦公式求方位角，并按目标点所在象限修正到 0–360°。测站处两方向方位角之差即为水平角。</p>
+          <p class="formula">cos c = cos(90°−B<sub>B</sub>)cos(90°−B<sub>A</sub>) + sin(90°−B<sub>B</sub>)sin(90°−B<sub>A</sub>)cos(L<sub>B</sub>−L<sub>A</sub>)</p>
+          <p class="formula">α = atan2(ΔE, ΔN)，角 = (α<sub>前视</sub> − α<sub>后视</sub>) mod 360°</p>
+        </article>
+        <article>
+          <h3>#2 坐标转换原理</h3>
+          <p>将 CGCS2000/WGS84 大地坐标 (B,L) 投影到 3° 带高斯平面。徐州取中央子午线 117°E，东坐标加 500 km 假东；x 为北、y 为东，供间接平差使用。</p>
+          <p class="formula">L<sub>0</sub> = 3° × round(L/3°)，l = (L−L<sub>0</sub>)/ρ</p>
+          <p class="formula">x = X + N sinB cosB l²/2 + …，y = N cosB l + … + 500000</p>
+        </article>
+        <article>
+          <h3>#3 精度估算原理</h3>
+          <p>按测角/测边误差方程组成 B 矩阵，间接平差 V=BX−L，协因数 Q=(BᵀPB)⁻¹。最弱点中误差 M=Mw√(Qxx+Qyy)，并与限差比较；误差椭圆由 E、F、φE 三个元素确定。</p>
+          <p class="formula">Q = (BᵀPB)⁻¹，M = Mw√(Qxx+Qyy)</p>
+          <p class="formula">E,F = Mw√((Qxx+Qyy±K)/2)，K=√((Qxx−Qyy)²+4Qxy²)</p>
+        </article>
+      </section>
+      <p class="offline-note">本页不使用任何在线瓦片或在线地图 API；底图由本机 DEM 渲染，服务仅绑定 127.0.0.1。</p>
+    </section>
+
+    <aside class="library-side" aria-label="点线角网数据库">
+      <div class="project-bar">
+        <label class="project-name-label">工程
+          <input id="project-name" type="text" value="未命名论文工程" autocomplete="off" />
+        </label>
+        <button class="btn btn-gray" id="save-project" type="button">保存</button>
+        <button class="btn btn-gray" id="refresh-projects" type="button" title="刷新已存工程">刷新</button>
+      </div>
+      <div class="project-load-row">
+        <select id="project-select" aria-label="已存论文工程"><option value="">已存工程…</option></select>
+        <button class="btn btn-gray" id="load-project" type="button">读取</button>
+        <span class="bar-sep"></span>
+        <button class="btn btn-gray btn-example" data-example="1" type="button">载入论文算例 1</button>
+        <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
+      </div>
+
+      <section class="panel" id="panel-points">
+        <header class="panel-title"><span>点库</span><span class="panel-count" id="point-count">0</span></header>
+        <div class="panel-body">
+          <div class="panel-hint">在地图上单击选点，点号自动递增；点可切换“未知/已知”。</div>
+          <div class="table-wrap">
+            <table class="data-table" id="point-table">
+              <thead><tr><th>点号</th><th>经度</th><th>纬度</th><th>类型</th><th>操作</th></tr></thead>
+              <tbody id="point-body"></tbody>
+            </table>
+            <div class="empty-row" id="point-empty">暂无点，请在地图上单击。</div>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-gray" id="new-project" type="button">新建空白工程</button>
+            <span class="muted" id="point-summary"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-lines">
+        <header class="panel-title"><span>线库</span><span class="panel-count" id="line-count">0</span></header>
+        <div class="panel-body">
+          <div class="input-row">
+            <label>起点 <input id="line-start" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <label>终点 <input id="line-end" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <button class="btn btn-gray" id="add-line" type="button">构线</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="line-table">
+              <thead><tr><th>编号</th><th>起点</th><th>终点</th><th>距离 m</th><th>方位 °</th><th>操作</th></tr></thead>
+              <tbody id="line-body"></tbody>
+            </table>
+            <div class="empty-row" id="line-empty">暂无线；输入起点/终点后点击“构线”。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-angles">
+        <header class="panel-title"><span>角库</span><span class="panel-count" id="angle-count">0</span></header>
+        <div class="panel-body">
+          <div class="input-row input-row-angle">
+            <label>起点(后视) <input id="angle-back" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <label>测站 <input id="angle-station" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <label>终点(前视) <input id="angle-fore" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <button class="btn btn-gray" id="add-angle" type="button">构角</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="angle-table">
+              <thead><tr><th>编号</th><th>后视</th><th>测站</th><th>前视</th><th>角度 °</th><th>操作</th></tr></thead>
+              <tbody id="angle-body"></tbody>
+            </table>
+            <div class="empty-row" id="angle-empty">暂无角；输入后视/测站/前视后点击“构角”。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-network">
+        <header class="panel-title"><span>网库</span><span class="panel-count" id="network-count">0</span></header>
+        <div class="panel-body">
+          <div class="network-top">
+            <label class="field-label">控制网等级
+              <select id="grade-select">
+                <option value="二等">二等</option>
+                <option value="三等">三等</option>
+                <option value="四等">四等</option>
+                <option value="一级">一级</option>
+                <option value="二级">二级</option>
+              </select>
+            </label>
+            <label class="field-label">限差 mm
+              <input id="tolerance-input" type="number" min="0.1" step="0.5" value="20" />
+            </label>
+            <div class="grade-suggestion" id="grade-suggestion">平均边长 —，建议等级 —。</div>
+          </div>
+
+          <div class="obs-grid">
+            <div class="obs-block">
+              <div class="obs-head"><strong>观测边</strong><span class="muted">未勾选＝仅图形边</span></div>
+              <div class="check-list" id="observed-edge-list"></div>
+            </div>
+            <div class="obs-block">
+              <div class="obs-head"><strong>观测角</strong><span class="muted">未勾选＝仅图形角</span></div>
+              <div class="check-list" id="observed-angle-list"></div>
+            </div>
+          </div>
+
+          <details class="optimize-box" id="optimize-box">
+            <summary>优化新增观测 <span class="yellow-dot"></span> 黄色显示</summary>
+            <div class="obs-grid">
+              <div class="obs-block">
+                <div class="obs-head"><strong>新增观测边</strong></div>
+                <div class="check-list" id="added-edge-list"></div>
+              </div>
+              <div class="obs-block">
+                <div class="obs-head"><strong>新增观测角</strong></div>
+                <div class="check-list" id="added-angle-list"></div>
+              </div>
+            </div>
+          </details>
+
+          <div class="calc-actions">
+            <button class="btn btn-gray btn-calc" id="calculate" type="button">精度计算</button>
+            <button class="btn btn-gray" id="export-coords" type="button">导出坐标转换结果</button>
+            <button class="btn btn-gray" id="export-angles" type="button">导出角度拓扑</button>
+          </div>
+
+          <div class="result-box hidden" id="result-box" aria-live="polite">
+            <div class="result-head">
+              <span class="result-badge" id="result-badge">—</span>
+              <span class="result-weakest" id="result-weakest">最弱点 —</span>
+            </div>
+            <div class="result-grid">
+              <div><span class="result-label">Qxx</span><strong id="result-qxx">—</strong></div>
+              <div><span class="result-label">Qyy</span><strong id="result-qyy">—</strong></div>
+              <div><span class="result-label">M</span><strong id="result-m">—</strong></div>
+              <div><span class="result-label">观测数</span><strong id="result-nobs">—</strong></div>
+            </div>
+            <p class="result-message" id="result-message"></p>
+            <p class="result-note" id="result-note">Qxx/Qyy 为论文截图数值口径；严格 mm² 值同时显示在接口中。</p>
+            <div class="ellipse-controls">
+              <label class="inline-check"><input id="show-ellipses" type="checkbox" checked /> 显示误差椭圆</label>
+              <label>放大倍数 <input id="ellipse-scale" type="number" min="1" step="100" value="2000" /></label>
+            </div>
+            <div class="result-subtitle">边长相对中误差分母</div>
+            <div class="table-wrap result-table-wrap">
+              <table class="data-table" id="denom-table">
+                <thead><tr><th>线号</th><th>端点</th><th>边长 m</th><th>分母</th><th>限差</th></tr></thead>
+                <tbody id="denom-body"></tbody>
+              </table>
+            </div>
+            <p class="result-message" id="weakest-edge"></p>
+          </div>
+          <div class="calc-error hidden" id="calc-error"></div>
+        </div>
+      </section>
+
+      <p class="offline-note sidebar-note">计算离线完成；Q=(BᵀPB)⁻¹。工程保存到本地 SQLite，不上传网络。</p>
+    </aside>
+  </main>
+
+  <div class="modal hidden" id="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="export-title">导出文本</h2>
+        <button class="icon-button" id="close-export" type="button" aria-label="关闭">×</button>
+      </div>
+      <pre class="export-text" id="export-text"></pre>
+      <div class="modal-actions">
+        <button class="btn btn-gray" id="copy-export" type="button">复制</button>
+        <button class="btn btn-gray" id="close-export-2" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="/static/leaflet/leaflet.js"></script>
+  <script src="/static/thesis.js"></script>
+</body>
+</html>

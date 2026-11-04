@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..terrain import line_of_sight_height
 from .state import ProjectStore, default_project_path
+from .thesis_web import ThesisService, create_thesis_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -159,8 +160,13 @@ def build_profile(store: ProjectStore, from_ref: str, to_ref: str) -> dict:
     }
 
 
-def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
+def create_app(
+    project_path: Optional[Path | str] = None,
+    *,
+    thesis_db: Optional[Path | str] = None,
+) -> FastAPI:
     store = ProjectStore(project_path)
+    thesis_service = ThesisService(thesis_db)
     app = FastAPI(
         title="CTRLNET 本地网页地图",
         description="SQLite 工程方案切换、DEM 晕渲/等高线、控制点/观测线/误差椭圆、报告下载与影像配准演示",
@@ -170,12 +176,17 @@ def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.state.store = store
+    app.state.thesis = thesis_service
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/dashboard", include_in_schema=False)
+    def dashboard() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
 
     @app.get("/favicon.ico", include_in_schema=False)
@@ -331,6 +342,8 @@ def create_app(project_path: Optional[Path | str] = None) -> FastAPI:
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=3600"},
         )
+
+    app.include_router(create_thesis_router(thesis_service))
 
     return app
 

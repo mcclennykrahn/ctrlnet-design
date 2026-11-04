@@ -93,7 +93,8 @@ SQLite 持久化、快照/结果缓存与报告下载，但尚未实现多工程
 提供 `pytest`、`httpx`、`fastapi`、`pillow`、`rasterio`、`scipy`，`opt` extra
 提供 SciPy MILP（`scipy>=1.11`），`demo` extra 提供
 `ipykernel`、`nbconvert`、`nbformat`，`terrain` extra 提供 `rasterio`，
-`webmap` extra 提供 FastAPI/uvicorn/pillow/rasterio。
+`webmap` extra 提供 FastAPI/uvicorn/pillow/rasterio，`e2e` extra 提供
+Playwright（无头 Chromium 端到端测试）。
 
 ```bash
 cd /workspace/ctrlnet-design
@@ -102,6 +103,7 @@ python3 -m venv .venv
 # 只跑 C2 MILP 演示：.venv/bin/pip install -e ".[opt]"
 # 只跑 B2 DEM 演示：.venv/bin/pip install -e ".[test,terrain]"
 # 只跑 B3 网页地图：.venv/bin/pip install -e ".[test,webmap]"
+# 论文模式端到端测试：.venv/bin/pip install -e ".[e2e]"
 ```
 
 `pip install -e` 会按 `pyproject.toml` 的 `src` 布局注册 editable 包，测试和演示
@@ -174,8 +176,11 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/build_demo_project.py # C4 生成 SQLite 演示工程
 .venv/bin/python -m ctrlnet.report \
   --project data/sample/demo_project.sqlite --out outputs/report  # C4 设计报告
-.venv/bin/ctrlnet-web                          # C4 本地网页地图（127.0.0.1:8765）
+.venv/bin/ctrlnet-web                          # 本地网页地图（127.0.0.1:8765）
+# 论文模式：http://127.0.0.1:8765/thesis       旧仪表盘：/dashboard
 # 或：.venv/bin/python -m ctrlnet.webmap --port 8765
+.venv/bin/python scripts/build_thesis_basemap.py  # 可选：重建离线徐州 DEM 底图
+.venv/bin/python scripts/test_thesis_e2e.py       # Playwright 无头 E2E
 ```
 
 `run_demo.py` 打印第 13 节两方案的关键精度/可靠性表，并生成平面网图件、CSV
@@ -840,10 +845,11 @@ ctrlnet-design/
 │   ├── store.py               # C4 SQLite 工程库、快照 input_hash、结果缓存
 │   ├── reportgen.py           # C4 Markdown/自包含 HTML/DOCX 设计报告
 │   ├── webmap/                # 本地 FastAPI 服务 + 离线 Leaflet 页面
-│   │   ├── app.py             # /api/scenarios、/api/scenario、/api/report 等
+│   │   ├── app.py             # /、/dashboard、/thesis、/api/scenarios 等
 │   │   ├── state.py           # SQLite 方案/DEM/图层/报告/配准缓存
 │   │   ├── render.py          # 晕渲 PNG、等高线/观测 GeoJSON、影像重采样
-│   │   └── static/            # index.html、app.js、style.css、leaflet/
+│   │   ├── thesis_web.py      # D2 论文模式：点线角网状态、计算、SQLite 保存
+│   │   └── static/            # index.*（旧仪表盘）、thesis.*（论文模式）、leaflet/
 │   ├── compare.py             # 方案对比
 │   ├── optimize.py            # 贪心/局部搜索/精确分支定界/MILP 代理
 │   ├── plot.py                # 网图与椭圆
@@ -872,6 +878,8 @@ ctrlnet-design/
 │   ├── capture_webmap_screenshots.py  # Playwright 无头截图（首屏/方案切换）
 │   ├── build_thesis_samples.py  # 生成论文算例 JSON
 │   ├── run_thesis_demo.py     # 论文算例演示/CSV/网图
+│   ├── build_thesis_basemap.py  # 下载/裁剪/渲染徐州离线 DEM 底图
+│   ├── test_thesis_e2e.py     # Playwright 无头 Chromium 端到端验证
 │   └── build_notebook.py      # 由脚本生成 notebook
 ├── data/
 │   ├── cache/                 # DEM 原始大文件（gitignore）
@@ -884,10 +892,13 @@ ctrlnet-design/
 │       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
 │       ├── thesis_example1.json  # 论文算例 1（点/线/角/拓扑/公布值/计算值）
 │       ├── thesis_example2.json  # 论文算例 2 近似版
+│       ├── thesis_basemap.png    # 徐州 117.1–117.3°E / 34.15–34.25°N 离线底图
+│       ├── thesis_basemap.json   # 底图 bounds/高程/等高距/离线声明
 │       └── registration_demo.json  # 4 控制点 + 2 检查点 + 已知仿射
 ├── notebooks/demo.ipynb       # 已执行的演示 notebook
 ├── outputs/                   # 图件、CSV、网页截图、results.md（提交）
-│   └── report/                # C4 design_report.md/html/docx + assets/*.png
+│   ├── report/                # C4 design_report.md/html/docx + assets/*.png
+│   └── thesis_web_example1.png  # D2 论文模式算例 1 的 Playwright 截图
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -1242,7 +1253,93 @@ Q（穷举 C(13,5) 最佳为 0.4740/0.2473）。27 角优化的新增角未公�
 - `tests/test_thesis.py`：投影往返、PROJ 对照、等级表、线性 σ、拓扑/坐标
   文本往返、误差椭圆、算例黄金断言与 2 个 `xfail`。
 
-## 18. 路线图完成度
+## 18. 论文模式交互网页（D2）
+
+D2 在旧仪表盘之外新增 `/thesis`（旧页面保留在 `/` 与 `/dashboard`），复刻
+论文图 4-1～4-13、5-1～5-13 的“左地图 + 右点/线/角/网四库”交互。全程离线：
+Leaflet 资源本地化，底图是 `data/sample/thesis_basemap.png`（由 Copernicus
+GLO-30 `N34 E117` 瓦片裁剪、浅色晕渲+分层设色+10 m 等高线），不加载任何在线
+瓦片、OSM 或在线地图 API；服务只绑定 `127.0.0.1`。
+
+### 18.1 启动与底图
+
+```bash
+.venv/bin/pip install -e ".[test,webmap]"
+.venv/bin/python scripts/build_thesis_basemap.py   # 可选；已提交小样本
+.venv/bin/python -m ctrlnet.webmap --port 8765
+# 浏览器打开 http://127.0.0.1:8765/thesis
+```
+
+底图脚本用 `scripts/fetch_dem.py` 的下载函数获取约 47 MB 原始瓦片到
+`data/cache/`（已 gitignore），裁剪 `117.10–117.30°E, 34.15–34.25°N`，输出
+`thesis_basemap.png`（约 1.7 MB，≤3 MB）与元数据 JSON。页面通过
+`/api/thesis/basemap.png` 以 Leaflet `imageOverlay` 加载，不生成也不请求任何
+在线 XYZ 瓦片。
+
+### 18.2 交互与界面
+
+- **点库**：地图点击加点，本地 SVG 红色水滴标记，点号递增；经度/纬度 6 位小数；
+  “未知/已知”下拉切换；删除点级联删除关联线和角，并重排点号。
+- **线库**：起点/终点 + 灰色“构线”；表格显示编号、起点、终点、距离 m（4 位）、
+  方位 °（4 位）；默认绿色虚线，观测后红色实线，优化新增黄色实线。
+- **角库**：后视/测站/前视 + “构角”；角度 0–360°、4 位小数；地图测站处绘制
+  小圆弧和两条短方向线。
+- **网库**：二等/三等/四等/一级/二级下拉，按平均边长显示建议等级并可一键采用；
+  观测边/观测角复选（未勾选仅图形）；“优化新增观测”区可将边/角标成黄色；
+  “精度计算”返回最弱点、Qxx/Qyy、M、限差判定、17 行分母表与误差椭圆；
+  误差椭圆可开关、放大倍数可调。参数为表 3-1；测距 `σS=a+bS`，测角/边角网
+  共用 D1 `thesis.build_network`。
+- **导出**：坐标文本 `点1；x，y` 逐行；角度拓扑 `[-1,1,2;…]`，已知点 8/9
+  记为 -1/-2。弹出页内文本框，可复制。
+- **工程**：保存/读取本地 SQLite（`thesis_projects` 表，默认
+  `data/sample/thesis_web.sqlite`，已 gitignore）；“载入论文算例 1/2”一键恢复
+  9 点/17 线/角网或边角网。
+- **说明区**：地图下方蓝色 `#1 角度测量原理`、`#2 坐标转换原理`、
+  `#3 精度估算原理`，内容取自论文第 3 章。
+
+### 18.3 后端 API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/thesis` | 论文模式页面 |
+| GET | `/api/thesis/state` | 当前工程、点/线/角/网配置、等级表、底图元数据 |
+| POST | `/api/thesis/points` | `{lon,lat}` 建点 |
+| PATCH | `/api/thesis/points/{id}` | `{fixed}` 切换已知/未知 |
+| DELETE | `/api/thesis/points/{id}` | 级联删除 |
+| POST | `/api/thesis/lines` | `{from,to}` 构线 |
+| POST | `/api/thesis/angles` | `{backsight,station,foresight}` 构角 |
+| POST | `/api/thesis/network` | 等级、观测边/角、新增观测、限差、椭圆参数 |
+| POST | `/api/thesis/calculate` | 复用 D1 的 Q/M/椭圆/分母表计算 |
+| GET | `/api/thesis/export/coordinates` | 论文格式坐标文本 |
+| GET | `/api/thesis/export/angles` | 论文格式角度拓扑 |
+| GET/POST | `/api/thesis/examples`、`/api/thesis/examples/{1,2}` | 算例列表/载入 |
+| GET/POST | `/api/thesis/projects`、`/projects/save`、`/projects/load` | SQLite 保存/读取 |
+
+`/api/thesis/calculate` 返回 `qxx/qyy`（论文截图口径）、`qxx_mm2/qyy_mm2`
+（严格 mm²）、`mp_paper_mm/mp_mm`、`satisfied`、`edge_denominators`、
+`ellipses` 与优化前后 `comparison`。算例 1 结果：最弱点 1，
+`Qxx=0.6502`、`Qyy=0.3039`、`M=9.77 mm`、满足 2 cm 限差；算例 2：
+最弱点 7，`Qxx=0.1715`、`Qyy=0.1575`、`M=5.74 mm`（近似复现）。
+
+### 18.4 测试与输出
+
+```bash
+.venv/bin/python -m pytest -q tests/test_thesis_web.py
+.venv/bin/pip install -e ".[e2e]"
+.venv/bin/python -m playwright install chromium   # 首次运行才需要
+.venv/bin/python scripts/test_thesis_e2e.py
+```
+
+- `tests/test_thesis_web.py`：页面离线检查、底图尺寸/PNG、建点/线/角、级联删除、
+  重边/非法拓扑、算例 1/2 计算、导出、优化对比、SQLite 保存/读取、错误码。
+- `scripts/test_thesis_e2e.py`：启动仅监听 `127.0.0.1` 的 uvicorn，用无头
+  Chromium 打开 `/thesis`，载入算例 1，点击“精度计算”，断言结果表 17 行、
+  `最弱点 1`、`Qxx=0.6502`、`Qyy=0.3039`，并确认没有非本地请求。
+- 输出：`outputs/thesis_web_example1.png`（1440×1000 页面截图）；
+  `data/sample/thesis_basemap.png` / `.json`。
+- 第 13 节黄金期望值与 D1 的 `thesis.py` 公式未修改；D2 只在 Web 层复用。
+
+## 19. 路线图完成度
 
 以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4 增量对照：
 
@@ -1258,6 +1355,7 @@ Q（穷举 C(13,5) 最佳为 0.4740/0.2473）。27 角优化的新增角未公�
 | C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计、工程包 |
 | C4 设计报告 | ✅ 已完成 | Markdown、自包含 HTML、DOCX（pandoc）、图表与方案对比 | PDF、模板选择、签名 |
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
+| D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
 | VCE、Helmert、多用户 | ❌ 未完成 | GNSS 3D 联合平差、局部 ζ 拟合 | Helmert/VCE、跨基线相关 VCV、多用户与权限 |
