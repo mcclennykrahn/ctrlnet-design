@@ -1,0 +1,1063 @@
+{
+  "schema": "ctrlnet.terrain_project/1",
+  "generated_by": "scripts/run_terrain_demo.py",
+  "generated_utc": "2026-11-04T12:50:51+00:00",
+  "description": "DEM intervisibility + visible-edge plane network demo",
+  "dem": {
+    "path": "data/sample/dem_sample.tif",
+    "crs": "EPSG:32650",
+    "shape": [
+      374,
+      289
+    ],
+    "resolution_m": [
+      30.0,
+      30.0
+    ],
+    "bounds_native": [
+      414503.434954206,
+      4417031.613385118,
+      423173.434954206,
+      4428251.613385118
+    ],
+    "source": "Copernicus GLO-30 DSM, AWS Open Data, (c) ESA",
+    "vertical_datum": "EGM2008 orthometric height",
+    "surface_type": "DSM",
+    "source_url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N39_00_E116_00_DEM/Copernicus_DSM_COG_10_N39_00_E116_00_DEM.tif",
+    "md5_sha256": "cebf6349ba64684d870c4c18013266fe5073eafdb611dd59c7822ad7bfa15051"
+  },
+  "analysis": {
+    "instrument_height_m": 1.5,
+    "target_height_m": 1.5,
+    "k": 0.13,
+    "R_m": 6371000.0,
+    "clearance_threshold_m": 0.0,
+    "confidence": 0.95,
+    "formula": "h_LOS(x)=h1+(h2-h1)*x/d-(1-k)*x*(d-x)/(2R)",
+    "ellipse_scale": 50000.0
+  },
+  "points": [
+    {
+      "name": "P1",
+      "lon": 116.00932231333756,
+      "lat": 39.93764839164841,
+      "E": 415358.434954206,
+      "N": 4421306.613385118,
+      "elevation_m": 944.883056640625,
+      "crs": "EPSG:32650",
+      "fixed": true,
+      "sigma_E_mm": 0.0,
+      "sigma_N_mm": 0.0,
+      "mp_mm": 0.0,
+      "ellipse_95": {
+        "a_m": 0.0,
+        "b_m": 0.0,
+        "azimuth_deg": 0.0,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P2",
+      "lon": 116.04425780751797,
+      "lat": 39.950375000000314,
+      "E": 418358.434954206,
+      "N": 4422686.613385118,
+      "elevation_m": 852.5975341796875,
+      "crs": "EPSG:32650",
+      "fixed": true,
+      "sigma_E_mm": 0.0,
+      "sigma_N_mm": 0.0,
+      "mp_mm": 0.0,
+      "ellipse_95": {
+        "a_m": 0.0,
+        "b_m": 0.0,
+        "azimuth_deg": 0.0,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P3",
+      "lon": 116.00956384587239,
+      "lat": 39.92089246331295,
+      "E": 415358.434954206,
+      "N": 4419446.613385118,
+      "elevation_m": 834.464111328125,
+      "crs": "EPSG:32650",
+      "fixed": false,
+      "sigma_E_mm": 3.5729789001771377,
+      "sigma_N_mm": 3.104694503177345,
+      "mp_mm": 4.7334243607742,
+      "ellipse_95": {
+        "a_m": 0.009677194899598564,
+        "b_m": 0.006371224098615889,
+        "azimuth_deg": 124.66051094127337,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P4",
+      "lon": 116.02541846853802,
+      "lat": 39.94156887894503,
+      "E": 416738.434954206,
+      "N": 4421726.613385118,
+      "elevation_m": 773.546875,
+      "crs": "EPSG:32650",
+      "fixed": false,
+      "sigma_E_mm": 2.8685668239882824,
+      "sigma_N_mm": 2.957969831140739,
+      "mp_mm": 4.120468558989984,
+      "ellipse_95": {
+        "a_m": 0.007592146681322628,
+        "b_m": 0.006639575174273943,
+        "azimuth_deg": 38.34502649843525,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P5",
+      "lon": 116.02650742151218,
+      "lat": 39.914278687759996,
+      "E": 416798.434954206,
+      "N": 4418696.613385118,
+      "elevation_m": 747.8779907226562,
+      "crs": "EPSG:32650",
+      "fixed": false,
+      "sigma_E_mm": 4.535480393515387,
+      "sigma_N_mm": 2.750616175601284,
+      "mp_mm": 5.3043823151656335,
+      "ellipse_95": {
+        "a_m": 0.011101747604059306,
+        "b_m": 0.0067327463251844084,
+        "azimuth_deg": 90.19306357971185,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P6",
+      "lon": 116.05793418935532,
+      "lat": 39.95183839728994,
+      "E": 419528.434954206,
+      "N": 4422836.613385118,
+      "elevation_m": 642.3385620117188,
+      "crs": "EPSG:32650",
+      "fixed": false,
+      "sigma_E_mm": 6.7419650618524685,
+      "sigma_N_mm": 7.4508094662262625,
+      "mp_mm": 10.048316008030712,
+      "ellipse_95": {
+        "a_m": 0.019083350733958896,
+        "b_m": 0.01551695328192047,
+        "azimuth_deg": 149.62016950324994,
+        "confidence": 0.95
+      }
+    },
+    {
+      "name": "P7",
+      "lon": 116.0458705565617,
+      "lat": 39.9101149755697,
+      "E": 418448.434954206,
+      "N": 4418216.613385118,
+      "elevation_m": 638.7852172851562,
+      "crs": "EPSG:32650",
+      "fixed": false,
+      "sigma_E_mm": 5.532806620173408,
+      "sigma_N_mm": 3.94787548027419,
+      "mp_mm": 6.79688678028293,
+      "ellipse_95": {
+        "a_m": 0.014388184241928547,
+        "b_m": 0.008352954902849746,
+        "azimuth_deg": 65.49621974029425,
+        "confidence": 0.95
+      }
+    }
+  ],
+  "observations": {
+    "distances": [
+      {
+        "from": "P1",
+        "to": "P2",
+        "value_m": 3302.1810973960833,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P1",
+        "to": "P3",
+        "value_m": 1860.0,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P1",
+        "to": "P5",
+        "value_m": 2980.889129102255,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P1",
+        "to": "P7",
+        "value_m": 4369.919907732864,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P2",
+        "to": "P3",
+        "value_m": 4415.6086783137835,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P2",
+        "to": "P4",
+        "value_m": 1883.082579177026,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P2",
+        "to": "P5",
+        "value_m": 4284.121847006689,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P2",
+        "to": "P7",
+        "value_m": 4470.905948462794,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P3",
+        "to": "P4",
+        "value_m": 2665.1078777415373,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P3",
+        "to": "P5",
+        "value_m": 1623.607095328177,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P3",
+        "to": "P6",
+        "value_m": 5374.104576578316,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P4",
+        "to": "P5",
+        "value_m": 3030.5940011819466,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P4",
+        "to": "P7",
+        "value_m": 3904.382153427095,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P5",
+        "to": "P6",
+        "value_m": 4959.082576444962,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P5",
+        "to": "P7",
+        "value_m": 1718.4004189943623,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      },
+      {
+        "from": "P6",
+        "to": "P7",
+        "value_m": 4744.554773632612,
+        "sigma_a_m": 0.002,
+        "sigma_b_ppm": 2.0
+      }
+    ],
+    "angles": [
+      {
+        "backsight": "P2",
+        "station": "P1",
+        "foresight": "P7",
+        "value_deg": 69.7024302277713,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P1",
+        "foresight": "P5",
+        "value_deg": 85.81584846086062,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P1",
+        "foresight": "P3",
+        "value_deg": 114.7024302277713,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P7",
+        "station": "P1",
+        "foresight": "P5",
+        "value_deg": 16.11341823308931,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P7",
+        "station": "P1",
+        "foresight": "P3",
+        "value_deg": 45.0,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P1",
+        "foresight": "P3",
+        "value_deg": 28.88658176691069,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P2",
+        "foresight": "P3",
+        "value_deg": 21.443024473336088,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P2",
+        "foresight": "P4",
+        "value_deg": 37.99495467804904,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P2",
+        "foresight": "P1",
+        "value_deg": 43.9431924073306,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P2",
+        "foresight": "P7",
+        "value_deg": -22.507827816003473,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P2",
+        "foresight": "P4",
+        "value_deg": 16.551930204712953,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P2",
+        "foresight": "P1",
+        "value_deg": 22.50016793399451,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P2",
+        "foresight": "P7",
+        "value_deg": -43.950852289339565,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P2",
+        "foresight": "P1",
+        "value_deg": 5.948237729281558,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P2",
+        "foresight": "P7",
+        "value_deg": -60.50278249405246,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P2",
+        "foresight": "P7",
+        "value_deg": -66.45102022333403,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P3",
+        "foresight": "P4",
+        "value_deg": 31.184974658738387,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P3",
+        "foresight": "P2",
+        "value_deg": 42.79740183823418,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P3",
+        "foresight": "P6",
+        "value_deg": 50.8906264162041,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P3",
+        "foresight": "P5",
+        "value_deg": 117.51200262385144,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P3",
+        "foresight": "P2",
+        "value_deg": 11.612427179495793,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P3",
+        "foresight": "P6",
+        "value_deg": 19.705651757465713,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P3",
+        "foresight": "P5",
+        "value_deg": 86.32702796511306,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P3",
+        "foresight": "P6",
+        "value_deg": 8.093224577969918,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P3",
+        "foresight": "P5",
+        "value_deg": 74.71460078561726,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P6",
+        "station": "P3",
+        "foresight": "P5",
+        "value_deg": 66.62137620764734,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P4",
+        "foresight": "P2",
+        "value_deg": -151.83564261579124,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P4",
+        "foresight": "P7",
+        "value_deg": -57.15936862116971,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P4",
+        "foresight": "P5",
+        "value_deg": -32.319396289715435,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P4",
+        "foresight": "P7",
+        "value_deg": 94.67627399462154,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P4",
+        "foresight": "P5",
+        "value_deg": 119.51624632607587,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P7",
+        "station": "P4",
+        "foresight": "P5",
+        "value_deg": 24.83997233145433,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P5",
+        "foresight": "P1",
+        "value_deg": 33.60141560923784,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P5",
+        "foresight": "P4",
+        "value_deg": 61.35357574517156,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P5",
+        "foresight": "P2",
+        "value_deg": 83.84237474104664,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P5",
+        "foresight": "P6",
+        "value_deg": 95.88966576307544,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P3",
+        "station": "P5",
+        "foresight": "P7",
+        "value_deg": 168.70819107175132,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P5",
+        "foresight": "P4",
+        "value_deg": 27.752160135933696,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P5",
+        "foresight": "P2",
+        "value_deg": 50.24095913180883,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P5",
+        "foresight": "P6",
+        "value_deg": 62.28825015383757,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P5",
+        "foresight": "P7",
+        "value_deg": 135.1067754625135,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P5",
+        "foresight": "P2",
+        "value_deg": 22.48879899587511,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P5",
+        "foresight": "P6",
+        "value_deg": 34.536090017903874,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P5",
+        "foresight": "P7",
+        "value_deg": 107.3546153265798,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P5",
+        "foresight": "P6",
+        "value_deg": 12.047291022028766,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P5",
+        "foresight": "P7",
+        "value_deg": 84.86581633070467,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P6",
+        "station": "P5",
+        "foresight": "P7",
+        "value_deg": 72.81852530867593,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P7",
+        "station": "P6",
+        "foresight": "P5",
+        "value_deg": 20.244125646912064,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P7",
+        "station": "P6",
+        "foresight": "P3",
+        "value_deg": 37.7330836761893,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P6",
+        "foresight": "P3",
+        "value_deg": 17.488958029277242,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P7",
+        "foresight": "P1",
+        "value_deg": 28.779806304397212,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P7",
+        "foresight": "P4",
+        "value_deg": 47.80541234196589,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P7",
+        "foresight": "P2",
+        "value_deg": 72.62635585329186,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P5",
+        "station": "P7",
+        "foresight": "P6",
+        "value_deg": 86.937349044412,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P7",
+        "foresight": "P4",
+        "value_deg": 19.02560603756868,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P7",
+        "foresight": "P2",
+        "value_deg": 43.84654954889462,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P1",
+        "station": "P7",
+        "foresight": "P6",
+        "value_deg": 58.15754274001482,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P7",
+        "foresight": "P2",
+        "value_deg": 24.82094351132594,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P4",
+        "station": "P7",
+        "foresight": "P6",
+        "value_deg": 39.13193670244614,
+        "sigma_arcsec": 1.0
+      },
+      {
+        "backsight": "P2",
+        "station": "P7",
+        "foresight": "P6",
+        "value_deg": 14.310993191120176,
+        "sigma_arcsec": 1.0
+      }
+    ]
+  },
+  "visibility": [
+    {
+      "from": "P1",
+      "to": "P2",
+      "distance_m": 3302.1810973960833,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 332,
+      "nodata_count": 0
+    },
+    {
+      "from": "P1",
+      "to": "P3",
+      "distance_m": 1860.0,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 187,
+      "nodata_count": 0
+    },
+    {
+      "from": "P1",
+      "to": "P4",
+      "distance_m": 1442.497833620557,
+      "status": "blocked",
+      "visible": false,
+      "min_clearance_m": -0.9134963940520038,
+      "min_distance_m": 1412.6530508559938,
+      "obstruction": {
+        "E": 416709.8832300681,
+        "N": 4421717.923729945,
+        "elevation_m": 779.5023792824875
+      },
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 146,
+      "nodata_count": 0
+    },
+    {
+      "from": "P1",
+      "to": "P5",
+      "distance_m": 2980.889129102255,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 300,
+      "nodata_count": 0
+    },
+    {
+      "from": "P1",
+      "to": "P6",
+      "distance_m": 4441.823949685534,
+      "status": "blocked",
+      "visible": false,
+      "min_clearance_m": -51.31103089293413,
+      "min_distance_m": 2874.7085337290646,
+      "obstruction": {
+        "E": 418057.22147105995,
+        "N": 4422296.815632309,
+        "elevation_m": 801.5824171072086
+      },
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 446,
+      "nodata_count": 0
+    },
+    {
+      "from": "P1",
+      "to": "P7",
+      "distance_m": 4369.919907732864,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 438,
+      "nodata_count": 0
+    },
+    {
+      "from": "P2",
+      "to": "P3",
+      "distance_m": 4415.6086783137835,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 443,
+      "nodata_count": 0
+    },
+    {
+      "from": "P2",
+      "to": "P4",
+      "distance_m": 1883.082579177026,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 190,
+      "nodata_count": 0
+    },
+    {
+      "from": "P2",
+      "to": "P5",
+      "distance_m": 4284.121847006689,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 430,
+      "nodata_count": 0
+    },
+    {
+      "from": "P2",
+      "to": "P6",
+      "distance_m": 1179.57619508025,
+      "status": "blocked",
+      "visible": false,
+      "min_clearance_m": -1.0532948560866089,
+      "min_distance_m": 29.989225298650425,
+      "obstruction": {
+        "E": 418388.18071691785,
+        "N": 4422690.426944439,
+        "elevation_m": 849.8029080428422
+      },
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 119,
+      "nodata_count": 0
+    },
+    {
+      "from": "P2",
+      "to": "P7",
+      "distance_m": 4470.905948462794,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 449,
+      "nodata_count": 0
+    },
+    {
+      "from": "P3",
+      "to": "P4",
+      "distance_m": 2665.1078777415373,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 268,
+      "nodata_count": 0
+    },
+    {
+      "from": "P3",
+      "to": "P5",
+      "distance_m": 1623.607095328177,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 164,
+      "nodata_count": 0
+    },
+    {
+      "from": "P3",
+      "to": "P6",
+      "distance_m": 5374.104576578316,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 539,
+      "nodata_count": 0
+    },
+    {
+      "from": "P3",
+      "to": "P7",
+      "distance_m": 3325.8081724597405,
+      "status": "blocked",
+      "visible": false,
+      "min_clearance_m": -4.524447455722452,
+      "min_distance_m": 1288.3761388808005,
+      "obstruction": {
+        "E": 416555.46198123303,
+        "N": 4418970.126898631,
+        "elevation_m": 764.5057945948837
+      },
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 334,
+      "nodata_count": 0
+    },
+    {
+      "from": "P4",
+      "to": "P5",
+      "distance_m": 3030.5940011819466,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 305,
+      "nodata_count": 0
+    },
+    {
+      "from": "P4",
+      "to": "P6",
+      "distance_m": 3002.6987860922713,
+      "status": "blocked",
+      "visible": false,
+      "min_clearance_m": -75.97330091389802,
+      "min_distance_m": 1436.5070604561033,
+      "obstruction": {
+        "E": 418073.18578477076,
+        "N": 4422257.64328545,
+        "elevation_m": 788.0958062739417
+      },
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 302,
+      "nodata_count": 0
+    },
+    {
+      "from": "P4",
+      "to": "P7",
+      "distance_m": 3904.382153427095,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 392,
+      "nodata_count": 0
+    },
+    {
+      "from": "P5",
+      "to": "P6",
+      "distance_m": 4959.082576444962,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 497,
+      "nodata_count": 0
+    },
+    {
+      "from": "P5",
+      "to": "P7",
+      "distance_m": 1718.4004189943623,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 173,
+      "nodata_count": 0
+    },
+    {
+      "from": "P6",
+      "to": "P7",
+      "distance_m": 4744.554773632612,
+      "status": "visible",
+      "visible": true,
+      "min_clearance_m": 1.5,
+      "min_distance_m": 0.0,
+      "obstruction": null,
+      "k": 0.13,
+      "R_m": 6371000.0,
+      "clearance_threshold_m": 0.0,
+      "samples": 476,
+      "nodata_count": 0
+    }
+  ],
+  "network": {
+    "name": "DEM 通视边角网",
+    "n_points": 7,
+    "n_fixed": 2,
+    "n_observations": 76,
+    "n_distances": 16,
+    "n_angles": 60,
+    "n_visible_pairs": 16,
+    "n_params": 10,
+    "rank": 10,
+    "redundancy": 66,
+    "condition_number": 6.866014014437639,
+    "max_mp_mm": 10.048316008030712
+  }
+}

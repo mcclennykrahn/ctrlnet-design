@@ -70,6 +70,22 @@ from .reliability import (
     w_test,
 )
 
+from .terrain import (
+    DEFAULT_CLEARANCE,
+    DEFAULT_INSTRUMENT_HEIGHT,
+    DEFAULT_K,
+    DEFAULT_R,
+    DEFAULT_TARGET_HEIGHT,
+    AffineTransform,
+    DEM,
+    IntervisibilityResult,
+    Profile,
+    contours,
+    curvature_refraction_correction,
+    hillshade,
+    line_of_sight_height,
+)
+
 from .leveling import (
     HeightDifference,
     HeightNetwork,
@@ -200,6 +216,22 @@ from .report import (
     format_report,
     report,
 )
+
+__all__ += [
+    "AffineTransform",
+    "DEM",
+    "Profile",
+    "IntervisibilityResult",
+    "DEFAULT_K",
+    "DEFAULT_R",
+    "DEFAULT_CLEARANCE",
+    "DEFAULT_INSTRUMENT_HEIGHT",
+    "DEFAULT_TARGET_HEIGHT",
+    "curvature_refraction_correction",
+    "line_of_sight_height",
+    "hillshade",
+    "contours",
+]
 
 __all__ += [
     "PlanMetrics",

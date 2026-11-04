@@ -11,13 +11,16 @@
 - 可靠性：多余观测分量 `r_i`、MDB、外部可靠性、w 检验；
 - 水准/高程网：1D 高程参数、固定/加权/自由网基准、水准测段与闭合环；
 - 三角高程：斜距/平距 + 天顶距、仪器高/目标高、曲率折光改正与误差传播；
+- DEM 地形：GeoTIFF 读取、双线性采样、剖面、曲率/折光通视、晕渲与等高线；
+- 通视约束网：只用通视的距离/角度边做平面平差，并把 95% 误差椭圆叠加到晕渲图；
 - 方案对比、贪心观测增补优化（最大 `mp`、trace、最弱边）；
 - 第 13 节黄金算例的精度与可靠性回归；
-- 生成网图、对比图、可靠性图、优化过程图、水准路线图、CSV 与中文报告。
+- 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告。
 
 数值约定：内部长度/高程单位为米、角度/方向为弧度；显示时距离/高差用 mm，
-角度用角秒。项目只做设计阶段的先验精度估算，不做实测观测值的后验平差，
-也不做 geoid/高程异常转换（`height_type` 仅作为属性字段）。
+角度用角秒。DEM 计算使用米制局部 UTM 坐标；项目只做设计阶段的先验精度估算，
+不做实测观测值的后验平差，也不做 geoid/高程异常转换（`height_type` 仅作为
+属性字段）。
 
 ## 1. 与 docs 方案的对应关系
 
@@ -29,14 +32,18 @@
 | §5.6 优化：贪心、预算/阈值、A 最优/最弱边 | `optimize.py`；贪心 + 可选 1 换 1 局部搜索 | ✅ MVP（贪心子集） |
 | §5.9 水准/高程网：路线/环、`σ_km`、固定/加权/自由基准、`r_i`/MDB | `leveling.py`；1D 设计矩阵、SVD、伪逆、相对高差精度 | ✅ P1/B1 |
 | §5.9.5 三角高程：斜距/平距、天顶距、曲率折光、误差传播 | `leveling.py`；解析偏导与逐项误差贡献 | ✅ P1/B1 |
+| §5.2 坐标与投影：局部 UTM、经纬度↔米制转换 | `fetch_dem.py`、`terrain.py`；样例重投影到 EPSG:32650 | ✅ P1/B2（局部） |
+| §5.7 DEM 通视：双线性采样、剖面、曲率/折光、四态判定 | `terrain.py`；`DEM`、`profile`、`intervisibility` | ✅ P1/B2 |
+| §5.7 地形渲染：晕渲、等高线 | `terrain.py`；`hillshade`、`contours` | ✅ P1/B2 |
 | §10.2 第 13 节黄金回归 | `examples.py`、`tests/test_section13.py` | ✅ 全部通过 |
 | §10.3 水准模块验证：闭合差、秩 1、`Σr_i`、三角高程公式 | `tests/test_leveling.py` | ✅ 全部通过 |
+| §10.3 DEM 模块验证：平面/斜面/山脊、曲率折光、插值、晕渲 | `tests/test_terrain.py` | ✅ 全部通过 |
 | 数据模型（点、观测、网、方案） | `model.py`；不可变计算入口，直接构造 `Network`/`Scenario` | ✅ MVP |
 | 报告与图件 | `report.py`、`plot.py`、`scripts/run_demo.py` | ✅ MVP |
 | 地图/离线底图/MBTiles、扫描图配准 | — | ❌ 未实现（后续 UI/GIS） |
 | GUI、工程树、地图选点、交互编辑 | — | ❌ 未实现 |
 | FastAPI/数据库/工程包/快照持久化 | — | ❌ 未实现（当前为内存对象） |
-| DEM 通视、投影归算 | — | ❌ 未实现 |
+| 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
 | geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
 | GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
 | 方差分量估计、稳健估计、数据 snooping 全流程 | 仅提供设计态 `r_i`/MDB 与 `w_test` 函数 | ⚠️ 部分 |
@@ -45,12 +52,14 @@
 ## 2. 安装
 
 要求 Python ≥ 3.9。运行时依赖 `numpy>=1.24`、`matplotlib>=3.6`；测试 extra 提供
-`pytest`，演示/Notebook extra 提供 `ipykernel`、`nbconvert`、`nbformat`。
+`pytest`，演示/Notebook extra 提供 `ipykernel`、`nbconvert`、`nbformat`，DEM
+GeoTIFF 读取 extra 提供 `rasterio`。
 
 ```bash
 cd /workspace/ctrlnet-design
 python3 -m venv .venv
-.venv/bin/pip install -e ".[test,demo]"   # 只跑测试可改用 ".[test]"
+.venv/bin/pip install -e ".[test,demo,terrain]"   # 只跑测试可改用 ".[test]"
+# 只跑 B2 DEM 演示：.venv/bin/pip install -e ".[test,terrain]"
 ```
 
 `pip install -e` 会按 `pyproject.toml` 的 `src` 布局注册 editable 包，测试和演示
@@ -80,9 +89,12 @@ cd /workspace/ctrlnet-design
   目标阈值、trace 目标单调性；
 - `tests/test_leveling.py`：单路线 `σ_km·sqrt(L)` 与测站数随机模型、闭合环/
   附合路线解析 `Cx`、`Σr_i=冗余数`、无基准秩亏、自由网最小约束、加权高程约束、
-  三角高程公式/球气差/斜距-平距等价/误差传播有限差分、`height_type` 属性。
+  三角高程公式/球气差/斜距-平距等价/误差传播有限差分、`height_type` 属性；
+- `tests/test_terrain.py`：平面/斜面 DEM 的双线性插值精确性、剖面端点与步长、
+  平地通视、高斯山脊遮挡、提高仪器高后通视、长距离曲率+折光下沉公式、
+  `marginal`/NoData `unknown` 四态、晕渲范围 `[0,1]` 与等高线冒烟测试。
 
-预期结果：`38 passed`。
+预期结果：`47 passed`。
 
 ## 4. 运行演示
 
@@ -90,11 +102,15 @@ cd /workspace/ctrlnet-design
 cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_demo.py
 .venv/bin/python scripts/run_leveling_demo.py
+.venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
+.venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
 ```
 
 `run_demo.py` 打印第 13 节两方案的关键精度/可靠性表，并生成平面网图件、CSV
 和中文汇总 `results.md`。`run_leveling_demo.py` 演示 6 点水准网 + 两条三角高程
-观测，生成高程点 CSV、中文结果与水准路线图。
+观测，生成高程点 CSV、中文结果与水准路线图。`run_terrain_demo.py` 在真实
+Copernicus GLO-30 子区域上选 7 个高地控制点，做全部 21 对通视分析，并用通视
+距离/角度边构网，输出地形图、剖面图、CSV、误差椭圆图与示例工程 JSON。
 
 Notebook 与脚本同源（`scripts/build_notebook.py` 从脚本的 `# %%` 单元生成），
 已执行版本在 `notebooks/demo.ipynb`，kernel 名为 `ctrlnet-venv`。重新生成并执行：
@@ -140,6 +156,10 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `leveling_points.csv` | 水准点高程、`σ_H`、基准角色与高程类型 |
 | `leveling_results.md` | 水准/三角高程中文结果、闭合环、相对高差与可靠性表 |
 | `leveling_network.png` | 水准路线图；点标注 `H`/`σ_H`，线宽按观测权重 `1/σ²` |
+| `dem_hillshade_contours.png` | 真实 DEM 晕渲 + 50 m 等高线 + 7 个控制点 + 21 对观测线（绿=通视，红=遮挡） |
+| `intervisibility_profiles.png` | 6 条代表性剖面：地形、两端连线、曲率/折光视线、遮挡点与最小净空 |
+| `intervisibility.csv` | 全部点对的 `status/visible/min_clearance`、遮挡位置、仪器高/目标高、`k/R`、采样数 |
+| `dem_network_ellipses.png` | 只用通视距离/角度边的平面网 95% 误差椭圆叠加在晕渲图上（图题注明放大倍数） |
 
 图件中如检测不到中文字体，会自动退回英文标签，避免方框乱码；本机有 Noto CJK
 字体时使用中文。误差椭圆在网图中做了 1000 倍放大，图题中已注明。
@@ -253,7 +273,93 @@ for row in result.observation_records:    # 不含加权约束行
 - `height_type` 只记录 `normal`/`orthometric`/`ellipsoidal` 等属性；MVP
   **不**把 GNSS 大地高换算为正常高，也不估计 geoid 不确定度。
 
-## 8. 目录结构
+## 8. DEM 通视与地形渲染（B2）
+
+### 8.1 数据与快速开始
+
+真实 DEM 样例来自公开的 Copernicus GLO-30 DSM（AWS Open Data，无需登录）：
+
+```text
+https://copernicus-dem-30m.s3.amazonaws.com/
+  Copernicus_DSM_COG_10_N39_00_E116_00_DEM/
+  Copernicus_DSM_COG_10_N39_00_E116_00_DEM.tif
+```
+
+`scripts/fetch_dem.py` 下载整幅 1°×1° 瓦片（约 48 MB），裁剪北京西山
+`116.00°E–116.10°E、39.90°N–40.00°N`，双线性重投影到当地 **UTM 50N
+（EPSG:32650）**，输出 `data/sample/dem_sample.tif` 与同名元数据 JSON。原始
+大文件只放 `data/cache/`（已 gitignore），仓库交付的样本约 0.3 MB（≤2 MB 限制）。
+
+```bash
+.venv/bin/python scripts/fetch_dem.py          # 已有缓存时自动跳过下载
+.venv/bin/python scripts/run_terrain_demo.py   # 通视 + 地形 + 误差椭圆演示
+```
+
+```python
+from ctrlnet import DEM, contours, hillshade
+
+dem = DEM.from_geotiff("data/sample/dem_sample.tif")
+z = dem.elevation(415500.0, 4421300.0)          # 双线性采样（米）
+prof = dem.profile((415358.4, 4421306.6), (418358.4, 4422686.6), step=10.0)
+vis = dem.intervisibility(
+    (415358.4, 4421306.6),
+    (418358.4, 4422686.6),
+    inst_h=1.5, target_h=1.5,
+    k=0.13, R=6371000.0, clearance=0.5,
+)
+print(vis.status, vis.visible, vis.min_clearance, vis.obstruction_position)
+print(vis.profile.distance, vis.profile.elevation)  # 剖面数据
+hs = hillshade(dem, azimuth=315, altitude=45)       # 返回 [0,1]
+cs = contours(dem, levels=20)                       # Matplotlib QuadContourSet
+```
+
+### 8.2 计算约定
+
+- **坐标**：`DEM` 直接使用其水平 CRS 的米制 `(E,N)`；样例为 UTM 50N。
+  `AffineTransform` 采用 GeoTIFF 六参数 `(a,b,c,d,e,f)`：
+  `E=a·col+b·row+c`、`N=d·col+e·row+f`。经纬度只用于工程 JSON/地图展示，
+  由 `rasterio.warp.transform` 与 UTM 互转，不在计算内部混用。
+- **采样**：GeoTIFF 变换定位像素角点，高程值位于像素中心；`elevation(E,N)`
+  先换算到中心索引再减 `0.5`，按四个邻点双线性插值。越界或参与插值的任一
+  邻点为 NoData 时返回 `nan`，不会把 NoData 当 0 m。
+- **剖面**：`profile(p1,p2,step=None)` 等距采样且强制包含两端点；默认
+  `step = clamp(0.5×分辨率, 0.5 m, 10 m)`（方案 §5.7.2）。
+- **曲率/折光**：视线高度按方案 §5.7.3 的经典形式
+
+  ```text
+  h_LOS(x) = h1 + (h2−h1)·x/d − (1−k)·x(d−x)/(2R)
+  ```
+
+  其中 `h1=地面1+仪器高`、`h2=地面2+目标高`，`R=6 371 000 m`，默认
+  `k=0.13`。改正项在两端为 0，跨中最大，等价于 `R_eff=R/(1−k)` 的弦线公式。
+  `curvature_refraction_correction(x,d,k,R)` 可直接复核该项。
+- **四态判定**：`min_clearance ≥ clearance` 为 `visible`；`<0` 为 `blocked`；
+  `0 ≤ min_clearance < clearance` 为 `marginal`（需现场复核）；剖面存在
+  NoData 或端点无效时为 `unknown`，不直接判为通视。默认 `clearance=0`；
+  光学观测建议现场按 0.5–1.5 m 阈值复核。
+- **晕渲**：`hillshade` 由高程梯度构造法向量，与方位角（自北顺时针）/高度角
+  的太阳方向点积后截断到 `[0,1]`；`contours` 直接调用 Matplotlib
+  `contour`/`contourf`，传入 `DEM` 时使用真实 E/N 坐标。
+- **局限**：30 m Copernicus 样例是 DSM（含植被/建筑），垂直基准为 EGM2008
+  正高；不能识别围墙、电杆、车辆等小障碍，也不等价于施工后地形。长边建议
+  对 `k=0.10/0.13/0.16` 做敏感性分析，关键边仍需现场复测。
+
+### 8.3 示例结果
+
+当前样本 `289×374`、30 m 分辨率、高程 92.6–988.5 m；边缘重投影产生约
+2.5% NoData，控制点选在内部高地，剖面未落入 NoData。演示脚本在 5×5 分块中
+取局部最高点，搜索空间展开且通视连通的 7 点网（前两点固定）。当前结果为：
+
+- 21 个点对中 16 对通视、5 对遮挡；
+- 平面网只用通视边：16 条距离 + 60 个角度（每个测站所有可见方向两两组合）；
+- `rank=10`、冗余 66、条件数约 6.87，未知点最大 `mp≈10.05 mm`；
+- 95% 误差椭圆在图上放大 50 000×，图题与图例中明确标注。
+
+`data/sample/terrain_project.json` 汇总下一步网页地图所需内容：点的经纬度 /
+UTM E/N / 高程 / 固定标志、`σE/σN/mp`、95% 椭圆半轴与方位、通视距离/角度
+观测、全部点对的通视状态与遮挡位置、DEM 来源/版本/垂直基准及 k/R/阈值。
+
+## 9. 目录结构
 
 ```text
 ctrlnet-design/
@@ -266,16 +372,26 @@ ctrlnet-design/
 │   ├── precision.py           # mp、误差椭圆、边相对精度
 │   ├── reliability.py         # 平面网 r_i、MDB、外部可靠性、w 检验
 │   ├── leveling.py            # 1D 水准/高程网、三角高程、高程可靠性、路线图
+│   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
 │   ├── compare.py             # 方案对比
 │   ├── optimize.py            # 贪心增补与局部搜索
 │   ├── plot.py                # 网图与椭圆
 │   ├── report.py              # 中文表格
 │   └── examples.py            # 第 13 节两方案
-├── tests/                     # 黄金回归、秩/异常、优化测试
+├── tests/                     # 黄金回归、秩/异常、优化、DEM 测试
+│   └── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
 ├── scripts/
 │   ├── run_demo.py            # 平面网演示主脚本
 │   ├── run_leveling_demo.py   # 水准/三角高程演示
+│   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
+│   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
 │   └── build_notebook.py      # 由脚本生成 notebook
+├── data/
+│   ├── cache/                 # DEM 原始大文件（gitignore）
+│   └── sample/
+│       ├── dem_sample.tif     # 289×374、30 m 裁剪样本（约 0.3 MB）
+│       ├── dem_sample.json    # 来源/CRS/垂直基准/范围/校验和
+│       └── terrain_project.json  # 网页地图示例工程
 ├── notebooks/demo.ipynb       # 已执行的演示 notebook
 ├── outputs/                   # 图件、CSV、results.md（提交）
 ├── pyproject.toml
@@ -283,7 +399,7 @@ ctrlnet-design/
 └── README.md
 ```
 
-## 9. 计算约定与限制
+## 10. 计算约定与限制
 
 - 设计态：`σ0=1`，`Cx=(AᵀQl⁻¹A)⁺`，不估计单位权方差，不做实测残差平差。
 - 距离先验方差：`σ²=a²+(b·10⁻⁶·s)²`；角度/方向标准差按角秒输入，内部转弧度。
@@ -301,5 +417,10 @@ ctrlnet-design/
   显式传 `datum="fixed"`；显式 `datum="weighted"` 时没有任何 `sigma_H` 会报错。
 - 三角高程单向观测的曲率/折光改正为正值（k=0.13 时 `S=1000 m` 约 0.0683 m）；
   对向观测取均值、正常高/大地高转换与 geoid 协方差尚未实现。
+- DEM 通视使用与三角高程一致的 `(1−k)x(d−x)/(2R)` 模型；`k` 随气象变化，
+  长边应做敏感性分析。30 m DSM 无法反映围墙、电杆、树木、车辆等小障碍，
+  NoData 或 DSM 地物不确定时输出 `unknown`，不得直接判为通视。
+- DEM 样例采用局部 UTM 50N，只适用于本测区；未实现投影尺度/子午线收敛角的
+  全链路 grid/ground 归算、跨带处理与 geoid 改正。
 - 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
-  3D 联合、投影归算、DEM 通视、地图/GUI/API/数据库。
+  3D 联合、地图/GUI/API/数据库。
