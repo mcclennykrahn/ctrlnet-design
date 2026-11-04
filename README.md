@@ -38,35 +38,29 @@
 
 ## 2. 安装
 
-要求 Python ≥ 3.9，依赖 `numpy>=1.24`、`matplotlib>=3.6`；测试额外需要 `pytest`。
+要求 Python ≥ 3.9。运行时依赖 `numpy>=1.24`、`matplotlib>=3.6`；测试 extra 提供
+`pytest`，演示/Notebook extra 提供 `ipykernel`、`nbconvert`、`nbformat`。
 
 ```bash
 cd /workspace/ctrlnet-design
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[test]"
+python3 -m venv .venv
+.venv/bin/pip install -e ".[test,demo]"   # 只跑测试可改用 ".[test]"
 ```
 
-也可以使用已有的虚拟环境：
+`pip install -e` 会按 `pyproject.toml` 的 `src` 布局注册 editable 包，测试和演示
+都直接 `import ctrlnet`，不再使用 `pythonpath = ["src"]` 或 `sys.path` 回退。
+安装后确认导入位置：
 
 ```bash
-/workspace/venvs/ctrlnet/bin/pip install -e /workspace/ctrlnet-design
+.venv/bin/python -c "import ctrlnet; print(ctrlnet.__file__)"
+# 应输出 /workspace/ctrlnet-design/src/ctrlnet/__init__.py
 ```
-
-如果运行环境中的 venv/site-packages 只读，可以不安装，直接从 `src` 运行：
-
-```bash
-PYTHONPATH=src /workspace/venvs/ctrlnet/bin/python -m pytest -q
-```
-
-仓库已在 `pyproject.toml` 中配置 `pythonpath = ["src"]`，因此在仓库根目录直接运行
-`python -m pytest -q` 也能找到包；演示脚本也带有 `src` 回退。
 
 ## 3. 运行测试
 
 ```bash
 cd /workspace/ctrlnet-design
-/workspace/venvs/ctrlnet/bin/python -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
 当前测试覆盖：
@@ -85,33 +79,35 @@ cd /workspace/ctrlnet-design
 
 ```bash
 cd /workspace/ctrlnet-design
-/workspace/venvs/ctrlnet/bin/python scripts/run_demo.py
+.venv/bin/python scripts/run_demo.py
 ```
 
 脚本会打印第 13 节两方案的关键精度/可靠性表，并在 `outputs/` 生成图件、CSV
 和中文汇总 `results.md`。
 
 Notebook 与脚本同源（`scripts/build_notebook.py` 从脚本的 `# %%` 单元生成），
-已执行版本在 `notebooks/demo.ipynb`。重新生成并执行：
+已执行版本在 `notebooks/demo.ipynb`，kernel 名为 `ctrlnet-venv`。重新生成并执行：
 
 ```bash
-/workspace/venvs/ctrlnet/bin/python scripts/build_notebook.py
-/workspace/venvs/ctrlnet/bin/python -m ipykernel install --user --name ctrlnet
-/workspace/venvs/ctrlnet/bin/python -m jupyter nbconvert \
+.venv/bin/python scripts/build_notebook.py
+.venv/bin/python -m ipykernel install --user \
+  --name ctrlnet-venv --display-name "ctrlnet (.venv)"
+.venv/bin/python -m jupyter nbconvert \
   --to notebook --execute --inplace \
-  --ExecutePreprocessor.kernel_name=ctrlnet notebooks/demo.ipynb
+  --ExecutePreprocessor.kernel_name=ctrlnet-venv notebooks/demo.ipynb
 ```
 
-如果无法写入用户 kernelspec 目录，可用 `--prefix` 安装到仓库内，并通过
-`JUPYTER_PATH` 指定：
+如果用户 kernelspec 目录不可写（例如只读 HOME），可把 kernel 安装到仓库内被
+`.gitignore` 忽略的 `.jupyter/`，执行时通过 `JUPYTER_PATH` 指定：
 
 ```bash
-/workspace/venvs/ctrlnet/bin/python -m ipykernel install \
-  --prefix /workspace/ctrlnet-design/.jupyter --name ctrlnet
+.venv/bin/python -m ipykernel install \
+  --prefix /workspace/ctrlnet-design/.jupyter \
+  --name ctrlnet-venv --display-name "ctrlnet (.venv)"
 JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
-  /workspace/venvs/ctrlnet/bin/python -m jupyter nbconvert \
+  .venv/bin/python -m jupyter nbconvert \
   --to notebook --execute --inplace \
-  --ExecutePreprocessor.kernel_name=ctrlnet notebooks/demo.ipynb
+  --ExecutePreprocessor.kernel_name=ctrlnet-venv notebooks/demo.ipynb
 ```
 
 ## 5. 输出说明
@@ -133,6 +129,13 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 
 图件中如检测不到中文字体，会自动退回英文标签，避免方框乱码；本机有 Noto CJK
 字体时使用中文。误差椭圆在网图中做了 1000 倍放大，图题中已注明。
+
+网图图例固定在坐标轴右侧外部，点名标签沿网形中心向外放置并位于误差椭圆之外，
+不会遮挡点位或椭圆。观测线统一使用深色、线宽 ≥ 1.5：距离为黑色实线，角度为
+绿色点划线并在测站处画出小圆弧及带箭头的两条方向线；方向/GNSS 基线分别用橙色
+虚线和紫色虚线。`scenario_comparison.png`、`reliability_ri.png` 的图例放在
+子图下方外部，`optimizer_steps.png` 的步骤标注放在数据点下方并用细引线连接，
+均避免遮挡柱体、折线或数值标签。
 
 ## 6. API 简例
 

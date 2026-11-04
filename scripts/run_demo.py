@@ -8,17 +8,18 @@
 # - 贪心观测增补优化；
 # - 生成 `outputs/` 下的图件、CSV 与中文汇总 `results.md`。
 #
-# 运行方式（仓库根目录）：
+# 运行方式（仓库根目录，先安装 `pip install -e ".[test,demo]"`）：
 #
 # ```bash
-# /workspace/venvs/ctrlnet/bin/python scripts/run_demo.py
+# .venv/bin/python scripts/run_demo.py
 # ```
 #
-# 或执行本 notebook：
+# 或执行本 notebook（kernel 名 `ctrlnet-venv`）：
 #
 # ```bash
-# /workspace/venvs/ctrlnet/bin/python -m jupyter nbconvert \
-#   --to notebook --execute --inplace notebooks/demo.ipynb
+# .venv/bin/python -m jupyter nbconvert \
+#   --to notebook --execute --inplace \
+#   --ExecutePreprocessor.kernel_name=ctrlnet-venv notebooks/demo.ipynb
 # ```
 
 # %%
@@ -29,16 +30,13 @@ import os
 import sys
 from pathlib import Path
 
-# 允许未安装 editable 包时直接从仓库的 src 布局导入。
+# 包已通过 editable 安装导入；ROOT 仅用于定位 outputs/。
 try:
     ROOT = Path(__file__).resolve().parents[1]
 except NameError:  # notebook 中没有 __file__
     ROOT = Path.cwd()
-    if not (ROOT / "src").exists():
+    if ROOT.name == "notebooks":
         ROOT = ROOT.parent
-SRC = ROOT / "src"
-if (SRC / "ctrlnet").exists():
-    sys.path.insert(0, str(SRC))
 
 # matplotlib 缓存放到临时目录，避免只读 HOME 的告警。
 os.environ.setdefault(
@@ -144,7 +142,7 @@ def draw_network(key: str) -> Path:
         f"{T('控制网与误差椭圆', 'Control network and error ellipses')} — "
         f"{T(SCENARIO_CN[key], SCENARIO_EN[key])}"
     )
-    fig, ax = plt.subplots(figsize=(7.6, 7.0))
+    fig, ax = plt.subplots(figsize=(9.2, 7.0))
     from ctrlnet import plot_network
 
     plot_network(
@@ -154,7 +152,7 @@ def draw_network(key: str) -> Path:
         confidence=None,
         show_observation_labels=False,
         title=title,
-        figsize=(7.6, 7.0),
+        figsize=(9.2, 7.0),
     )
     ax.set_xlabel(T("东坐标 E / m", "Easting E / m"))
     ax.set_ylabel(T("北坐标 N / m", "Northing N / m"))
@@ -188,6 +186,8 @@ def draw_network(key: str) -> Path:
 
     handles, labels = ax.get_legend_handles_labels()
     label_map = {
+        "Distance": T("距离", "Distance"),
+        "Angle": T("角度", "Angle"),
         "Fixed point": T("固定点", "Fixed point"),
         "Unknown point": T("待定点", "Unknown point"),
     }
@@ -198,24 +198,39 @@ def draw_network(key: str) -> Path:
                 facecolor="tab:blue",
                 edgecolor="tab:blue",
                 alpha=0.15,
-                label=T("标准椭圆", "standard ellipse"),
+                label=T("标准椭圆（蓝色实线）", "standard ellipse (blue solid)"),
             ),
             Patch(
                 facecolor="none",
                 edgecolor="tab:red",
                 ls="--",
-                label=T("95% 椭圆", "95% ellipse"),
+                label=T("95% 椭圆（红色虚线）", "95% ellipse (red dashed)"),
             ),
         ]
     )
-    labels.extend([T("标准椭圆", "standard ellipse"), T("95% 椭圆", "95% ellipse")])
-    ax.legend(handles, labels, loc="upper right", fontsize=8)
+    labels.extend(
+        [
+            T("标准椭圆（蓝色实线）", "standard ellipse (blue solid)"),
+            T("95% 椭圆（红色虚线）", "95% ellipse (red dashed)"),
+        ]
+    )
+    # 图例固定在坐标轴右侧外部，绝不遮挡点位或椭圆。
+    ax.legend(
+        handles,
+        labels,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        fontsize=8,
+        borderaxespad=0.0,
+        frameon=True,
+    )
 
     xs = [p.E for p in network.points]
     ys = [p.N for p in network.points]
-    pad = 12.0
+    pad = 14.0
     ax.set_xlim(min(xs) - pad, max(xs) + pad)
     ax.set_ylim(min(ys) - pad, max(ys) + pad)
+    fig.tight_layout()
     path = OUTPUTS / f"network_ellipses_{key}.png"
     fig.savefig(path, dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -237,7 +252,7 @@ def draw_comparison() -> Path:
     if base.edge_order != added.edge_order:
         edge_names = list(dict.fromkeys(base.edge_order + added.edge_order))
 
-    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    fig, axes = plt.subplots(1, 2, figsize=(12.8, 5.2))
     x = np.arange(len(point_names))
     width = 0.36
     base_mp = [base.points[name].mp_mm for name in point_names]
@@ -247,9 +262,11 @@ def draw_comparison() -> Path:
     axes[0].set_xticks(x, point_names)
     axes[0].set_ylabel(T("mp / mm", "mp / mm"))
     axes[0].set_title(T("各点 mp", "Point mp"))
-    axes[0].bar_label(axes[0].containers[0], fmt="%.3f", padding=2, fontsize=8)
-    axes[0].bar_label(axes[0].containers[1], fmt="%.3f", padding=2, fontsize=8)
-    axes[0].legend(fontsize=8)
+    for container in axes[0].containers:
+        axes[0].bar_label(
+            container, fmt="%.3f", padding=2, fontsize=7, rotation=90
+        )
+    axes[0].set_ylim(0.0, max(base_mp + added_mp) * 1.22)
 
     xe = np.arange(len(edge_names))
     base_den = [base.edges[name].ratio_denominator or 0 for name in edge_names]
@@ -264,9 +281,10 @@ def draw_comparison() -> Path:
             container,
             labels=[f"{v / 1000:.1f}k" for v in container.datavalues],
             padding=2,
-            fontsize=8,
+            fontsize=7,
+            rotation=90,
         )
-    axes[1].legend(fontsize=8)
+    axes[1].set_ylim(0.0, max(base_den + added_den) * 1.22)
 
     fig.suptitle(
         T(
@@ -274,7 +292,18 @@ def draw_comparison() -> Path:
             "Base vs added scenario: precision metrics",
         )
     )
-    fig.tight_layout()
+    # 共享图例放在两幅子图下方的坐标轴外部，避免遮挡柱体或数值标签。
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncol=2,
+        fontsize=8,
+        frameon=True,
+    )
+    fig.tight_layout(rect=(0.0, 0.11, 1.0, 0.94))
     path = OUTPUTS / "scenario_comparison.png"
     fig.savefig(path, dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -293,9 +322,8 @@ def short_observation_label(row) -> str:
 
 
 def draw_reliability() -> Path:
-    fig, axes = plt.subplots(1, 2, figsize=(13.0, 4.8), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.4), sharey=True)
     thresholds = [(0.1, "0.10"), (0.3, "0.30"), (0.5, "0.50")]
-    colors = []
     for ax, key in zip(axes, ("base", "added")):
         rel = runs[key]["reliability"]
         labels = [short_observation_label(row) for row in rel.records]
@@ -306,8 +334,8 @@ def draw_reliability() -> Path:
         ]
         x = np.arange(len(labels))
         ax.bar(x, values, color=bar_colors, width=0.68)
-        ax.set_xticks(x, labels, rotation=20)
-        ax.set_ylim(0.0, 1.05)
+        ax.set_xticks(x, labels, rotation=25, ha="right")
+        ax.set_ylim(0.0, 1.08)
         ax.set_ylabel(T("多余观测分量 r_i", "Redundancy number r_i"))
         ax.set_title(
             f"{T(SCENARIO_CN[key], SCENARIO_EN[key])}  "
@@ -325,13 +353,20 @@ def draw_reliability() -> Path:
             )
         for threshold, label in thresholds:
             ax.axhline(threshold, color="0.35", lw=0.9, ls="--", zorder=0)
+            # 阈值文字放在最右一条柱子上方的空白处，避免压住柱体。
             ax.text(
-                len(labels) - 0.45,
-                threshold + 0.015,
+                0.985,
+                threshold + 0.012,
                 label,
+                transform=ax.get_yaxis_transform(),
                 fontsize=7,
-                color="0.35",
+                color="0.30",
                 ha="right",
+                va="bottom",
+                zorder=8,
+                bbox=dict(
+                    boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.85
+                ),
             )
     handles = [
         Line2D([0], [0], color="0.35", lw=0.9, ls="--", label=T("常用阈值", "common thresholds")),
@@ -339,9 +374,17 @@ def draw_reliability() -> Path:
         Patch(color="tab:orange", label=T("0.1 ≤ r_i < 0.3", "0.1 ≤ r_i < 0.3")),
         Patch(color="tab:blue", label=T("r_i ≥ 0.3", "r_i ≥ 0.3")),
     ]
-    axes[0].legend(handles=handles, fontsize=7, loc="upper left")
+    # 图例放在两幅子图下方外部，避免遮挡接近 1.0 的柱体和数值标签。
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncol=4,
+        fontsize=7.5,
+        frameon=True,
+    )
     fig.suptitle(T("两方案多余观测分量 r_i", "Redundancy numbers r_i for both scenarios"))
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.15, 1.0, 0.94))
     path = OUTPUTS / "reliability_ri.png"
     fig.savefig(path, dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -384,17 +427,32 @@ def draw_optimizer() -> Path:
         step.objective * 1000.0 for step in optimization.steps
     ]
     annotations = [T("初始", "initial")] + [step.added_label for step in optimization.steps]
-    fig, ax = plt.subplots(figsize=(9.5, 4.8))
+    fig, ax = plt.subplots(figsize=(9.8, 5.2))
     ax.step(x, y, where="post", color="tab:blue", lw=1.8)
     ax.scatter(x, y, color="tab:blue", s=45, zorder=3)
-    for xi, yi, text in zip(x, y, annotations):
+    # 初始点标在点的左上方，其余点标在点下方，并用细引导线连接，避免压住折线。
+    for index, (xi, yi, text) in enumerate(zip(x, y, annotations)):
+        if index == 0:
+            offset = (8, 12)
+            ha, va = "left", "bottom"
+        else:
+            offset = (0, -22)
+            ha, va = "center", "top"
         ax.annotate(
             text,
             (xi, yi),
             textcoords="offset points",
-            xytext=(5, 8),
-            fontsize=7,
-            rotation=25,
+            xytext=offset,
+            fontsize=7.5,
+            ha=ha,
+            va=va,
+            zorder=6,
+            bbox=dict(
+                boxstyle="round,pad=0.2", fc="white", ec="0.75", alpha=0.95
+            ),
+            arrowprops=dict(
+                arrowstyle="-", color="0.55", lw=0.6, shrinkA=0, shrinkB=2
+            ),
         )
     ax.set_xlabel(T("贪心步（0=初始）", "Greedy step (0 = initial)"))
     ax.set_ylabel(T("最大 mp / mm", "max mp / mm"))
@@ -404,6 +462,10 @@ def draw_optimizer() -> Path:
             "Greedy observation augmentation: max mp per step",
         )
     )
+    span = max(y) - min(y)
+    headroom = max(span * 0.28, 0.08)
+    ax.set_ylim(min(y) - headroom, max(y) + headroom)
+    ax.set_xlim(-0.35, len(x) - 0.35)
     ax.grid(True, color="0.9")
     fig.tight_layout()
     path = OUTPUTS / "optimizer_steps.png"

@@ -59,9 +59,9 @@ def main() -> None:
     cells = parse_cells(SCRIPT.read_text(encoding="utf-8"))
     notebook = nbf.v4.new_notebook(cells=cells)
     notebook.metadata["kernelspec"] = {
-        "display_name": "ctrlnet (venv)",
+        "display_name": "ctrlnet (.venv)",
         "language": "python",
-        "name": "ctrlnet",
+        "name": "ctrlnet-venv",
     }
     notebook.metadata["language_info"] = {"name": "python"}
     NOTEBOOK.parent.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,9 @@ htmlcov/
 venv/
 env/
 
+# 大型原始数据缓存（DEM 等只保留裁剪后的小样本）
+data/cache/
+
 # Notebook / Jupyter 本地状态
 .ipynb_checkpoints/
 .jupyter/

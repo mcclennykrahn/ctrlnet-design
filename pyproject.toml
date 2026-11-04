@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+demo = ["ipykernel>=6", "nbconvert>=7", "nbformat>=5"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -25,5 +26,3 @@ include = ["ctrlnet*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-# 允许在未安装 editable 包时直接从 src 布局运行测试（CI 与本地均适用）。
-pythonpath = ["src"]
