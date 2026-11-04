@@ -1,0 +1,7 @@
+第 B2 步（下一阶段：DEM 通视分析与地形渲染）。先阅读 docs/redesign_plan.md §5.7 通视分析与曲率/折光改正、§5.2 坐标与投影。
+1. 真实 DEM：编写 scripts/fetch_dem.py，从公开 AWS 存储桶下载 Copernicus GLO-30 一个 1°×1° 瓦片（无需登录），URL 形如
+   https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N39_00_E116_00_DEM/Copernicus_DSM_COG_10_N39_00_E116_00_DEM.tif
+   （选一个有起伏的区域，例如北京西山 N39 E115/E116 或其它有明显地形的瓦片；先用 curl -I 确认存在）。原始文件放 data/cache/（gitignore），裁剪约 10 km×10 km 的子区域，保存成 data/sample/dem_sample.tif（或 .npz + 元数据 json，≤2MB）提交。读取 GeoTIFF 可用 rasterio 或 tifffile+手动解析 geotransform（优先 rasterio，pip 能装就用；放到 extras [terrain]）。坐标：在子区域内用局部 UTM 或局部切平面（pyproj 若可用）把经纬度转成米制 E/N。
+2. src/ctrlnet/terrain.py：DEM 类（数组、仿射变换、nodata、双线性插值采样 elevation(E,N)）；profile(p1,p2,step) 剖面采样；intervisibility(p1,p2,inst_h,target_h,k=0.13,R=6371000,clearance=0) —— 视线高度按地球曲率+折光改正 (1−k)d(D−d)/(2R) 的经典形式比较地形，返回是否通视、最小净空、遮挡位置、剖面数据；hillshade(dem, azimuth=315, altitude=45)；contours（用 matplotlib contour）。
+3. 测试 tests/test_terrain.py：合成 DEM（平面、斜面、中间有山脊/高斯山峰）——平地两点通视；山脊遮挡；提高仪器高后通视；长距离时曲率+折光使远点“下沉”的数值与公式一致；双线性插值精确性；hillshade 输出范围 [0,1] 或 [0,255]。
+4. 演示 scripts/run_terrain_demo.py：在真实 DEM 子区域上布设 5~7 个控制点（取高处），对所有点对做通视分析，输出 outputs/dem_hillshade_contours.png（晕渲+等高线+控制点+观测线，通视绿色/遮挡红色）、outputs/intervisibility_profiles.png（若干代表性剖面：地形、视线、遮挡点）、outputs/intervisibility.csv。同时把该网送进已有平面平差（距离+角度只用通视的边）画误差椭圆叠加在晕渲图上 outputs/dem_network_ellipses.png。保存示例工程到 data/sample/terrain_project.json 供下一步网页地图使用（点经纬度、E/N、高程、观测及通视结果、椭圆参数）。

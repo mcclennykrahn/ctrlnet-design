@@ -10,6 +10,10 @@
 - 设计矩阵解析偏导、Cholesky 白化、SVD 求协方差；
 - 点位中误差、标准/置信误差椭圆、边长相对精度；
 - 可靠性：多余观测分量 `r_i`、MDB、外部可靠性、w 检验；
+- 模拟观测与实测平差：按先验 σ 生成距离/方向/角度/GNSS 2D/水准观测，可注入
+  k·σ 粗差；平面网高斯-牛顿迭代、水准网线性迭代；
+- 粗差探测与稳健估计：Baarda w 检验与迭代 snooping、Pope τ 检验、χ² 整体检验、
+  Huber 与 IGG-III 迭代重加权最小二乘；
 - 水准/高程网：1D 高程参数、固定/加权/自由网基准、水准测段与闭合环；
 - 三角高程：斜距/平距 + 天顶距、仪器高/目标高、曲率折光改正与误差传播；
 - DEM 地形：GeoTIFF 读取、双线性采样、剖面、曲率/折光通视、晕渲与等高线；
@@ -21,9 +25,9 @@
 - 生成网图、对比图、可靠性图、优化过程图、水准路线图、地形图、CSV 与中文报告。
 
 数值约定：内部长度/高程单位为米、角度/方向为弧度；显示时距离/高差用 mm，
-角度用角秒。DEM 计算使用米制局部 UTM 坐标；项目只做设计阶段的先验精度估算，
-不做实测观测值的后验平差，也不做 geoid/高程异常转换（`height_type` 仅作为
-属性字段）。
+角度用角秒。DEM 计算使用米制局部 UTM 坐标。项目以设计阶段先验精度估算为主，
+C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不做 geoid/高程异常转换
+（`height_type` 仅作为属性字段），也不实现完整工程数据库。
 
 ## 1. 与 docs 方案的对应关系
 
@@ -31,6 +35,7 @@
 |---|---|---|
 | §5.3 基准与秩：固定/加权/最小约束/自由网 | `datum.py`、`adjustment.py`；SVD 秩、零空间诊断、伪逆 | ✅ MVP |
 | §5.4 可靠性：`Qv`、`R`、`r_i`、MDB、外部可靠性、w 检验 | `reliability.py`；λ0 用 `statistics.NormalDist` 精确计算，默认 7.849 | ✅ MVP |
+| §5.10 粗差探测与稳健估计：模拟观测、w/τ/χ²、Huber/IGG-III | `robust.py`；高斯-牛顿、迭代 snooping、IRLS、MAD 尺度 | ✅ P1/C1 |
 | §5.5 精度：`mp`、误差椭圆、边长相对精度、最弱点/边 | `precision.py`；标准椭圆与 95% 椭圆，`k=sqrt(-2ln0.05)` | ✅ MVP |
 | §5.6 优化：贪心、预算/阈值、A 最优/最弱边 | `optimize.py`；贪心 + 可选 1 换 1 局部搜索 | ✅ MVP（贪心子集） |
 | §5.9 水准/高程网：路线/环、`σ_km`、固定/加权/自由基准、`r_i`/MDB | `leveling.py`；1D 设计矩阵、SVD、伪逆、相对高差精度 | ✅ P1/B1 |
@@ -52,7 +57,7 @@
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
 | geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
 | GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
-| 方差分量估计、稳健估计、数据 snooping 全流程 | 仅提供设计态 `r_i`/MDB 与 `w_test` 函数 | ⚠️ 部分 |
+| 方差分量估计（VCE） | 未实现 Helmert/最小范数二次无偏估计 | ❌ 未实现 |
 | MICP/MILP/Pareto、A/D/E 精确最优 | 仅贪心与简单局部搜索 | ⚠️ 部分 |
 
 ## 2. 安装
@@ -95,6 +100,9 @@ cd /workspace/ctrlnet-design
   `σ≤0`、NaN、重合点、非法 GNSS 相关系数；
 - `tests/test_optimize.py`：贪心加入观测后最大 `mp` 单调不增、预算约束、
   目标阈值、trace 目标单调性；
+- `tests/test_robust.py`：固定种子模拟观测、近似坐标高斯-牛顿收敛、χ² 全局检验、
+  无粗差无误判、10σ 粗差被 w 检验与 IGG-III 定位、稳健解接近无粗差解、
+  `r_i` 与可控性关系、水准/GNSS 2D/方向观测接口；
 - `tests/test_leveling.py`：单路线 `σ_km·sqrt(L)` 与测站数随机模型、闭合环/
   附合路线解析 `Cx`、`Σr_i=冗余数`、无基准秩亏、自由网最小约束、加权高程约束、
   三角高程公式/球气差/斜距-平距等价/误差传播有限差分、`height_type` 属性；
@@ -106,7 +114,7 @@ cd /workspace/ctrlnet-design
 - `tests/test_webmap.py`：TestClient 覆盖页面、离线 Leaflet 静态资源、
   `/api/project`、`/api/layers`、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`63 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
+预期结果：`70 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -114,6 +122,7 @@ cd /workspace/ctrlnet-design
 cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_demo.py
 .venv/bin/python scripts/run_leveling_demo.py
+.venv/bin/python scripts/run_robust_demo.py     # C1 粗差探测与稳健估计
 .venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
 .venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
 .venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
@@ -174,6 +183,9 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `leveling_points.csv` | 水准点高程、`σ_H`、基准角色与高程类型 |
 | `leveling_results.md` | 水准/三角高程中文结果、闭合环、相对高差与可靠性表 |
 | `leveling_network.png` | 水准路线图；点标注 `H`/`σ_H`，线宽按观测权重 `1/σ²` |
+| `blunder_detection.png` | C1 粗差探测：迭代前后各观测 `|w|`、临界线、IGG-III 权因子与坐标偏差对比 |
+| `robust_results.md` | C1 中文汇总：LS/剔除后 LS/Huber/IGG-III 偏差、snooping 轮次、`r_i` 与可控性 |
+| `robust_results.csv` | C1 各方法、各待定点的真值/估值/偏差、异常标签与粗差权因子 |
 | `dem_hillshade_contours.png` | 真实 DEM 晕渲 + 50 m 等高线 + 7 个控制点 + 21 对观测线（绿=通视，红=遮挡） |
 | `intervisibility_profiles.png` | 6 条代表性剖面：地形、两端连线、曲率/折光视线、遮挡点与最小净空 |
 | `intervisibility.csv` | 全部点对的 `status/visible/min_clearance`、遮挡位置、仪器高/目标高、`k/R`、采样数 |
@@ -536,7 +548,80 @@ N = -0.8·col − 12·row + 4427200
 `.pgw`、GeoTIFF 世界文件 `.tfw` 的写入/读取往返。`tests/test_webmap.py`
 覆盖配准演示 API 的参数数量、RMS、检查点、叠加 PNG 与前端离线资源。
 
-## 11. 目录结构
+## 11. 粗差探测与稳健估计（C1）
+
+### 11.1 快速开始
+
+```python
+from ctrlnet import (
+    data_snooping,
+    estimate_network,
+    igg3_estimate,
+    section13_added,
+    simulate_observations,
+)
+
+scenario = section13_added()
+dataset = simulate_observations(
+    scenario.network,
+    seed=30,
+    blunders={"CD": 10.0},       # 在 CD 上注入 10σ 粗差
+)
+approx = {"C": (0.32, 100.28), "D": (99.74, 100.31)}
+
+ls = estimate_network(dataset, approximate=approx)     # 高斯-牛顿 LS
+snoop = data_snooping(dataset, approximate=approx)     # Baarda w 迭代剔除
+robust = igg3_estimate(dataset, approximate=approx)    # IGG-III
+
+print(ls.max_deviation_mm(), ls.iterations)
+print(snoop.removed_labels)                             # ['CD']
+print(robust.outlier_labels, robust.observation_weight("CD"))
+```
+
+`simulate_observations` 支持 `Network`（距离/方向/角度/GNSS 2D）和
+`LevelingNetwork`；`blunders` 的键可为观测序号、标签或观测对象，值默认按
+`k·σ` 解释，也可用 `BlunderSpec(..., unit="absolute")` 指定绝对单位。
+`estimate_network(..., approximate=...)` 对平面网从近似坐标做高斯-牛顿迭代，
+对水准网做线性迭代；`datum` 支持固定/加权基准，水准自由网暂不支持。
+
+### 11.2 数据探测与整体检验
+
+- `data_snooping(dataset, test="w")`：σ0 已知的 Baarda w 检验，默认临界值
+  **3.29**（α0=0.001 双侧），每轮只剔除 `|w|` 最大的观测，返回所有轮次；
+- `data_snooping(dataset, test="tau")`：σ0 未知时的 Pope τ 检验，默认临界值取
+  对应自由度的 t 分布分位数；
+- `global_model_test(result)`：χ² 整体模型检验，统计量 `vᵀPv/σ0²`，返回
+  自由度、p 值、临界值与是否通过；
+- `chi2_sf`/`chi2_critical`/`t_critical` 为纯 Python 分布函数，避免新增 scipy
+  依赖。
+
+### 11.3 Huber 与 IGG-III
+
+`robust_estimate(dataset, method="huber"|"igg3")` 使用迭代重加权最小二乘：
+
+- 标准化残差 `z_i = v_i/sqrt(diag(Qv0))`，其中 `Qv0` 为先验权下的残差协方差；
+- 尺度 `s = 1.4826·MAD(z)`，`u_i = z_i/s`；
+- Huber：`|u|≤c` 原权，否则 `c/|u|`，默认 `c=1.345`；
+- IGG-III：`|u|≤k0` 原权，`k0<|u|≤k1` 降权，`|u|>k1` 淘汰，
+  默认 `k0=1.5`、`k1=3.0`。
+
+结果对象提供 `weight_factors`、`observation_weight_factors`、`outlier_labels`、
+`robust_scale`、`converged` 与迭代历史。稳健估计降低粗差影响，但不能替代
+设计阶段 `r_i`/MDB/外部可靠性；小样本下仍可能出现遮蔽或淹没。
+
+### 11.4 演示结果
+
+`scripts/run_robust_demo.py` 在第 13 节增补网的 CD 距离注入 10σ 粗差，输出：
+
+- `outputs/blunder_detection.png`：初始/剔除后 `|w|`、IGG-III 权因子、坐标偏差；
+- `outputs/robust_results.md` / `.csv`：LS、剔除后 LS、Huber、IGG-III 对比。
+
+本仓库固定种子 `30` 的实测：LS 最大点位偏差约 2.06 mm，剔除后 LS 与 IGG-III
+约 1.56 mm，Huber 约 1.52 mm；无粗差参考解约 1.57 mm。同一网中 CD 的
+`r_i≈0.90`，10σ 粗差 |w|≈9.0；角度 `r_i` 仅 0.04～0.08，同样 10σ 的 |w| 约
+2.0～2.9，低于 3.29，说明小 `r_i` 观测的粗差更难发现。
+
+## 12. 目录结构
 
 ```text
 ctrlnet-design/
@@ -548,6 +633,7 @@ ctrlnet-design/
 │   ├── adjustment.py          # SVD 求解、秩诊断、协方差
 │   ├── precision.py           # mp、误差椭圆、边相对精度
 │   ├── reliability.py         # 平面网 r_i、MDB、外部可靠性、w 检验
+│   ├── robust.py              # 模拟观测、w/τ/χ²、Huber/IGG-III 稳健估计
 │   ├── leveling.py            # 1D 水准/高程网、三角高程、高程可靠性、路线图
 │   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
 │   ├── registration.py        # 六参数仿射、残差/RMS、世界文件
@@ -563,11 +649,13 @@ ctrlnet-design/
 │   └── examples.py            # 第 13 节两方案
 ├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、Web API
 │   ├── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
+│   ├── test_robust.py         # 模拟观测/高斯-牛顿/粗差探测/稳健估计
 │   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
 │   └── test_webmap.py         # FastAPI TestClient 与离线静态资源
 ├── scripts/
 │   ├── run_demo.py            # 平面网演示主脚本
 │   ├── run_leveling_demo.py   # 水准/三角高程演示
+│   ├── run_robust_demo.py     # C1 粗差探测与稳健估计演示
 │   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
 │   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
@@ -588,9 +676,11 @@ ctrlnet-design/
 └── README.md
 ```
 
-## 12. 计算约定与限制
+## 13. 计算约定与限制
 
-- 设计态：`σ0=1`，`Cx=(AᵀQl⁻¹A)⁺`，不估计单位权方差，不做实测残差平差。
+- 设计态接口（`solve`）：`σ0=1`，`Cx=(AᵀQl⁻¹A)⁺`，不估计单位权方差。
+  实测模拟接口（`estimate_network`/`robust_estimate`）另行计算残差、σ̂0、
+  w/τ 统计量与稳健权因子，两者不要混用。
 - 距离先验方差：`σ²=a²+(b·10⁻⁶·s)²`；角度/方向标准差按角秒输入，内部转弧度。
 - 标准误差椭圆不乘置信系数（约 39.35%）；95% 椭圆乘
   `k=sqrt(χ²(2,0.95))=sqrt(-2ln0.05)≈2.4477`。
@@ -611,6 +701,9 @@ ctrlnet-design/
   NoData 或 DSM 地物不确定时输出 `unknown`，不得直接判为通视。
 - DEM 样例采用局部 UTM 50N，只适用于本测区；未实现投影尺度/子午线收敛角的
   全链路 grid/ground 归算、跨带处理与 geoid 改正。
+- C1 实测模块以“先验 σ 已知、σ0=1”为默认；w 检验临界值 3.29 对应
+  α0=0.001 双侧，τ 检验默认 t 分位数。稳健估计使用先验权下的标准化残差
+  与 MAD 尺度；IGG-III 淘汰的观测权因子为 0，但其结果仍不能替代 MDB 报告。
 - 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
   3D 联合、数据库、多工程与编辑。
 - 网页地图只绑定回环地址，无鉴权、只读单工程；扫描图配准为 6 参数仿射，
