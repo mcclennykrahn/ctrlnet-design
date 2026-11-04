@@ -86,7 +86,7 @@
       zoomControl: false,
       attributionControl: false,
       minZoom: 11,
-      maxZoom: 17,
+      maxZoom: 20,
       preferCanvas: false,
     });
     state.map = map;
@@ -463,6 +463,7 @@
   function renderCheckList(containerId, items, selectedIds, kind, mode) {
     const container = $(containerId);
     const selected = new Set(selectedIds || []);
+    container.classList.toggle("empty", !items.length);
     if (!items.length) {
       container.innerHTML = '<span class="muted">暂无条目</span>';
       return;
@@ -539,6 +540,12 @@
     renderLines();
     renderAngles();
     renderNetwork();
+    document.body.classList.toggle(
+      "empty-project",
+      !(payload.points || []).length &&
+        !(payload.lines || []).length &&
+        !(payload.angles || []).length
+    );
     if (state.map) {
       drawPoints();
       drawLines();
@@ -927,12 +934,44 @@
   }
 
   // ------------------------------------------------------------------
+  // 论文步骤视图
+  // ------------------------------------------------------------------
+  const STAGES = ["full", "map", "points", "lines", "angles"];
+
+  function applyStage(stage, options) {
+    const opts = options || {};
+    const next = STAGES.includes(stage) ? stage : "full";
+    document.body.dataset.stage = next;
+    const select = $("stage-select");
+    if (select) select.value = next;
+    if (opts.updateUrl !== false) {
+      const url = new URL(window.location.href);
+      if (next === "full") url.searchParams.delete("stage");
+      else url.searchParams.set("stage", next);
+      window.history.replaceState(null, "", url.toString());
+    }
+    if (state.map) {
+      window.setTimeout(() => state.map.invalidateSize({ pan: false }), 60);
+    }
+  }
+
+  function stageFromUrl() {
+    try {
+      const stage = new URL(window.location.href).searchParams.get("stage");
+      return STAGES.includes(stage) ? stage : "full";
+    } catch (err) {
+      return "full";
+    }
+  }
+
+  // ------------------------------------------------------------------
   // 事件绑定
   // ------------------------------------------------------------------
   function bindEvents() {
     $("project-name").addEventListener("input", () => {
       state.nameDirty = true;
     });
+    $("stage-select").addEventListener("change", () => applyStage($("stage-select").value));
 
     $("point-body").addEventListener("change", (event) => {
       const select = event.target.closest("select[data-action='toggle-fixed']");
@@ -1092,6 +1131,15 @@
       initMap();
       applyState(payload, { fit: false });
       bindEvents();
+      applyStage(stageFromUrl(), { updateUrl: false });
+      // 只读调试句柄：供本地 Playwright 截图脚本把经纬度换算成像素后点击，
+      // 不发起任何网络请求，也不绕过页面的正常交互流程。
+      window.ctrlnetThesis = {
+        map: state.map,
+        state,
+        applyStage,
+        fitToPoints,
+      };
       await refreshProjects();
     } catch (err) {
       const mapNode = $("map");

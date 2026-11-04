@@ -294,3 +294,17 @@ cd /workspace/ctrlnet-design
 - `tests/test_thesis.py`：黄金断言与 2 个 `xfail`；
 - `data/sample/thesis_example1.json`、`thesis_example2.json`：网页数据；
 - `docs/target/reproduction.md`：本文件。
+
+## 6. D3 截图专用补充（非黄金结果）
+
+D3 的截图脚本为了在网页上同时展示“论文公布的 27 个观测角”效果，在 17 条边
+给出的候选角中做了局部搜索：
+
+- 算例 1 新增 13 个角，27 角网显示 `Qxx=0.4634`、`Qyy=0.1861`（论文公布
+  `0.4636/0.1861`）；已公布 14 角仍保持 `0.6502/0.3039`。
+- 算例 2 新增 6 个角，27 观测网显示 `Qxx=0.1411`、`Qyy=0.1298`（与论文
+  公布值 4 位小数一致）。
+
+这些新增集合**不是论文原始观测集合**，只用于界面截图（黄色/观测角标记）；
+本文第 2–4 节的精确/近似/无法复现清单与 `tests/test_thesis.py` 的黄金断言
+不受影响。截图与逐项差异见 `docs/target/d3_review.md`。

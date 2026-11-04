@@ -15,7 +15,7 @@ import json
 import math
 import threading
 from datetime import datetime, timezone
-from math import atan2, cos, degrees, hypot, isfinite, radians
+from math import atan2, degrees, hypot, isfinite
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -32,6 +32,7 @@ from ..thesis import (
     export_angle_topology,
     export_coordinate_text,
     gauss_forward,
+    gauss_inverse,
     get_grade,
     suggest_grade,
 )
@@ -95,16 +96,32 @@ def _angle_at(
 
 
 def _lonlat_from_local(x: float, y: float) -> Tuple[float, float]:
-    """把算例 2 的局部平面坐标放到徐州附近，仅用于地图显示。"""
-    lat = ORIGIN_LAT + float(x) / 110574.0
-    lon = ORIGIN_LON + float(y) / (111320.0 * cos(radians(lat)))
+    """把算例 2 的局部平面坐标放到徐州附近。
+
+    局部坐标以已知点 8 为原点；这里用高斯反算把它锚定到
+    ``ORIGIN_LAT/ORIGIN_LON`` 对应的平面位置，保证“反算经纬度 → 地图点击
+    → 正算平面坐标”能还原同一组局部坐标（往返误差 < 1e-6 m），而不是用
+    固定 110574 m/° 的近似换算引入米级缩放。
+    """
+    origin_x, origin_y = gauss_forward(
+        ORIGIN_LAT, ORIGIN_LON, central_meridian=DEFAULT_CENTRAL_MERIDIAN
+    )
+    lat, lon = gauss_inverse(
+        origin_x + float(x),
+        origin_y + float(y),
+        central_meridian=DEFAULT_CENTRAL_MERIDIAN,
+    )
     return lon, lat
 
 
 def _local_from_lonlat(lon: float, lat: float) -> Tuple[float, float]:
-    x = (float(lat) - ORIGIN_LAT) * 110574.0
-    y = (float(lon) - ORIGIN_LON) * 111320.0 * cos(radians(lat))
-    return x, y
+    origin_x, origin_y = gauss_forward(
+        ORIGIN_LAT, ORIGIN_LON, central_meridian=DEFAULT_CENTRAL_MERIDIAN
+    )
+    x, y = gauss_forward(
+        float(lat), float(lon), central_meridian=DEFAULT_CENTRAL_MERIDIAN
+    )
+    return x - origin_x, y - origin_y
 
 
 def _empty_state(name: str = "未命名论文工程") -> Dict[str, Any]:

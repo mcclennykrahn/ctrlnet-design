@@ -1,14 +1,14 @@
 :root {
-  --topbar-h: 48px;
-  --green-head: #d9ead3;
-  --green-head-border: #c3d9bf;
-  --green-soft: #edf5ea;
+  --topbar-h: 0px;
+  --green-head: #dff0d8;
+  --green-head-border: #d0e9c6;
+  --green-soft: #f2f9ee;
   --blue: #1d4ed8;
   --text: #222;
   --muted: #6b7280;
   --line: #e3e5e1;
-  --button: #e6e7e3;
-  --button-hover: #d9dad5;
+  --button: #f2f2f2;
+  --button-hover: #e6e6e6;
   --red: #e53935;
   --orange: #ef7d22;
   --yellow: #f2b705;
@@ -96,6 +96,7 @@ button, input, select { font: inherit; color: inherit; }
   background: #f2f4ee;
   z-index: 1;
 }
+body[data-stage="full"] #map { height: clamp(430px, calc(100vh - 46px), 620px); }
 
 .map-caption {
   display: flex;
@@ -107,7 +108,42 @@ button, input, select { font: inherit; color: inherit; }
   background: #fbfcfa;
   border-top: 1px solid #e3e7df;
 }
+.map-caption-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.map-caption-right a { color: #4b6b52; text-decoration: none; }
+.map-caption-right a:hover { text-decoration: underline; }
 #map-coord { white-space: nowrap; color: #44604b; font-variant-numeric: tabular-nums; }
+
+/* 论文第 4 章的分步视图：只显示当前阶段已有的库。 */
+body[data-stage="map"] .library-side { display: none; }
+body[data-stage="map"] .thesis-layout { grid-template-columns: minmax(0, 1fr); }
+body[data-stage="map"] .map-side { border-right: 0; padding: 0; }
+body[data-stage="map"] .map-card { border-left: 0; border-right: 0; border-top: 0; height: 100vh; }
+body[data-stage="map"] #map { height: calc(100vh - 26px); }
+body[data-stage="map"] .principles,
+body[data-stage="map"] .offline-note { display: none; }
+
+body[data-stage="points"] #panel-lines,
+body[data-stage="points"] #panel-angles,
+body[data-stage="points"] #panel-network,
+body[data-stage="lines"] #panel-angles,
+body[data-stage="lines"] #panel-network,
+body[data-stage="angles"] #panel-network { display: none; }
+
+body[data-stage="points"] .principles,
+body[data-stage="points"] .offline-note,
+body[data-stage="lines"] .principles,
+body[data-stage="lines"] .offline-note,
+body[data-stage="angles"] .principles,
+body[data-stage="angles"] .offline-note { display: none; }
+
+body[data-stage="points"] #map,
+body[data-stage="lines"] #map,
+body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 
 .leaflet-container { font-family: inherit; }
 .leaflet-control-scale-line {
@@ -193,22 +229,35 @@ button, input, select { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
   flex-wrap: wrap;
 }
-.project-name-label { display: flex; align-items: center; gap: 5px; flex: 1 1 170px; color: #4b5563; }
+.project-name-label { display: flex; align-items: center; gap: 5px; flex: 1 1 150px; color: #4b5563; }
 .project-name-label input {
   flex: 1;
   min-width: 90px;
-  height: 27px;
+  height: 26px;
   border: 1px solid #cfd4cc;
   background: #fff;
   padding: 2px 6px;
 }
+.stage-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.stage-label select {
+  height: 26px;
+  border: 1px solid #cfd4cc;
+  background: #fff;
+  padding: 1px 4px;
+}
 .project-load-row select {
   flex: 1 1 130px;
   min-width: 100px;
-  height: 27px;
+  height: 26px;
   border: 1px solid #cfd4cc;
   background: #fff;
   padding: 1px 4px;
@@ -235,7 +284,7 @@ button, input, select { font: inherit; color: inherit; }
 
 .panel {
   border: 1px solid #d8ded4;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   background: #fff;
 }
 .panel-title {
@@ -247,7 +296,7 @@ button, input, select { font: inherit; color: inherit; }
   padding: 4px 9px;
   font-weight: 700;
   font-size: 13px;
-  color: #24452d;
+  color: #3c763d;
   letter-spacing: .02em;
 }
 .panel-count {
@@ -260,9 +309,15 @@ button, input, select { font: inherit; color: inherit; }
   padding: 0 7px;
   line-height: 16px;
 }
-.panel-body { padding: 7px 8px 8px; }
+.panel-body { padding: 6px 8px 7px; }
 .panel-hint { color: var(--muted); font-size: 11px; margin-bottom: 5px; }
 .panel-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.empty-project .panel-hint,
+.empty-project .panel-actions { display: none; }
+.empty-project .obs-grid,
+.empty-project .optimize-box { display: none; }
+.empty-project .panel-body { padding-top: 5px; padding-bottom: 5px; }
+.empty-project .empty-row { padding: 4px 3px 3px; }
 .muted { color: var(--muted); font-size: 11px; }
 
 .table-wrap { width: 100%; overflow-x: auto; position: relative; }
@@ -335,7 +390,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .input-row-angle label { flex: 1 1 90px; }
 .input-row-angle input { width: 48px; }
-.input-row .btn { margin-left: auto; }
+.input-row .btn { margin-left: auto; width: 80px; height: 30px; }
 .input-row-angle .btn { flex: 0 0 auto; margin-left: 0; }
 
 .network-top {
@@ -399,6 +454,7 @@ button, input, select { font: inherit; color: inherit; }
 .check-list .chip-status { margin-left: auto; font-size: 9.5px; color: #8a9186; }
 .check-list .chip-status.added { color: #a06b00; }
 .check-list .chip-status.observed { color: #b3382e; }
+.check-list.empty { max-height: none; padding: 3px 6px; }
 
 .optimize-box {
   border: 1px solid #eadfbd;

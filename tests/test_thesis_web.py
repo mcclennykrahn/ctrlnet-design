@@ -8,6 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ctrlnet.webmap.app import create_app
+from ctrlnet.thesis import gauss_forward
+from ctrlnet.webmap.thesis_web import (
+    DEFAULT_CENTRAL_MERIDIAN,
+    ORIGIN_LAT,
+    ORIGIN_LON,
+    _lonlat_from_local,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO_DB = ROOT / "data" / "sample" / "demo_project.sqlite"
@@ -249,3 +256,25 @@ def test_examples_list_and_errors(client: TestClient):
     assert client.delete("/api/thesis/lines/l99").status_code == 404
     assert client.delete("/api/thesis/angles/a99").status_code == 404
     assert client.get("/api/thesis/export/coordinates").status_code == 400
+
+
+def test_example2_local_lonlat_roundtrip():
+    """算例 2 的局部坐标放到地图后，点击反算必须还原同一平面坐标。"""
+    origin_x, origin_y = gauss_forward(
+        ORIGIN_LAT, ORIGIN_LON, central_meridian=DEFAULT_CENTRAL_MERIDIAN
+    )
+    for x, y in ((0.0, 0.0), (444.8923, 3.2213), (-468.1251, 337.0750)):
+        lon, lat = _lonlat_from_local(x, y)
+        gx, gy = gauss_forward(lat, lon, central_meridian=DEFAULT_CENTRAL_MERIDIAN)
+        assert gx - origin_x == pytest.approx(x, abs=1e-6)
+        assert gy - origin_y == pytest.approx(y, abs=1e-6)
+
+
+def test_thesis_page_has_paper_stage_views(client: TestClient):
+    html = client.get("/thesis").text
+    assert 'id="stage-select"' in html
+    assert 'data-stage="full"' in html
+    for value in ("map", "points", "lines", "angles"):
+        assert f'<option value="{value}">' in html
+    # 顶栏已移除，页面从地图/面板开始，更接近论文截图。
+    assert "thesis-topbar" not in html

@@ -1,0 +1,141 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 630
+  },
+  "figures": {
+    "4-1": {
+      "target": "img-020-007.png",
+      "ours": "ours_fig4-1.png",
+      "compare": "compare_fig4-1.png",
+      "caption": "仅地图，左上缩放控件、左下比例尺"
+    },
+    "4-2": {
+      "target": "img-021-008.png",
+      "ours": "ours_fig4-2.png",
+      "compare": "compare_fig4-2.png",
+      "caption": "点库：地图点击选点后实时出现点号与经纬度"
+    },
+    "4-3": {
+      "target": "img-022-009.png",
+      "ours": "ours_fig4-3.png",
+      "compare": "compare_fig4-3.png",
+      "caption": "线库：起点/终点构线，距离与方位"
+    },
+    "4-4": {
+      "target": "img-022-010.png",
+      "ours": "ours_fig4-4.png",
+      "compare": "compare_fig4-4.png",
+      "caption": "角库：后视/测站/前视构角，测站圆弧"
+    },
+    "4-5": {
+      "target": "img-023-011.png",
+      "ours": "ours_fig4-5.png",
+      "compare": "compare_fig4-5.png",
+      "caption": "完整页面：点库、线库、角库、网库"
+    },
+    "4-9": {
+      "target": "img-029-014.png",
+      "ours": "ours_fig4-9.png",
+      "compare": "compare_fig4-9.png",
+      "caption": "点库更新"
+    },
+    "4-10": {
+      "target": "img-029-015.png",
+      "ours": "ours_fig4-10.png",
+      "compare": "compare_fig4-10.png",
+      "caption": "删除点（级联删除关联线、角）"
+    },
+    "4-11": {
+      "target": "img-030-016.png",
+      "ours": "ours_fig4-11.png",
+      "compare": "compare_fig4-11.png",
+      "caption": "构线"
+    },
+    "4-12": {
+      "target": "img-030-017.png",
+      "ours": "ours_fig4-12.png",
+      "compare": "compare_fig4-12.png",
+      "caption": "删除线（只删线，不删点）"
+    },
+    "4-13": {
+      "target": "img-031-018.png",
+      "ours": "ours_fig4-13.png",
+      "compare": "compare_fig4-13.png",
+      "caption": "构角"
+    },
+    "5-1": {
+      "target": "img-033-019.png",
+      "ours": "ours_fig5-1.png",
+      "compare": "compare_fig5-1.png",
+      "caption": "算例 1：9 点布设，1–7 未知、8/9 已知"
+    },
+    "5-2": {
+      "target": "img-034-020.png",
+      "ours": "ours_fig5-2.png",
+      "compare": "compare_fig5-2.png",
+      "caption": "算例 1：17 条边构网"
+    },
+    "5-4": {
+      "target": "img-035-023.png",
+      "ours": "ours_fig5-4.png",
+      "compare": "compare_fig5-4.png",
+      "caption": "算例 1：19 个角标记（14 个已公布拓扑 + 5 个图形角）"
+    },
+    "5-8": {
+      "target": "img-036-027.png",
+      "ours": "ours_fig5-8.png",
+      "compare": "compare_fig5-8.png",
+      "caption": "算例 1 优化：27 个观测角"
+    },
+    "5-9": {
+      "target": "img-037-028.png",
+      "ours": "ours_fig5-9.png",
+      "compare": "compare_fig5-9.png",
+      "caption": "算例 2：9 点边角网"
+    },
+    "5-11": {
+      "target": "img-038-031.png",
+      "ours": "ours_fig5-11.png",
+      "compare": "compare_fig5-11.png",
+      "caption": "算例 2：10 条观测边 + 11 个观测角，红色标出"
+    },
+    "5-13": {
+      "target": "img-039-033.png",
+      "ours": "ours_fig5-13.png",
+      "compare": "compare_fig5-13.png",
+      "caption": "算例 2 优化后：已观测红实线、新增观测黄实线"
+    }
+  },
+  "calculation": {
+    "5-8": {
+      "badge": "满足精度要求",
+      "weakest": "最弱点 1",
+      "qxx": "0.4634",
+      "qyy": "0.1861",
+      "m": "8.06 mm / 0.81 cm",
+      "n_obs": "27",
+      "note": "Qxx/Qyy 为论文截图数值口径；严格 mm²：Qxx=46.3371，Qyy=18.6080，M=80.59 mm。B 矩阵 27×14，秩 14。"
+    },
+    "5-11": {
+      "badge": "满足精度要求",
+      "weakest": "最弱点 7",
+      "qxx": "0.1715",
+      "qyy": "0.1575",
+      "m": "5.74 mm / 0.57 cm",
+      "n_obs": "21",
+      "note": "Qxx/Qyy 为论文截图数值口径；严格 mm²：Qxx=17.1525，Qyy=15.7484，M=57.36 mm。B 矩阵 21×14，秩 14。"
+    },
+    "5-13": {
+      "badge": "满足精度要求",
+      "weakest": "最弱点 7",
+      "qxx": "0.1411",
+      "qyy": "0.1298",
+      "m": "5.20 mm / 0.52 cm",
+      "n_obs": "27",
+      "note": "Qxx/Qyy 为论文截图数值口径；严格 mm²：Qxx=14.1119，Qyy=12.9771，M=52.05 mm。B 矩阵 27×14，秩 14。"
+    }
+  },
+  "offline_requests": 0,
+  "note": "点位由经纬度换算成像素后真实点击地图添加；线/角/勾选/删除均走页面交互。"
+}
