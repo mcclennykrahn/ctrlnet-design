@@ -6,6 +6,10 @@
 设计”重设计方案的 MVP、P1–P5 部分能力与 C1–C4 增量：
 
 - 平面网：距离、方向、角度、二维 GNSS 基线、坐标伪观测；
+- GNSS 三维基线网：WGS84 大地坐标/ECEF/局部 ENU、3×3 基线协方差、固定/最小
+  约束、水平/垂直/三维精度、基线相对精度与 `r_i`/MDB；
+- GNSS + 地面边角 + 水准联合平差（局部 ENU 切平面近似）；
+- 高程异常 ζ=h−H 的常数/平面拟合、参数协方差与残差，可选 EGM96 格网插值；
 - 平面基准：固定基准、加权基准、自由网/最小约束与秩亏诊断；
 - 设计矩阵解析偏导、Cholesky 白化、SVD 求协方差；
 - 点位中误差、标准/置信误差椭圆、边长相对精度；
@@ -35,9 +39,11 @@
 
 数值约定：内部长度/高程单位为米、角度/方向为弧度；显示时距离/高差用 mm，
 角度用角秒。DEM 计算使用米制局部 UTM 坐标。项目以设计阶段先验精度估算为主，
-C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不做 geoid/高程异常转换
-（`height_type` 仅作为属性字段）。C4 起提供单工程只读 SQLite 持久化、快照/
-结果缓存与报告下载，但尚未实现多工程编辑、并发写入与权限管理。
+C1 起补充实测模拟观测的平差、粗差探测与稳健估计；C3 起支持 GNSS 三维基线
+向量网、局部 ENU 联合平差与高程异常平面拟合（可选 EGM96 格网插值），但
+高程异常仍是**局部近似**，不是全国/高精度 geoid 模型。C4 起提供单工程只读
+SQLite 持久化、快照/结果缓存与报告下载，但尚未实现多工程编辑、并发写入与
+权限管理。
 
 ## 1. 与 docs 方案的对应关系
 
@@ -67,8 +73,11 @@ C1 起补充实测模拟观测的平差、粗差探测与稳健估计；仍不�
 | GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3） |
 | FastAPI/数据库/工程包/快照持久化 | `store.py` + `webmap/app.py`：SQLite 单工程、方案快照/结果缓存；工程包（zip/manifest）、多工程写入、迁移框架未实现 | ⚠️ 部分（C4） |
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
-| geoid/高程异常转换、GNSS 大地高→正常高 | 仅记录 `height_type`；无 N 模型/方差 | ❌ MVP 明确不做 |
-| GNSS 三维 ECEF/ENU、跨基线完整 VCV、Helmert | 仅二维基线（2×2 协方差） | ⚠️ 部分 |
+| §5.2 GNSS 三维 ECEF/ENU、局部切平面 | `gnss.py`；WGS84 自实现转换、ENU 原点与旋转 | ✅ C3 |
+| §5.8 GNSS 基线网：3×3 VCV、固定/最小约束、基线相对精度 | `gnss.py`；ECEF 平差、ENU 基线旋转、Cholesky 白化、复用可靠性 | ✅ C3 |
+| §5.8/§5.9 联合平差：GNSS + 距离/角度 + 水准 | `gnss.py`；同一 3D 参数集、局部 ENU、ζ 改正 | ✅ C3（局部近似） |
+| §5.9.4 高程异常/geoid、GNSS 大地高→正常高 | `gnss.py`；ζ 常数/平面拟合、参数协方差、可选 EGM96 插值 | ⚠️ 近似（C3）；无高精度 geoid/方差场 |
+| 跨基线相关完整 VCV、Helmert、LandXML | 仅逐基线 3×3；未实现跨基线块与七参数 | ❌ 未实现 |
 | 方差分量估计（VCE） | 未实现 Helmert/最小范数二次无偏估计 | ❌ 未实现 |
 | MICP/MILP/Pareto、A/D/E 精确最优 | A/D/E/max_mp/最弱边的精确分支定界（≤20 候选）与 MILP 线性代理；Pareto 前沿未实现 | ✅ C2（小规模精确） |
 
@@ -123,6 +132,10 @@ cd /workspace/ctrlnet-design
 - `tests/test_leveling.py`：单路线 `σ_km·sqrt(L)` 与测站数随机模型、闭合环/
   附合路线解析 `Cx`、`Σr_i=冗余数`、无基准秩亏、自由网最小约束、加权高程约束、
   三角高程公式/球气差/斜距-平距等价/误差传播有限差分、`height_type` 属性；
+- `tests/test_gnss.py`：大地坐标↔ECEF↔ENU 往返 <1e-6 m、已知 ENU 数值、
+  协方差旋转迹/特征值不变、纯 GNSS 网 `Cx` 与解析法方程一致、ENU 基线旋转、
+  自由网 3 平移零空间、联合平差加入地面观测后 `Cx` 不变差、ζ 平面参数恢复、
+  EGM96 样本插值；
 - `tests/test_terrain.py`：平面/斜面 DEM 的双线性插值精确性、剖面端点与步长、
   平地通视、高斯山脊遮挡、提高仪器高后通视、长距离曲率+折光下沉公式、
   `marginal`/NoData `unknown` 四态、晕渲范围 `[0,1]` 与等高线冒烟测试；
@@ -137,7 +150,7 @@ cd /workspace/ctrlnet-design
   `/api/project`、`/api/scenarios`、`/api/scenario/{id}`、`/api/layers` 方案切换、
   `/api/report` HTML/MD/DOCX、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`114 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
+预期结果：`128 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -149,6 +162,8 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_optimizer_compare.py  # C2 贪心/局部/精确/MILP 对比
 .venv/bin/python scripts/fetch_dem.py          # 可选：重新下载/裁剪 DEM 小样本
 .venv/bin/python scripts/run_terrain_demo.py   # B2 DEM 通视与误差椭圆演示
+.venv/bin/python scripts/fetch_egm.py          # 可选：下载/裁剪 EGM96 小样本
+.venv/bin/python scripts/run_gnss_demo.py      # C3 GNSS 三维基线网 + 联合平差 + ζ 拟合
 .venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
 .venv/bin/python scripts/build_demo_project.py # C4 生成 SQLite 演示工程
 .venv/bin/python -m ctrlnet.report \
@@ -162,6 +177,9 @@ cd /workspace/ctrlnet-design
 观测，生成高程点 CSV、中文结果与水准路线图。`run_terrain_demo.py` 在真实
 Copernicus GLO-30 子区域上选 7 个高地控制点，做全部 21 对通视分析，并用通视
 距离/角度边构网，输出地形图、剖面图、CSV、误差椭圆图与示例工程 JSON。
+`run_gnss_demo.py` 用 DEM 演示区 7 点构造 13 条 ENU 三维基线、6 条距离、
+4 个水平角与 9 条水准，输出基线/椭圆/垂直精度图、ζ 拟合图、CSV 与中文报告。
+`fetch_egm.py` 从公开 PROJ-data 下载 EGM96 15′ 格网并裁剪北京西山小样本。
 `make_scan_sample.py` 生成 `data/sample/scan_sample.png` 与 4 对控制点/2 个检查点
 元数据；`build_demo_project.py` 把第 13 节两方案与 DEM 全部通视边/优化方案写入
 `data/sample/demo_project.sqlite`；`python -m ctrlnet.report` 生成设计报告；
@@ -216,6 +234,10 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `leveling_points.csv` | 水准点高程、`σ_H`、基准角色与高程类型 |
 | `leveling_results.md` | 水准/三角高程中文结果、闭合环、相对高差与可靠性表 |
 | `leveling_network.png` | 水准路线图；点标注 `H`/`σ_H`，线宽按观测权重 `1/σ²` |
+| `gnss_network.png` | C3 GNSS 基线网、95% 水平椭圆（放大 10 000×）与各点垂直/三维精度 |
+| `geoid_fit.png` | C3 ζ 平面拟合残差、ζ 样本/平面/EGM96 对照 |
+| `gnss_results.md` | C3 中文报告：GNSS-only vs 联合平差、点位/基线/可靠性/ζ 拟合 |
+| `gnss_results.csv` | C3 长表：点、基线、ζ 控制点的精度/相对精度/`r_i`/MDB/残差 |
 | `blunder_detection.png` | C1 粗差探测：迭代前后各观测 `|w|`、临界线、IGG-III 权因子与坐标偏差对比 |
 | `robust_results.md` | C1 中文汇总：LS/剔除后 LS/Huber/IGG-III 偏差、snooping 轮次、`r_i` 与可控性 |
 | `robust_results.csv` | C1 各方法、各待定点的真值/估值/偏差、异常标签与粗差权因子 |
@@ -346,8 +368,9 @@ for row in result.observation_records:    # 不含加权约束行
 - 三角高程：`Δh = S·cos z + (1−k)·S²·sin²z/(2R) + i − v`；平距形式
   `Δh = D·cot z + (1−k)·D²/(2R) + i − v`。误差传播包含 `σ_z`、`σ_S/σ_D`、
   `σ_i`、`σ_v` 与可选 `σ_k`。
-- `height_type` 只记录 `normal`/`orthometric`/`ellipsoidal` 等属性；MVP
-  **不**把 GNSS 大地高换算为正常高，也不估计 geoid 不确定度。
+- `height_type` 只记录 `normal`/`orthometric`/`ellipsoidal` 等属性；B1 本身
+  **不**把 GNSS 大地高换算为正常高。C3 的 `fit_height_anomaly` 提供局部
+  ζ 平面近似，可做转换并传播拟合参数协方差，但不是高精度 geoid 模型。
 
 ## 8. DEM 通视与地形渲染（B2）
 
@@ -805,6 +828,7 @@ ctrlnet-design/
 │   ├── reliability.py         # 平面网 r_i、MDB、外部可靠性、w 检验
 │   ├── robust.py              # 模拟观测、w/τ/χ²、Huber/IGG-III 稳健估计
 │   ├── leveling.py            # 1D 水准/高程网、三角高程、高程可靠性、路线图
+│   ├── gnss.py                # C3 WGS84/ECEF/ENU、3D 基线网、联合平差、ζ/EGM96
 │   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
 │   ├── registration.py        # 六参数仿射、残差/RMS、世界文件
 │   ├── store.py               # C4 SQLite 工程库、快照 input_hash、结果缓存
@@ -821,6 +845,7 @@ ctrlnet-design/
 │   └── examples.py            # 第 13 节两方案
 ├── tests/                     # 黄金回归、秩/异常、优化、DEM、配准、存储、报告、Web API
 │   ├── test_exact_optimizer.py # C2 分支定界/穷举/预算/设站成本/五准则/MILP
+│   ├── test_gnss.py           # C3 坐标/协方差/解析 Cx/联合平差/ζ 拟合/EGM96
 │   ├── test_terrain.py        # 合成 DEM 插值/通视/曲率折光/晕渲
 │   ├── test_robust.py         # 模拟观测/高斯-牛顿/粗差探测/稳健估计
 │   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
@@ -834,6 +859,8 @@ ctrlnet-design/
 │   ├── run_optimizer_compare.py  # C2 贪心/局部/精确/MILP 多预算对比
 │   ├── fetch_dem.py           # 下载/裁剪 Copernicus GLO-30 小样本
 │   ├── run_terrain_demo.py    # DEM 通视 + 地形 + 误差椭圆演示
+│   ├── run_gnss_demo.py       # C3 GNSS 三维基线网 + 联合平差 + ζ 拟合演示
+│   ├── fetch_egm.py           # 下载/裁剪 EGM96 15′ 小样本
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
 │   ├── build_demo_project.py  # C4 生成 demo_project.sqlite（4 方案）
 │   ├── capture_webmap_screenshots.py  # Playwright 无头截图（首屏/方案切换）
@@ -843,6 +870,7 @@ ctrlnet-design/
 │   └── sample/
 │       ├── dem_sample.tif     # 289×374、30 m 裁剪样本（约 0.3 MB）
 │       ├── dem_sample.json    # 来源/CRS/垂直基准/范围/校验和
+│       ├── egm96_beijing.tif  # EGM96 15′ 北京西山裁剪样本（<1 KB）
 │       ├── terrain_project.json  # B2 DEM 示例工程（报告/网页的 DEM 元数据源）
 │       ├── demo_project.sqlite   # C4 SQLite 工程（约 108 KiB，4 个方案）
 │       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
@@ -863,7 +891,8 @@ ctrlnet-design/
 - 距离先验方差：`σ²=a²+(b·10⁻⁶·s)²`；角度/方向标准差按角秒输入，内部转弧度。
 - 标准误差椭圆不乘置信系数（约 39.35%）；95% 椭圆乘
   `k=sqrt(χ²(2,0.95))=sqrt(-2ln0.05)≈2.4477`。
-- `r_i` 对独立观测为 `1-h_ii`；GNSS 2×2 基线按块内对角元求和。`trace(R)=n-rank`。
+- `r_i` 对独立观测为 `1-h_ii`；GNSS 2×2/3×3 基线按块内对角元求和，故一条
+  3D 基线的 `r_i∈[0,3]`。`trace(R)=n-rank`。
 - MDB 默认 `λ0=7.849`（α=0.05 双侧，power=0.80）；外部可靠性取 MDB 引起的
   **最大单个坐标分量绝对值**（mm），同时保留向量范数。
 - 固定点协方差为 0；自由网/最小约束使用 Moore–Penrose 伪逆，`Cx` 与所选基准
@@ -874,7 +903,8 @@ ctrlnet-design/
 - 高程网默认 `auto` 会把非固定点的 `sigma_H` 作为加权约束；若只想使用固定点，
   显式传 `datum="fixed"`；显式 `datum="weighted"` 时没有任何 `sigma_H` 会报错。
 - 三角高程单向观测的曲率/折光改正为正值（k=0.13 时 `S=1000 m` 约 0.0683 m）；
-  对向观测取均值、正常高/大地高转换与 geoid 协方差尚未实现。
+  对向观测取均值尚未实现。C3 的高程异常平面拟合可把 GNSS 大地高转正常高，
+  但只适用于小范围；高精度 geoid 格网方差场与跨基准转换尚未实现。
 - DEM 通视使用与三角高程一致的 `(1−k)x(d−x)/(2R)` 模型；`k` 随气象变化，
   长边应做敏感性分析。30 m DSM 无法反映围墙、电杆、树木、车辆等小障碍，
   NoData 或 DSM 地物不确定时输出 `unknown`，不得直接判为通视。
@@ -888,8 +918,16 @@ ctrlnet-design/
   分支定界默认按候选集合内首次使用计设站费，不自动扣除基准网既有测站；
   需要时用 `existing_stations` 显式声明。MILP 为线性代理近似，不能替代
   精确解或最终平差复算。
-- 当前平面部分仅支持二维网；GNSS 只实现二维基线（2×2 协方差）；未实现
-  3D 联合、跨基线完整 VCV 与 Helmert 基准。
+- GNSS 三维网在 ECEF 中平差，水平距离/角度与水准在局部 ENU 切平面内联合；
+  测区跨度增大时切平面/投影尺度误差不可忽略，必须改用严格投影归算。
+- 基线向量三分量已知时，自由网零空间为 3 个整体平移（固定 1 点即可）；
+  方案 §5.8.3 的 7 个缺陷对应距离/方向型或需估计相似变换的网。当前实现按
+  实际设计矩阵报告零空间，不强行施加 7 个约束。
+- 逐基线 3×3 VCV 已支持；跨基线相关块、Helmert 七参数、方差分量估计与
+  LandXML 导入尚未实现。
+- 高程异常平面拟合的 `E,N` 必须与联合平差的 ENU/工程平面一致；模型不含
+  geoid 系统误差，外推会失效。EGM96 15′ 格网只作为对照/可选插值，不应当作
+  高精度似大地水准面。
 - C4 SQLite 工程库为**单工程只读演示**：`projects/points/observations/scenarios/
   snapshots/results` 六表已实现，支持方案版本/父方案、规范化快照与
   `input_hash` 结果缓存；尚未实现多工程编辑、并发写锁、迁移框架
@@ -999,7 +1037,114 @@ Markdown 图片使用 `assets/` 相对路径；HTML 把 PNG 以 base64 内嵌，
 章节、HTML base64 自包含、DOCX（有 pandoc 时）与 CLI；`tests/test_webmap.py`
 验证四方案列表、方案切换后的点/观测/椭圆/统计、图层 GeoJSON 与报告 API。
 
-## 16. 路线图完成度
+## 16. GNSS 三维基线网与高程异常（C3）
+
+### 16.1 快速开始
+
+```python
+import numpy as np
+from ctrlnet import (
+    Angle, Distance, GnssBaseline, GnssNetwork, GnssPoint,
+    HeightDifference, fit_height_anomaly, solve_gnss,
+)
+
+# 点可用经纬度+椭球高，也可用 ECEF (xyz=...)
+P1 = GnssPoint("P1", 39.9376, 116.0093, 934.72, fixed=True)
+P2 = GnssPoint("P2", 39.9504, 116.0443, 842.49)
+P3 = GnssPoint("P3", 39.9209, 116.0096, 824.26)
+net = GnssNetwork(
+    [P1, P2, P3],
+    [
+        # ENU 基线：ΔE/ΔN/ΔU + 3×3 协方差
+        GnssBaseline("P1", "P2", [2985.8, 1413.9, -93.1],
+                     [[4e-6, 4e-7, 0], [4e-7, 4e-6, 0], [0, 0, 1.6e-5]],
+                     frame="ENU"),
+        GnssBaseline("P2", "P3", [-2965.2, -3274.6, -18.2],
+                     [[4e-6, 0, 0], [0, 4e-6, 0], [0, 0, 1.6e-5]],
+                     frame="ENU"),
+    ],
+    distances=[Distance("P1", "P3")],
+    angles=[Angle("P1", "P2", "P3")],
+    leveling=[HeightDifference("P1", "P3", -110.46, length_km=3.3)],
+    origin="P1",
+)
+result = solve_gnss(net, datum="fixed")
+print(result.rank, result.redundancy, result.max_mp, result.max_m3D)
+print(result.points["P3"].sigma_E_mm, result.points["P3"].sigma_U_mm)
+print(result.baselines["P1-P2"].relative_horizontal)
+print(result.reliability.by_label["GNSS P1-P2"].r_i)
+```
+
+> 上面的 ENU 数值只为 API 示意；实际请用完整坐标计算，不要手填近似基线。
+> `example` 不能直接作为可复现算例，真实演示见 `scripts/run_gnss_demo.py`。
+
+高程异常平面拟合：
+
+```python
+from ctrlnet import GeoidControlPoint, fit_height_anomaly
+
+samples = [
+    GeoidControlPoint("P1", E=0.0, N=0.0, h=934.72, H=944.88),
+    GeoidControlPoint("P2", E=2985.8, N=1413.9, h=842.49, H=852.60),
+    GeoidControlPoint("P3", E=20.7, N=-1860.7, h=824.26, H=834.46),
+]
+# 3 个点刚好确定平面（dof=0）；显式给单位权方差，避免 a priori σ0=1。
+fit = fit_height_anomaly(samples, mode="plane", variance_factor=4e-6)
+print(fit.a, fit.b, fit.c, fit.rms, fit.applicability_note)
+H, sigma_H = fit.normal_height(824.26, 20.7, -1860.7, sigma_h=0.004)
+```
+
+### 16.2 模型与约定
+
+- **坐标**：WGS84 `a=6378137.0 m`、`f=1/298.257223563`；`geodetic_to_ecef`、
+  `ecef_to_geodetic`、`ecef_to_enu_matrix` 等自实现，不依赖 pyproj。
+- **基线观测**：`l_ij = X_j − X_i + v`。ECEF 框架下设计矩阵对 `from` 为
+  `−I₃`、对 `to` 为 `+I₃`；参数改为 ENU 时用公共原点的 `Rᵀ`（ECEF→ENU 的
+  转置）作链式变换。ENU 基线先按 `reference` 点（默认 `from`）旋转到 ECEF：
+  `l_ECEF=Rᵀl_ENU`、`C_ECEF=RᵀC_ENU R`。
+- **随机模型**：每条基线完整 3×3 协方差，必须对称正定；`whiten()` 用
+  Cholesky `Ql=LLᵀ` 白化，再 SVD 求 `Cx`。逐基线块对角；跨基线相关尚未实现。
+- **基准**：`fixed` 删除固定点参数（纯基线向量网固定 1 点即可消除 3 个平移）；
+  `minimal`/`free` 用 Moore–Penrose 伪逆，并报告实际零空间维数。`rank` 不足且
+  使用 fixed 时抛 `RankDeficientError`。
+- **联合平差**：水平距离/角度在公共 ENU 切平面内按 `ΔE,ΔN` 计算；水准高差
+  作用于 `U`。若附 `fit_height_anomaly` 结果，正常高差按
+  `Δh = ΔH + (ζ_j−ζ_i)` 转为椭球高差；否则假定输入已是椭球高差或局部
+  geoid 梯度可忽略。**这是本模块最重要的近似假设。**
+- **输出**：点 `E/N/U`、`X/Y/Z`、经纬度/大地高、`σE/σN/σU`、`mp`、`m3D`、
+  水平误差椭圆；基线三维/水平长度、`σ`、相对精度；`r_i`/MDB 复用
+  `reliability.analyze_reliability`。
+- **高程异常**：`fit_height_anomaly` 支持常数 `ζ=a` 与平面 `ζ=a+bE+cN`；
+  参数协方差由 `σ0²(AᵀA)⁻¹` 给出；`dof>0` 时默认由残差估计 `σ0²`，
+  `dof=0` 或已知噪声水平时用 `variance_factor=` 显式指定 `σ0²`。
+  `normal_height()` 同时传播 `σ_h` 与 `σ_ζ`。结果带 `applicability_note`，
+  明确“近似，仅适用于小范围”。
+- **EGM96 可选**：`EGMGrid.from_geotiff()` 读取 PROJ-data 的
+  `us_nga_egm96_15.tif` 或裁剪样本，双线性插值。完整格网约 2.7 MB，放在
+  `data/cache/`（gitignore）；仓库只提交 `data/sample/egm96_beijing.tif` 小样本。
+
+### 16.3 演示与结果
+
+```bash
+.venv/bin/python scripts/fetch_egm.py      # 可选；已有裁剪样本时跳过
+.venv/bin/python scripts/run_gnss_demo.py
+```
+
+演示用 `terrain_project.json` 的 7 点（P1/P2 固定）构造 13 条 ENU 基线、
+6 条距离、4 个水平角、9 条水准；大地高由 EGM96 格网 ζ 加 4 mm 模拟噪声生成。
+当前结果：
+
+- GNSS-only：参数 15、冗余 24，max `mp≈3.02 mm`，max `m3D≈5.23 mm`；
+- 联合平差：冗余 43，max `mp≈2.98 mm`，max `m3D≈3.14 mm`，max `σU≈1.26 mm`；
+- ζ 平面：`a≈−10.1666 m`、`b≈7.71 ppm`、`c≈18.14 ppm`，残差 RMS≈4.8 mm；
+- EGM96 与平面近似的差值 RMS≈0.96 mm（局部 15′ 格网很平滑，主要用于格式与
+  流程对照，不代表 geoid 精度）。DEM 的垂直基准为 EGM2008，演示格网为
+  EGM96；两者模型差异未改正，ζ 数值只用于演示转换/拟合流程。
+
+测试覆盖：`tests/test_gnss.py` 的坐标往返、已知 ENU、协方差旋转、解析 `Cx`、
+联合精度不劣化、ζ 参数恢复与 EGM96 插值。第 13 节黄金期望值未修改。
+
+## 17. 路线图完成度
 
 以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4 增量对照：
 
@@ -1007,8 +1152,8 @@ Markdown 图片使用 `assets/` 相对路径；HTML 把 PNG 以 base64 内嵌，
 |---|---|---|---|
 | P0 基线/架构、§13 黄金回归 | ✅ 已完成 | `examples.py`、`tests/test_section13.py`、文档与目录 | — |
 | P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | 投影全链路、跨带 |
-| P2 水准/高程（B1） | ✅ 已完成 | 1D 水准、路线/环、三角高程、高程可靠性 | geoid、正常高/大地高转换 |
-| P2 GNSS（C3） | ❌ 未完成 | 仅二维基线（2×2 VCV） | 3D ECEF/ENU、跨基线完整 VCV、Helmert、LandXML |
+| P2 水准/高程（B1/C3） | ✅ 已完成（局部 geoid） | 1D 水准、路线/环、三角高程、高程可靠性、ζ 平面拟合/正常高转换 | 高精度 geoid、跨基准方差场 |
+| P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、Helmert、LandXML |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
 | P3 投影归算 | ⚠️ 部分 | 局部 UTM 50N、DEM 米制坐标 | 投影尺度、子午线收敛角、grid/ground、跨带 |
 | P4 观测优化（C2） | ✅ 小规模精确 | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理 | Pareto 前沿、大规模 MICP、成本模型持久化 |
@@ -1017,4 +1162,4 @@ Markdown 图片使用 `assets/` 相对路径；HTML 把 PNG 以 base64 内嵌，
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
 | P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
-| VCE、3D 联合、多用户 | ❌ 未完成 | — | Helmert/VCE、3D 联合平差、多用户与权限 |
+| VCE、Helmert、多用户 | ❌ 未完成 | GNSS 3D 联合平差、局部 ζ 拟合 | Helmert/VCE、跨基线相关 VCV、多用户与权限 |

@@ -140,7 +140,7 @@ class ReliabilityResult:
 
 
 def _display_unit(kind: str) -> str:
-    if kind in ("distance", "gnss", "constraint"):
+    if kind in ("distance", "gnss", "constraint", "leveling", "height", "trig_height"):
         return "mm"
     if kind in ("angle", "direction"):
         return "arcsec"
@@ -160,11 +160,12 @@ def _external_by_point(
     best_norm = 0.0
     best_comp = 0.0
     best_name: Optional[str] = None
-    for name, (ie, inn) in result.index.point_columns.items():
-        vec = np.array([dx[ie], dx[inn]], dtype=float)
+    for name, columns in result.index.point_columns.items():
+        cols = tuple(int(c) for c in columns)
+        vec = np.asarray([dx[c] for c in cols], dtype=float)
         by_point[name] = vec
         norm = float(np.linalg.norm(vec))
-        comp = float(np.max(np.abs(vec)))
+        comp = float(np.max(np.abs(vec))) if vec.size else 0.0
         if norm > best_norm:
             best_norm = norm
             best_name = name
@@ -193,8 +194,11 @@ def analyze_reliability(
         from .adjustment import solve
 
         result = solve(result)
-    if not isinstance(result, AdjustmentResult):
-        raise TypeError("需要 AdjustmentResult、Scenario 或 Network")
+    required = ("Ql", "A", "Cx", "redundancy", "n_params", "design", "index")
+    if not isinstance(result, AdjustmentResult) and not all(
+        hasattr(result, name) for name in required
+    ):
+        raise TypeError("需要 AdjustmentResult、Scenario、Network 或兼容的平差结果")
 
     if lambda0_value is not None:
         lam = float(lambda0_value)

@@ -212,6 +212,10 @@ def _ellipse_from_cov(cov: np.ndarray, confidence: Optional[float]) -> ErrorElli
     )
 
 
+# 公开的椭圆构造函数，供 GNSS 三维/其他模块复用。
+ellipse_from_cov = _ellipse_from_cov
+
+
 def _point_precision(
     result: AdjustmentResult, point: Any, confidence: Optional[float]
 ) -> PointPrecision:
@@ -412,6 +416,7 @@ __all__ = [
     "edge_precision",
     "edge_precisions",
     "edge_gradient",
+    "ellipse_from_cov",
     "weakest_point",
     "weakest_edge",
 ]
