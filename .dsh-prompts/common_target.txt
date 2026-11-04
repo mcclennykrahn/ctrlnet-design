@@ -1,0 +1,1 @@
+重要约束：完全离线——不得加载任何在线瓦片或在线地图 API（包括 OSM、百度、天地图、CDN），不使用 OSM 数据；底图只用本机由 DEM 生成的离线底图；网页服务只绑定 127.0.0.1。目标规格见 /workspace/ctrlnet-design/docs/target/target_spec.md（必须先完整阅读），论文全文 docs/target/target.txt（第 3–5 章为重点）。你看不到图片，规格里已用文字描述截图。
