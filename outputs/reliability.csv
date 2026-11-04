@@ -1,0 +1,16 @@
+scenario,observation,kind,sigma,sigma_unit,r_i,mdb,mdb_unit,external_max_component_mm,external_max_norm_mm,external_point,undetectable
+base,AC,distance,2.009975,mm,0.325209,9.874534,mm,6.663247,6.665600,C,0
+base,BC,distance,2.019901,mm,0.656858,6.982350,mm,3.211287,3.216166,C,0
+base,AD,distance,2.019901,mm,0.656858,6.982350,mm,3.211287,3.216166,D,0
+base,BD,distance,2.009975,mm,0.325209,9.874534,mm,6.663247,6.665600,D,0
+base,CD,distance,2.009975,mm,0.897538,5.943900,mm,0.304512,0.320774,C,0
+base,∠C-A-B,angle,1.000000,arcsec,0.069165,10.652843,arcsec,4.807434,5.064167,C,0
+base,∠A-B-D,angle,1.000000,arcsec,0.069165,10.652843,arcsec,4.807434,5.064167,D,0
+added,AC,distance,2.009975,mm,0.628337,7.103976,mm,2.640284,2.651435,C,0
+added,BC,distance,2.019901,mm,0.823469,6.236107,mm,1.473509,1.475865,C,0
+added,AD,distance,2.019901,mm,0.807387,6.297908,mm,1.523250,1.535337,D,0
+added,BD,distance,2.009975,mm,0.644190,7.016022,mm,2.496373,2.497434,D,0
+added,CD,distance,2.009975,mm,0.899380,5.937809,mm,0.300789,0.382257,C,0
+added,∠C-A-B,angle,1.000000,arcsec,0.084158,9.657393,arcsec,4.288006,5.095051,C,0
+added,∠A-B-D,angle,1.000000,arcsec,0.072244,10.423309,arcsec,4.688287,4.774083,D,0
+added,∠D-C-A,angle,1.000000,arcsec,0.040835,13.864142,arcsec,3.180388,3.181281,D,0

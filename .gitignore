@@ -1,0 +1,24 @@
+# Python 缓存与构建产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# Notebook / Jupyter 本地状态
+.ipynb_checkpoints/
+.jupyter/
+.mplconfig/
+
+# 操作系统
+.DS_Store
+Thumbs.db
