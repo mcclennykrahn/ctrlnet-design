@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 __version__ = "0.1.0"
 
-from .exceptions import CtrlnetError, RegistrationError
+from .exceptions import CtrlnetError, PackageError, RegistrationError
 from .adjustment import (
     AdjustmentResult,
     AdjustmentError,
@@ -218,6 +220,7 @@ __all__ = [
     "AdjustmentError",
     "CtrlnetError",
     "RegistrationError",
+    "PackageError",
     "RankDeficientError",
     "InvalidGeometryError",
     "InvalidPrecisionError",
@@ -507,4 +510,96 @@ __all__ += [
     "build_angle_network",
     "build_thesis_network",
     "thesis_edge_denominator",
+]
+
+
+from .projection import (
+    DEFAULT_FALSE_EASTING as PROJECTION_FALSE_EASTING,
+    DEFAULT_ZONE_WIDTH,
+    GAUSS_SCALE_FACTOR,
+    SCALE_WARNING_PPM,
+    UTM_SCALE_FACTOR,
+    GeoPoint,
+    PointZoneInfo,
+    ProjectionSpec,
+    ReductionFactors,
+    ZoneCheck,
+    azimuth_grid_to_true,
+    azimuth_true_to_grid,
+    check_cross_zone,
+    convergence,
+    grid_to_ground,
+    ground_to_grid,
+    height_reduction_factor,
+    local_curvature_radius,
+    mean_projection_scale,
+    meridian_convergence,
+    point_scale_factor,
+    project_zone_check,
+    reduction_factors,
+    scale_factor,
+    zone_central_meridian,
+    zone_number,
+)
+
+__all__ += [
+    "DEFAULT_ZONE_WIDTH",
+    "UTM_SCALE_FACTOR",
+    "GAUSS_SCALE_FACTOR",
+    "SCALE_WARNING_PPM",
+    "PROJECTION_FALSE_EASTING",
+    "ProjectionSpec",
+    "ReductionFactors",
+    "GeoPoint",
+    "PointZoneInfo",
+    "ZoneCheck",
+    "zone_number",
+    "zone_central_meridian",
+    "local_curvature_radius",
+    "point_scale_factor",
+    "scale_factor",
+    "meridian_convergence",
+    "convergence",
+    "azimuth_true_to_grid",
+    "azimuth_grid_to_true",
+    "height_reduction_factor",
+    "reduction_factors",
+    "grid_to_ground",
+    "ground_to_grid",
+    "mean_projection_scale",
+    "check_cross_zone",
+    "project_zone_check",
+]
+
+# 工程包 API 采用惰性导入：既方便 ``ctrlnet.export_project_package`` 调用，
+# 又避免 ``python -m ctrlnet.package`` 在包初始化阶段提前加载模块。
+def export_project_package(*args: Any, **kwargs: Any) -> Any:
+    from .package import export_project_package as _export
+
+    return _export(*args, **kwargs)
+
+
+def import_project_package(*args: Any, **kwargs: Any) -> Any:
+    from .package import import_project_package as _import
+
+    return _import(*args, **kwargs)
+
+
+def inspect_project_package(*args: Any, **kwargs: Any) -> Any:
+    from .package import inspect_project_package as _inspect
+
+    return _inspect(*args, **kwargs)
+
+
+def read_manifest(*args: Any, **kwargs: Any) -> Any:
+    from .package import read_manifest as _read
+
+    return _read(*args, **kwargs)
+
+
+__all__ += [
+    "export_project_package",
+    "import_project_package",
+    "inspect_project_package",
+    "read_manifest",
 ]

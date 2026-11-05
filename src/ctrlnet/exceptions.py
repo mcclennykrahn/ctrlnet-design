@@ -49,6 +49,10 @@ class RegistrationError(CtrlnetError, ValueError):
     """影像仿射配准失败（控制点不足、共线、坐标非法等）。"""
 
 
+class PackageError(CtrlnetError, ValueError):
+    """工程包格式、版本、哈希或内容校验失败。"""
+
+
 __all__ = [
     "CtrlnetError",
     "AdjustmentError",
@@ -56,4 +60,5 @@ __all__ = [
     "InvalidPrecisionError",
     "InvalidGeometryError",
     "RegistrationError",
+    "PackageError",
 ]

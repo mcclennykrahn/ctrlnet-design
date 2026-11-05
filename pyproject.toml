@@ -36,6 +36,7 @@ e2e = [
 
 [project.scripts]
 ctrlnet-web = "ctrlnet.webmap.__main__:main"
+ctrlnet-package = "ctrlnet.package:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

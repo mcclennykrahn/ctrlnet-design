@@ -31,6 +31,12 @@
 - SQLite 工程库（`store.py`）：`projects / points / observations / scenarios /
   snapshots / results`，方案版本号与父方案、规范化 JSON 快照 + SHA-256
   `input_hash`、按哈希缓存计算结果；
+- 投影归算（`projection.py`）：高斯/UTM 尺度因子、子午线收敛角、grid↔ground
+  高程归算、跨带/中央子午线偏离检查；复用 `thesis.py` 的 CGCS2000/WGS84
+  椭球与 Krüger n⁶ 系数；
+- 单工程 zip 工程包（`package.py`）：`manifest.json` + SQLite + 小资源，
+  逐文件 SHA-256、格式版本、快照哈希与依赖清单；导出/校验/导入 CLI，
+  样例包约 324 KiB（大 DEM 仍只引用路径）；
 - 设计报告（`reportgen.py`）：工程概况、点/观测清单、先验精度模型、基准、
   点位精度与误差椭圆、边相对精度、可靠性、方案对比、优化建议、通视结果与图表，
   输出 Markdown / 自包含 HTML / 可选 DOCX（pandoc）；
@@ -48,8 +54,8 @@
 C1 起补充实测模拟观测的平差、粗差探测与稳健估计；C3 起支持 GNSS 三维基线
 向量网、局部 ENU 联合平差与高程异常平面拟合（可选 EGM96 格网插值），但
 高程异常仍是**局部近似**，不是全国/高精度 geoid 模型。C4 起提供单工程只读
-SQLite 持久化、快照/结果缓存与报告下载，但尚未实现多工程编辑、并发写入与
-权限管理。
+SQLite 持久化、快照/结果缓存、报告下载与 zip 工程包导出/回读；E1 补齐投影
+尺度/收敛角/grid-ground/跨带检查，但多工程编辑、并发写入与权限管理仍未实现。
 
 ## 1. 与 docs 方案的对应关系
 
@@ -62,11 +68,12 @@ SQLite 持久化、快照/结果缓存与报告下载，但尚未实现多工程
 | §5.6 优化：贪心、预算/阈值、A/D/E 最优、最弱边、MICP/MILP | `optimize.py`；贪心 + 1 换 1 局部搜索；≤20 候选的分支定界/穷举精确解；SciPy MILP 线性代理 | ✅ C2 |
 | §5.9 水准/高程网：路线/环、`σ_km`、固定/加权/自由基准、`r_i`/MDB | `leveling.py`；1D 设计矩阵、SVD、伪逆、相对高差精度 | ✅ P1/B1 |
 | §5.9.5 三角高程：斜距/平距、天顶距、曲率折光、误差传播 | `leveling.py`；解析偏导与逐项误差贡献 | ✅ P1/B1 |
-| §5.2 坐标与投影：局部 UTM、经纬度↔米制转换 | `fetch_dem.py`、`terrain.py`；样例重投影到 EPSG:32650 | ✅ P1/B2（局部） |
+| §5.2 坐标与投影：局部 UTM、经纬度↔米制转换、尺度/收敛角 | `projection.py`、`thesis.py`、`terrain.py`；高斯/UTM 尺度、γ、grid/ground、跨带检查 | ✅ P1/E1 |
 | §5.7 DEM 通视：双线性采样、剖面、曲率/折光、四态判定 | `terrain.py`；`DEM`、`profile`、`intervisibility` | ✅ P1/B2 |
 | §5.7 地形渲染：晕渲、等高线 | `terrain.py`；`hillshade`、`contours` | ✅ P1/B2 |
 | §5.2.7 地图/地形图配准：6 参数仿射、控制/检查点、残差 RMS | `registration.py`；`register_affine`/`register_image`、世界文件 | ✅ P1/B3 |
 | §4 数据模型：Project/Point/Observation/Scenario/Snapshot/Result | `store.py`；SQLite 六表、方案版本/父方案、规范化快照与结果缓存 | ✅ C4（单工程只读） |
+| §4 工程包 zip/manifest、依赖与哈希校验 | `package.py`；`manifest.json`、SQLite、小资源、SHA-256、版本/快照校验 | ✅ E1（单工程） |
 | §7 接口：图层、剖面、晕渲、配准、报告资源 | `webmap/app.py`；FastAPI `/api/scenarios`、`/api/scenario/{id}`、`/api/report` 等 | ✅ C4（只读单工程） |
 | §8 界面：地图、图层、属性、剖面图、方案切换、报告 | `webmap/static/`；Leaflet `CRS.Simple` + SVG 剖面 + 方案下拉 + 报告按钮 | ✅ C4（演示级） |
 | §10.2 第 13 节黄金回归 | `examples.py`、`tests/test_section13.py` | ✅ 全部通过 |
@@ -74,11 +81,12 @@ SQLite 持久化、快照/结果缓存与报告下载，但尚未实现多工程
 | §10.3 DEM 模块验证：平面/斜面/山脊、曲率折光、插值、晕渲 | `tests/test_terrain.py` | ✅ 全部通过 |
 | 数据模型（点、观测、网、方案） | `model.py`；不可变计算入口，直接构造 `Network`/`Scenario` | ✅ MVP |
 | 工程持久化 / 快照 / 结果缓存 | `store.py`；SQLite、`input_hash`、`get_or_compute_result` | ✅ C4 |
+| 工程包导出 / 回读 / 校验 | `package.py`；zip + manifest、逐文件 SHA-256、快照回读、CLI | ✅ E1 |
 | 报告与图件 | `report.py`（文本表）、`reportgen.py`（Markdown/HTML/DOCX）、`plot.py`、`scripts/run_demo.py` | ✅ C4 |
 | 地图/离线底图/MBTiles、扫描图配准 | `webmap/` 的单工程 DEM imageOverlay、扫描图配准与半透明叠加；MBTiles/矢量瓦片未实现 | ⚠️ 部分（B3） |
 | GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3） |
-| FastAPI/数据库/工程包/快照持久化 | `store.py` + `webmap/app.py`：SQLite 单工程、方案快照/结果缓存；工程包（zip/manifest）、多工程写入、迁移框架未实现 | ⚠️ 部分（C4） |
-| 投影归算全链路（投影尺度、子午线收敛角、跨带） | 仅实现局部 UTM 与 DEM 采样；未做 grid/ground 全链路归算 | ⚠️ 部分 |
+| FastAPI/数据库/工程包/快照持久化 | `store.py` + `package.py` + `webmap/app.py`：SQLite 单工程、快照/结果缓存、zip 工程包；多工程写入/迁移框架未实现 | ✅ C4/E1（单工程） |
+| 投影归算全链路（投影尺度、子午线收敛角、跨带） | `projection.py`：复变 n⁶ 尺度/γ、grid/ground、跨带告警；`scripts/run_projection_demo.py` | ✅ E1 |
 | §5.2 GNSS 三维 ECEF/ENU、局部切平面 | `gnss.py`；WGS84 自实现转换、ENU 原点与旋转 | ✅ C3 |
 | §5.8 GNSS 基线网：3×3 VCV、固定/最小约束、基线相对精度 | `gnss.py`；ECEF 平差、ENU 基线旋转、Cholesky 白化、复用可靠性 | ✅ C3 |
 | §5.8/§5.9 联合平差：GNSS + 距离/角度 + 水准 | `gnss.py`；同一 3D 参数集、局部 ENU、ζ 改正 | ✅ C3（局部近似） |
@@ -152,13 +160,21 @@ cd /workspace/ctrlnet-design
 - `tests/test_store.py`：SQLite 保存/读回往返、规范化 JSON、快照确定性、
   同一 `input_hash` 结果缓存、重新打开数据库结果一致、父方案版本、
   修改/追加观测后哈希变化；
+- `tests/test_projection.py`：6 组已知点/检查点的尺度因子与收敛角（2e-10 /
+  5e-10°）、二阶解析级数与 `gauss_forward` 数值雅可比交叉验证、中央经线
+  `m=k0, γ=0`、grid↔ground 5 组往返、3°/UTM 跨带与错误带号告警；
+- `tests/test_package.py`：manifest 字段与资源清单、导出→导入→再计算往返
+  （点/观测/快照哈希/精度结果一致）、坏 manifest/缺文件/字节数/SHA-256
+  不一致/路径穿越拒绝、非空目标目录保护、样例包 ≤2 MiB 且可回读；
 - `tests/test_report.py`：Markdown 12 个章节、HTML base64 自包含、方案对比、
   DOCX（有 pandoc 时）、CLI 与未知方案错误；
 - `tests/test_webmap.py`：TestClient 覆盖页面、离线 Leaflet 静态资源、
   `/api/project`、`/api/scenarios`、`/api/scenario/{id}`、`/api/layers` 方案切换、
   `/api/report` HTML/MD/DOCX、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`128 passed`（FastAPI TestClient 会提示一条 httpx 弃用警告，不影响结果）。
+预期结果：`221 passed, 1 skipped, 2 xfailed`（pyproj 未安装时跳过 PROJ 对照；
+两条 xfail 为论文 19/27 角算例的已知不可复现项；FastAPI TestClient 会提示
+一条 httpx 弃用警告，不影响结果）。
 
 ## 4. 运行演示
 
@@ -174,6 +190,10 @@ cd /workspace/ctrlnet-design
 .venv/bin/python scripts/run_gnss_demo.py      # C3 GNSS 三维基线网 + 联合平差 + ζ 拟合
 .venv/bin/python scripts/make_scan_sample.py   # B3 示例扫描图 + 4 对控制点
 .venv/bin/python scripts/build_demo_project.py # C4 生成 SQLite 演示工程
+.venv/bin/python scripts/run_projection_demo.py  # E1 尺度/收敛角/grid-ground/跨带表
+.venv/bin/python scripts/build_sample_package.py # E1 生成并回读校验 zip 工程包
+.venv/bin/python -m ctrlnet.package inspect \
+  data/sample/demo_project.ctrlnet.zip            # E1 查看 manifest
 .venv/bin/python -m ctrlnet.report \
   --project data/sample/demo_project.sqlite --out outputs/report  # C4 设计报告
 .venv/bin/ctrlnet-web                          # 本地网页地图（127.0.0.1:8765）
@@ -193,9 +213,11 @@ Copernicus GLO-30 子区域上选 7 个高地控制点，做全部 21 对通视�
 `fetch_egm.py` 从公开 PROJ-data 下载 EGM96 15′ 格网并裁剪北京西山小样本。
 `make_scan_sample.py` 生成 `data/sample/scan_sample.png` 与 4 对控制点/2 个检查点
 元数据；`build_demo_project.py` 把第 13 节两方案与 DEM 全部通视边/优化方案写入
-`data/sample/demo_project.sqlite`；`python -m ctrlnet.report` 生成设计报告；
-`ctrlnet-web` 启动只绑定回环地址的网页地图，浏览器访问
-`http://127.0.0.1:8765/`，可在左栏切换方案并下载报告。
+`data/sample/demo_project.sqlite`；`run_projection_demo.py` 输出已知点尺度/收敛角、
+UTM 手算近似、grid/ground 往返和跨带检查表；`build_sample_package.py` 生成
+`data/sample/demo_project.ctrlnet.zip` 并回读校验 4 个方案的快照哈希与精度结果；
+`python -m ctrlnet.report` 生成设计报告；`ctrlnet-web` 启动只绑定回环地址的
+网页地图，浏览器访问 `http://127.0.0.1:8765/`，可在左栏切换方案并下载报告。
 
 报告生成命令也支持 `--scenario s13-added`（按 id 或名称）、`--title`、
 `--confidence`、`--no-docx` 与 `--basename`；默认输出
@@ -242,6 +264,7 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `reliability.csv` | `r_i`、MDB、MDB 单位、外部最大分量/向量范数、影响点 |
 | `optimizer.csv` | 初始与每步目标值、收益、成本、已选观测 |
 | `results.md` | 平面网中文汇总表格与说明 |
+| `projection_results.md` | E1 投影归算：已知点 m/γ、解析级数与数值雅可比对照、UTM 手算近似、grid/ground 往返、跨带告警 |
 | `leveling_points.csv` | 水准点高程、`σ_H`、基准角色与高程类型 |
 | `leveling_results.md` | 水准/三角高程中文结果、闭合环、相对高差与可靠性表 |
 | `leveling_network.png` | 水准路线图；点标注 `H`/`σ_H`，线宽按观测权重 `1/σ²` |
@@ -843,6 +866,8 @@ ctrlnet-design/
 │   ├── terrain.py             # DEM 采样/剖面/通视/晕渲/等高线
 │   ├── registration.py        # 六参数仿射、残差/RMS、世界文件
 │   ├── store.py               # C4 SQLite 工程库、快照 input_hash、结果缓存
+│   ├── projection.py          # E1 投影尺度/收敛角/grid-ground/跨带检查
+│   ├── package.py             # E1 zip + manifest 工程包导出/校验/导入 + CLI
 │   ├── reportgen.py           # C4 Markdown/自包含 HTML/DOCX 设计报告
 │   ├── webmap/                # 本地 FastAPI 服务 + 离线 Leaflet 页面
 │   │   ├── app.py             # /、/dashboard、/thesis、/api/scenarios 等
@@ -862,6 +887,8 @@ ctrlnet-design/
 │   ├── test_robust.py         # 模拟观测/高斯-牛顿/粗差探测/稳健估计
 │   ├── test_registration.py   # 仿射恢复/噪声/共线/世界文件
 │   ├── test_store.py          # C4 SQLite 往返/快照哈希/结果缓存/方案版本
+│   ├── test_projection.py     # E1 已知点 m/γ/级数/数值雅可比/grid-ground/跨带
+│   ├── test_package.py        # E1 导出回读/哈希/坏包拒收/样例包 ≤2 MiB
 │   ├── test_report.py         # C4 Markdown/HTML/DOCX/章节/图表/CLI
 │   └── test_webmap.py         # 方案切换、图层、报告 API 与离线静态资源
 ├── scripts/
@@ -875,6 +902,8 @@ ctrlnet-design/
 │   ├── fetch_egm.py           # 下载/裁剪 EGM96 15′ 小样本
 │   ├── make_scan_sample.py    # 生成示例扫描图 + 配准控制点
 │   ├── build_demo_project.py  # C4 生成 demo_project.sqlite（4 方案）
+│   ├── run_projection_demo.py # E1 投影归算/跨带表 → outputs/projection_results.md
+│   ├── build_sample_package.py  # E1 生成并回读校验 demo_project.ctrlnet.zip
 │   ├── capture_webmap_screenshots.py  # Playwright 无头截图（首屏/方案切换）
 │   ├── build_thesis_samples.py  # 生成论文算例 JSON
 │   ├── run_thesis_demo.py     # 论文算例演示/CSV/网图
@@ -889,6 +918,7 @@ ctrlnet-design/
 │       ├── egm96_beijing.tif  # EGM96 15′ 北京西山裁剪样本（<1 KB）
 │       ├── terrain_project.json  # B2 DEM 示例工程（报告/网页的 DEM 元数据源）
 │       ├── demo_project.sqlite   # C4 SQLite 工程（约 108 KiB，4 个方案）
+│       ├── demo_project.ctrlnet.zip  # E1 可回读工程包（约 324 KiB，含小 DEM 样本）
 │       ├── scan_sample.png    # 780×820 示例扫描地形图（约 1.4 MB）
 │       ├── thesis_example1.json  # 论文算例 1（点/线/角/拓扑/公布值/计算值）
 │       ├── thesis_example2.json  # 论文算例 2 近似版
@@ -929,8 +959,10 @@ ctrlnet-design/
 - DEM 通视使用与三角高程一致的 `(1−k)x(d−x)/(2R)` 模型；`k` 随气象变化，
   长边应做敏感性分析。30 m DSM 无法反映围墙、电杆、树木、车辆等小障碍，
   NoData 或 DSM 地物不确定时输出 `unknown`，不得直接判为通视。
-- DEM 样例采用局部 UTM 50N，只适用于本测区；未实现投影尺度/子午线收敛角的
-  全链路 grid/ground 归算、跨带处理与 geoid 改正。
+- DEM 样例采用局部 UTM 50N，只适用于本测区。`projection.py` 已提供投影尺度/
+  子午线收敛角/grid-ground/跨带检查；但仍是 Krüger n⁶ 局部级数与
+  `R/(R+H_m)` 近似，未做逐边曲率积分、跨带分区平差、坐标变形/历元改正与
+  geoid 改正，远离中央经线或高精度成果仍需 PROJ/GeographicLib 复核。
 - C1 实测模块以“先验 σ 已知、σ0=1”为默认；w 检验临界值 3.29 对应
   α0=0.001 双侧，τ 检验默认 t 分位数。稳健估计使用先验权下的标准化残差
   与 MAD 尺度；IGG-III 淘汰的观测权因子为 0，但其结果仍不能替代 MDB 报告。
@@ -940,7 +972,8 @@ ctrlnet-design/
   需要时用 `existing_stations` 显式声明。MILP 为线性代理近似，不能替代
   精确解或最终平差复算。
 - GNSS 三维网在 ECEF 中平差，水平距离/角度与水准在局部 ENU 切平面内联合；
-  测区跨度增大时切平面/投影尺度误差不可忽略，必须改用严格投影归算。
+  测区跨度增大时切平面/投影尺度误差不可忽略，应结合 `projection.py` 做
+  grid/ground 归算或按带分区。
 - 基线向量三分量已知时，自由网零空间为 3 个整体平移（固定 1 点即可）；
   方案 §5.8.3 的 7 个缺陷对应距离/方向型或需估计相似变换的网。当前实现按
   实际设计矩阵报告零空间，不强行施加 7 个约束。
@@ -951,8 +984,13 @@ ctrlnet-design/
   高精度似大地水准面。
 - C4 SQLite 工程库为**单工程只读演示**：`projects/points/observations/scenarios/
   snapshots/results` 六表已实现，支持方案版本/父方案、规范化快照与
-  `input_hash` 结果缓存；尚未实现多工程编辑、并发写锁、迁移框架
-  （Alembic/schema_version 升级）、审计与工程包（zip/manifest）。
+  `input_hash` 结果缓存；E1 增加 zip + manifest 工程包导出/回读与哈希校验，
+  但尚未实现多工程编辑、并发写锁、迁移框架（Alembic/schema_version 升级）、
+  审计、包签名/加密与体积压缩策略。
+- 工程包默认只打包 ≤1 MiB 的引用资源；更大的原始 DEM/瓦片只在
+  `manifest.dependencies` 记录路径、大小与 SHA-256，导入后仍需保持该相对路径
+  可访问。包内资源路径拒绝绝对路径、`..`、盘符与符号链接；`format_version`
+  主版本不兼容时拒绝导入。
 - 报告为设计态报告：HTML 中图片 base64 内嵌；Markdown 使用 `assets/` 相对路径；
   DOCX 依赖本机 pandoc，失败时自动跳过。未实现 PDF、报告模板选择与签名。
 - 网页地图报告由 SQLite 结果实时生成并在进程内缓存；方案切换只读，不写回数据库。
@@ -994,6 +1032,7 @@ result = get_or_compute_result(db, "s13-added")             # 命中 results 缓
 `ProjectStore` 类提供同名方法；`get_or_compute_result` 首次计算也先写入
 `results` 再从 JSON 反序列化返回，因此首次与重新打开数据库后读取逐位一致。
 同一 `input_hash` 只计算一次；修改/追加观测后快照哈希变化，旧结果保留为历史。
+单工程的导出/回读见 §21（`package.py`）。
 
 ### 15.2 快照与结果缓存
 
@@ -1057,6 +1096,8 @@ Markdown 图片使用 `assets/` 相对路径；HTML 把 PNG 以 base64 内嵌，
 后哈希变化、父方案版本与结果重新打开一致；`tests/test_report.py` 验证 Markdown
 章节、HTML base64 自包含、DOCX（有 pandoc 时）与 CLI；`tests/test_webmap.py`
 验证四方案列表、方案切换后的点/观测/椭圆/统计、图层 GeoJSON 与报告 API。
+E1 的 `tests/test_package.py` 另验证工程包导出→导入→再计算、快照/结果逐位一致、
+坏 manifest/缺文件/哈希不一致拒收与样例包 ≤2 MiB。
 
 ## 16. GNSS 三维基线网与高程异常（C3）
 
@@ -1459,24 +1500,180 @@ D3 对照后已修正：移除论文中没有的顶栏、把地图增高到接�
 新增测试覆盖：算例 2 局部坐标→经纬度→高斯坐标往返、页面分步视图与离线静态
 资源。第 13 节黄金期望值与 D1 公式未修改。
 
-## 20. 路线图完成度
+## 20. 投影归算与跨带检查（E1）
 
-以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4 增量对照：
+### 20.1 模块与公式
+
+`src/ctrlnet/projection.py` 复用 `thesis.py` 的 CGCS2000/WGS84 椭球、
+Krüger n⁶ α 系数与 `gauss_forward/inverse`，不复制第二套椭球参数。核心约定：
+
+- 长度 m，角度输入度；高斯平面坐标统一为 `(E, N)`；
+- `m = ds_grid / ds_ellipsoid`，UTM 中央经线 `k0=0.9996`，高斯通常 `k0=1`；
+- `γ = 真北方位角 − 网格方位角`，即 `grid_azimuth = true_azimuth − γ`；
+  东于中央子午线为正，支持 `deg/arcmin/arcsec/rad`；
+- 复变形式 `ζ = z + Σα_j sin(2jz)`、`z=atan(sinh(ψ+iλ))`，由
+  `dζ/dw` 的模/辐角求 `m/γ`；这与 `gauss_forward` 的雅可比一致；
+- 高程归算 `s_ground = s_grid / [k_prj·R/(R+H_m)]`，
+  `R=sqrt(M·N)`，`H_m` 为测线平均大地高（m）。使用正常高/正高时是工程近似，
+  成果必须注明高程类型。
+
+```python
+from ctrlnet.projection import (
+    ProjectionSpec, point_scale_factor, meridian_convergence,
+    grid_to_ground, ground_to_grid, check_cross_zone,
+)
+
+m = point_scale_factor(39.95, 116.05, central_meridian=117.0,
+                       scale_factor=0.9996)
+gamma = meridian_convergence(39.95, 116.05, central_meridian=117.0,
+                             scale_factor=0.9996)          # 度
+ground = grid_to_ground(1000.0, mean_height_m=500.0,
+                        projection_scale=m, latitude_deg=39.95)
+checked = check_cross_zone(
+    [(39.95, 116.05), (39.96, 116.10)],
+    zone=50, zone_width=6.0, convention="utm",
+)
+print(checked.crosses_zone, checked.max_scale_deviation_ppm,
+      checked.recommended_zone, checked.warning_codes)
+```
+
+分带约定：
+
+| convention / width | 带号 | 中央经线 | 示例 |
+|---|---|---|---|
+| `gauss` / 3° | `round(λ/3)` | `3·带号` | 117.2°E → 39 带 / 117°E |
+| `gauss` / 6° | `floor(λ/6)+1` | `6·带号−3` | 117.2°E → 20 带 / 117°E |
+| `utm` / 6° | `floor((λ+180)/6)+1` | `6·带号−183` | 117.2°E → 50N / 117°E |
+
+### 20.2 变形/跨带阈值
+
+`check_cross_zone` 同时返回当前带与“最大经差最小”的推荐带：
+
+- `|m/k0−1| > 10 ppm` 或尺度变化范围 >10 ppm：提示投影变形；
+- 综合尺度 `|k_comb−1| > 25 ppm`（约 2.5 cm/km）：建议地面坐标/低变形投影；
+- `|γ|` 或 `Δγ > 30′`：提示分区或 3D/ENU；
+- 点集跨带、当前带号错误或推荐中央经线不同：`should_switch_zone=True`，
+  并给出 `cross_zone`、`zone_mismatch`、`recommend_switch_zone` 等稳定代码。
+
+超过阈值只做**强制警告**，不直接禁止计算；是否接受由项目精度目标决定。
+跨带时禁止把两带坐标直接当同一平面混算，应分区平差或统一到 3D/ENU。
+
+### 20.3 演示与测试
+
+```bash
+.venv/bin/python scripts/run_projection_demo.py
+.venv/bin/python -m pytest -q tests/test_projection.py
+```
+
+演示写出 `outputs/projection_results.md`，包含 7 个已知/检查点的 `m/γ`、
+二阶解析级数与 `gauss_forward` 数值雅可比对照、UTM 东坐标近似、5 条 DEM 边的
+grid↔ground 往返，以及 4 个跨带场景。当前最大差异：解析级数 <0.001 ppm /
+<0.001″，数值雅可比 <0.001 ppm / <0.00001″，往返误差 ≤1e-9 m。
+
+限制：仍是局部 Krüger 级数与 `R/(R+H_m)` 近似；未实现逐边曲率积分、跨带
+分区平差、坐标变形/历元改正与 geoid 改正。远离中央经线（>1.5 个带宽）或
+高精度成果应用 PROJ/GeographicLib 复核。
+
+## 21. 工程包导出与回读（E1）
+
+### 21.1 包结构
+
+`src/ctrlnet/package.py` 把单工程 SQLite 导出为可移植 zip：`manifest.json` +
+`project.sqlite` + 工程元数据引用的最小资源。样例包
+`data/sample/demo_project.ctrlnet.zip` 约 **324 KiB**，包含 DEM 小样
+`data/sample/dem_sample.tif`（303 KiB）与 `terrain_project.json`；大 DEM 仍只
+引用路径，不写入包。
+
+```text
+manifest.json                 # 版本/时间/engine/input_hash/files/dependencies
+project.sqlite                # 六表单工程
+data/sample/dem_sample.tif    # ≤1 MiB 的引用资源，保序相对路径
+data/sample/terrain_project.json
+```
+
+关键 manifest 字段：
+
+| 字段 | 含义 |
+|---|---|
+| `format_version` | 包格式主/次版本；主版本不兼容时拒绝导入 |
+| `package_id` | 工程 id + 文件路径/哈希派生的稳定短 id |
+| `created_at` / `engine_version` | 导出时间与 `ctrlnet.__version__` |
+| `schema_version` | SQLite 工程 schema（当前 `2.0`） |
+| `entrypoint` | 数据库在 zip 内的路径（`project.sqlite`） |
+| `project` | id/name/crs/点数/方案数/默认方案 |
+| `input_hash` | 默认方案最新快照哈希（无快照时为 `null`） |
+| `snapshot_hashes` | 各方案最新快照的 `input_hash` |
+| `files` | 每个文件的路径、role、字节数、SHA-256、media type |
+| `dependencies` | 所有被引用资源的路径/大小/哈希/是否打包/原因 |
+
+### 21.2 Python API 与 CLI
+
+```python
+from ctrlnet.package import (
+    export_project_package, import_project_package,
+    read_manifest, inspect_project_package,
+)
+
+exported = export_project_package(
+    "data/sample/demo_project.sqlite",
+    "data/sample/demo_project.ctrlnet.zip",
+    overwrite=True,
+)
+manifest = read_manifest("data/sample/demo_project.ctrlnet.zip")
+imported = import_project_package(
+    "data/sample/demo_project.ctrlnet.zip", "outputs/imported_project"
+)
+project = imported["project"]          # 可直接交给 load_project 的结果
+```
+
+```bash
+# 导出（默认拒绝覆盖；--no-resources 只打包数据库）
+.venv/bin/python -m ctrlnet.package export \
+  data/sample/demo_project.sqlite data/sample/demo_project.ctrlnet.zip --overwrite
+.venv/bin/python -m ctrlnet.package inspect data/sample/demo_project.ctrlnet.zip
+.venv/bin/python -m ctrlnet.package import \
+  data/sample/demo_project.ctrlnet.zip outputs/imported_project
+# 也可用安装后的入口：ctrlnet-package export|inspect|import ...
+```
+
+导出使用 SQLite backup API 复制一致快照，不锁源库；manifest 在数据库复制后
+计算哈希，因此源库继续写不会影响包。导入先解压到目标目录旁的临时目录，逐文件
+校验字节数与 SHA-256，再校验 `entrypoint`、工程 id、快照哈希并调用
+`load_project`；全部通过后才落盘，目标非空默认拒绝。
+
+### 21.3 往返、体积与安全
+
+- **往返**：`scripts/build_sample_package.py` 导出 4 方案样例包后立即导入临时
+  目录，比较工程字典、各方案快照 `input_hash` 与 `get_or_compute_result`
+  结果；`tests/test_package.py` 覆盖点/观测/快照哈希/精度结果逐位一致。
+- **失败路径**：缺 manifest、坏 JSON、不支持的主版本、缺文件、字节数不符、
+  SHA-256 不符、路径穿越/重复路径、非空目标目录均拒绝并抛 `PackageError`/
+  `FileExistsError`。
+- **体积**：样例包 331 964 B（324 KiB）≤2 MiB；`max_resource_bytes` 默认
+  1 MiB，大 DEM 仅记录依赖。资源写入 zip 时保持工程内相对路径，导入后
+  `load_project` 与网页/DEM 仍能按原路径解析。
+- **不做**：包签名/加密、增量包、多工程包、MBTiles/全国 DEM、Pareto、
+  Helmert/VCE、多用户鉴权与在线地图（留待 E2+）。
+
+## 22. 路线图完成度
+
+以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4/E1 增量对照：
 
 | 阶段/能力 | 状态 | 已实现 | 未完成 |
 |---|---|---|---|
 | P0 基线/架构、§13 黄金回归 | ✅ 已完成 | `examples.py`、`tests/test_section13.py`、文档与目录 | — |
-| P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | 投影全链路、跨带 |
+| P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | —（投影见 E1） |
 | P2 水准/高程（B1/C3） | ✅ 已完成（局部 geoid） | 1D 水准、路线/环、三角高程、高程可靠性、ζ 平面拟合/正常高转换 | 高精度 geoid、跨基准方差场 |
 | P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、Helmert、LandXML |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
-| P3 投影归算 | ⚠️ 部分 | 局部 UTM 50N、DEM 米制坐标 | 投影尺度、子午线收敛角、grid/ground、跨带 |
+| P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
 | P4 观测优化（C2） | ✅ 小规模精确 | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理 | Pareto 前沿、大规模 MICP、成本模型持久化 |
-| C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计、工程包 |
+| C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计 |
+| E1 工程包 zip/manifest/回读 | ✅ 已完成（单工程） | `package.py`：manifest/版本/快照哈希/逐文件 SHA-256、小资源、导出/校验/导入 CLI、324 KiB 样例包 | 包签名/加密、多工程包、增量更新、外部大资源的自动定位 |
 | C4 设计报告 | ✅ 已完成 | Markdown、自包含 HTML、DOCX（pandoc）、图表与方案对比 | PDF、模板选择、签名 |
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
 | D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
-| P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
+| P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、工程包校验、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
 | VCE、Helmert、多用户 | ❌ 未完成 | GNSS 3D 联合平差、局部 ζ 拟合 | Helmert/VCE、跨基线相关 VCV、多用户与权限 |
