@@ -91,8 +91,8 @@ SQLite 持久化、快照/结果缓存、报告下载与 zip 工程包导出/回
 | §5.8 GNSS 基线网：3×3 VCV、固定/最小约束、基线相对精度 | `gnss.py`；ECEF 平差、ENU 基线旋转、Cholesky 白化、复用可靠性 | ✅ C3 |
 | §5.8/§5.9 联合平差：GNSS + 距离/角度 + 水准 | `gnss.py`；同一 3D 参数集、局部 ENU、ζ 改正 | ✅ C3（局部近似） |
 | §5.9.4 高程异常/geoid、GNSS 大地高→正常高 | `gnss.py`；ζ 常数/平面拟合、参数协方差、可选 EGM96 插值 | ⚠️ 近似（C3）；无高精度 geoid/方差场 |
-| 跨基线相关完整 VCV、Helmert、LandXML | 仅逐基线 3×3；未实现跨基线块与七参数 | ❌ 未实现 |
-| 方差分量估计（VCE） | 未实现 Helmert/最小范数二次无偏估计 | ❌ 未实现 |
+| 跨基线相关完整 VCV、LandXML | 逐基线 3×3 与 Helmert 七参数已支持；跨基线块、LandXML 未实现 | ⚠️ 部分完成 |
+| 方差分量估计（VCE） | 独立组经典 Helmert 迭代、GNSS/地面边桥接、更新权精度 | ✅ E2b |
 | MICP/MILP/Pareto、A/D/E 精确最优 | A/D/E/max_mp/最弱边的精确分支定界（≤20 候选）与 MILP 线性代理；Pareto 前沿未实现 | ✅ C2（小规模精确） |
 
 ## 2. 安装
@@ -977,7 +977,7 @@ ctrlnet-design/
 - 基线向量三分量已知时，自由网零空间为 3 个整体平移（固定 1 点即可）；
   方案 §5.8.3 的 7 个缺陷对应距离/方向型或需估计相似变换的网。当前实现按
   实际设计矩阵报告零空间，不强行施加 7 个约束。
-- 逐基线 3×3 VCV 已支持；跨基线相关块、Helmert 七参数、方差分量估计与
+- 逐基线 3×3 VCV 已支持；跨基线相关块与
   LandXML 导入尚未实现。
 - 高程异常平面拟合的 `E,N` 必须与联合平差的 ENU/工程平面一致；模型不含
   geoid 系统误差，外推会失效。EGM96 15′ 格网只作为对照/可选插值，不应当作
@@ -1653,7 +1653,7 @@ project = imported["project"]          # 可直接交给 load_project 的结果
   1 MiB，大 DEM 仅记录依赖。资源写入 zip 时保持工程内相对路径，导入后
   `load_project` 与网页/DEM 仍能按原路径解析。
 - **不做**：包签名/加密、增量包、多工程包、MBTiles/全国 DEM、Pareto、
-  Helmert/VCE、多用户鉴权与在线地图（留待 E2+）。
+  多用户鉴权与在线地图；Helmert/VCE 核心已由 E2a1/E2b 补齐。
 
 ## 22. 路线图完成度
 
@@ -1664,7 +1664,7 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | P0 基线/架构、§13 黄金回归 | ✅ 已完成 | `examples.py`、`tests/test_section13.py`、文档与目录 | — |
 | P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | —（投影见 E1） |
 | P2 水准/高程（B1/C3） | ✅ 已完成（局部 geoid） | 1D 水准、路线/环、三角高程、高程可靠性、ζ 平面拟合/正常高转换 | 高精度 geoid、跨基准方差场 |
-| P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、Helmert、LandXML |
+| P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、LandXML |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
 | P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
 | P4 观测优化（C2） | ✅ 小规模精确 | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理 | Pareto 前沿、大规模 MICP、成本模型持久化 |
@@ -1676,4 +1676,50 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
 | P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、工程包校验、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
-| VCE、Helmert、多用户 | ❌ 未完成 | GNSS 3D 联合平差、局部 ζ 拟合 | Helmert/VCE、跨基线相关 VCV、多用户与权限 |
+| E2 Helmert / VCE | ✅ 已完成（E2a1/E2b） | 七参数恢复、经典 Helmert 分量迭代、两组桥接与演示 | 跨组相关 VCV、MINQUE |
+| 多用户 | ❌ 未完成 | 本地工程管理 | 多用户与权限 |
+
+
+## 23. Helmert 相似变换
+
+`src/ctrlnet/helmert.py` 提供 `forward(points, params)`、`inverse(points, params)`
+和 `estimate(src, dst, weights=None)`，保持 E2a1 API。参数顺序为
+`TX, TY, TZ, RX, RY, RZ, s`，单位依次为米、弧度、ppm；采用右手主动旋转
+position-vector 小角模型 `y=t+(1+s×10⁻⁶)x+r×x`，忽略角度平方与尺度角度乘积。
+逆变换精确求逆这一阶模型。至少三个非共线公共点，源坐标视为无误差；
+结果包含参数、参数协方差、目标减拟合残差和后验单位权方差。
+权可按点或分量提供，不支持相关公共点权阵。退化几何抛出 `ValueError`。
+
+```bash
+.venv/bin/python scripts/run_helmert_vce_demo.py
+```
+
+演示复用 `data/sample/terrain_project.json` 控制点，将坐标中心化后施加已知七参数，
+恢复参数并验证逆变换，生成 [Helmert 结果](outputs/helmert_results.md)。
+
+## 24. 方差分量估计 VCE
+
+`ctrlnet.vce.estimate(groups, initial_factors=None, tol=1e-7, max_iterations=100)`
+接收 `{组名: (A_g, P_g, l_g)}`，各组共享参数列，`l_g` 为观测减计算值，
+`P_g` 为相对权（正对角向量或对称正定矩阵），模型为 `Cov(l_g)=σ²_g P_g⁻¹`。
+支持组内相关、组间独立；固定线性化和固定基准，不含跨组相关 VCV 或 MINQUE。
+
+经典 Helmert 方程在每次平差后由残差二次型及正规阵迹组成，求得各组乘法更新量
+`θ_g`，更新 `σ²_g←σ²_g θ_g`，当 `max|θ_g−1|≤tol` 收敛。
+单组退化为后验 `σ₀²=vᵀPv/(n−u)`。返回 `VCEResult` 的 `variance_factors`、
+`history`、`parameters`、`residuals`、`updated_weights`、`covariance` 与
+`precision_summary`；协方差为更新权后正规阵的逆，不重复乘后验单位权方差。
+摘要含参数标准差、冗余数和更新权后的后验单位权方差。
+奇异、不可辨识、非正分量抛 `VCEError`，迭代超限抛 `VCEConvergenceError`。
+非正估计不做静默截断。
+
+`estimate_gnss_ground(adjustment, misclosures, **options)` 复用现有
+`solve_gnss` 或平面 `solve` 的结果，按设计行顺序传入真实观测减计算值；
+GNSS 基线归 `gnss`，地面距离归 `ground`。返回坐标改正和更新权后的参数精度，
+不修改现有设计态平差 API。拒绝角度、水准、伪约束及跨组相关输入。
+设计态协方差本身不能估计 VCE，必须提供有冗余的实际或合成观测差值。
+
+同一演示在现有控制点网构造两组各八次独立重复观测，注入方差因子 1 和 9 的
+可重复合成噪声（随机种子 20261105），通过现有 GNSS 平差桥接生成
+[VCE 结果与迭代历史](outputs/vce_results.md)。这些结果用于验证算法，非实测成果。
+测试覆盖方差比恢复、单组后验方差、相关组内权、桥接、奇异和迭代超限。
