@@ -83,8 +83,8 @@ SQLite 持久化、快照/结果缓存、报告下载与 zip 工程包导出/回
 | 工程持久化 / 快照 / 结果缓存 | `store.py`；SQLite、`input_hash`、`get_or_compute_result` | ✅ C4 |
 | 工程包导出 / 回读 / 校验 | `package.py`；zip + manifest、逐文件 SHA-256、快照回读、CLI | ✅ E1 |
 | 报告与图件 | `report.py`（文本表）、`reportgen.py`（Markdown/HTML/DOCX）、`plot.py`、`scripts/run_demo.py` | ✅ C4 |
-| 地图/离线底图/MBTiles、扫描图配准 | `webmap/` 的单工程 DEM imageOverlay、扫描图配准与半透明叠加；MBTiles/矢量瓦片未实现 | ⚠️ 部分（B3） |
-| GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3） |
+| 地图/离线底图/MBTiles、扫描图配准 | `webmap/` DEM/扫描图叠加；多项式/TPS、离线 MBTiles/XYZ 已实现；RPC/MVT 未实现 | ⚠️ 部分（B3/E3） |
+| GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3/E3） |
 | FastAPI/数据库/工程包/快照持久化 | `store.py` + `package.py` + `webmap/app.py`：SQLite 单工程、快照/结果缓存、zip 工程包；多工程写入/迁移框架未实现 | ✅ C4/E1（单工程） |
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | `projection.py`：复变 n⁶ 尺度/γ、grid/ground、跨带告警；`scripts/run_projection_demo.py` | ✅ E1 |
 | §5.2 GNSS 三维 ECEF/ENU、局部切平面 | `gnss.py`；WGS84 自实现转换、ENU 原点与旋转 | ✅ C3 |
@@ -995,9 +995,9 @@ ctrlnet-design/
   DOCX 依赖本机 pandoc，失败时自动跳过。未实现 PDF、报告模板选择与签名。
 - 网页地图报告由 SQLite 结果实时生成并在进程内缓存；方案切换只读，不写回数据库。
 - 网页地图只绑定回环地址，无鉴权、只读单工程；扫描图配准为 6 参数仿射，
-  未实现多项式/TPS/RPC、影像裁切持久化与任意客户端旋转 warp。
-- MBTiles/矢量瓦片/在线底图未实现；当前 DEM 以单张 imageOverlay 叠加，
-  大范围浏览需改为按视窗渲染的 XYZ 瓦片。
+  多项式/TPS 另提供 Python API，未实现 RPC、影像裁切持久化与任意客户端旋转 warp。
+- 离线 MBTiles/XYZ 已实现；矢量瓦片/在线底图未实现。现有工程平面地图以重投影
+  imageOverlay 预览本地瓦片；标准 XYZ PNG 路由可供 WebMercator 客户端使用。
 
 ## 15. 工程持久化、设计报告与方案切换（C4）
 
@@ -1675,7 +1675,7 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
 | P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、工程包校验、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
-| 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分 | 单张 DEM imageOverlay、扫描图 6 参数仿射 | MBTiles/XYZ、多项式/TPS/RPC、图层管理 |
+| 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分（E3） | 仿射及二/三次多项式/TPS；离线 MBTiles 读写、XYZ 导出、WebMercator 切片、本地路由与图层选择 | RPC、矢量瓦片 MVT、在线底图未实现 |
 | E2 Helmert / VCE | ✅ 已完成（E2a1/E2b） | 七参数恢复、经典 Helmert 分量迭代、两组桥接与演示 | 跨组相关 VCV、MINQUE |
 | 多用户 | ❌ 未完成 | 本地工程管理 | 多用户与权限 |
 
@@ -1723,3 +1723,57 @@ GNSS 基线归 `gnss`，地面距离归 `ground`。返回坐标改正和更新�
 可重复合成噪声（随机种子 20261105），通过现有 GNSS 平差桥接生成
 [VCE 结果与迭代历史](outputs/vce_results.md)。这些结果用于验证算法，非实测成果。
 测试覆盖方差比恢复、单组后验方差、相关组内权、桥接、奇异和迭代超限。
+
+
+## 25. 多项式/TPS 配准（E3）
+
+`ctrlnet.georef` 复用 `registration.ControlPoint`，接受 `(col,row,E,N)`、字典或
+控制点对象；原 `registration.register_affine/register_image` API 保持不变。
+
+```python
+from ctrlnet.georef import fit_polynomial, fit_tps
+result = fit_polynomial(control_points, check_points, degree=2)  # degree=3 为三次
+warped = result.transform([[100, 200]])
+pixels = result.inverse(warped)
+tps = fit_tps(control_points, check_points)
+```
+
+二次至少 6 点、三次至少 10 点，TPS 至少 3 个不共线且不重复的点；布局退化或
+不足抛 `RegistrationError`。源坐标归一化后求解，多项式用最小二乘、TPS 用
+`U(r)=r² log(r²)` 精确插值。`residuals` 为控制点预测减观测的二维分量，
+`rmse` 为二维距离的 RMS；`check_errors/check_rmse` 是不参与拟合的独立检查点
+误差，无检查点时返回空数组和 `None`。目标单位由工程平面坐标决定。
+逆变换用局部 Newton 迭代，奇异或不收敛报错；折叠映射不保证全局唯一逆。
+非线性模型没有六参数世界文件表示，当前网页扫描图交互仍使用原仿射流程。
+
+## 26. 离线 MBTiles 瓦片（E3）
+
+安装：`.venv/bin/pip install -e '.[test,webmap,tiles]'`。
+`ctrlnet.tiles.MBTiles(path)` 使用 sqlite3 标准 `metadata/tiles` schema，
+`put_tile/get_tile(z,x,y,...)` 使用 XYZ，落库自动翻转为 TMS 行号；
+`MBTiles(path, readonly=True)` 以 SQLite `mode=ro` 打开。
+`export_xyz(directory)` 导出 `{z}/{x}/{y}.png`；
+`xyz_to_tms/tms_to_xyz(z,y)` 均为 `2**z-1-y`。
+写入要求 256×256 PNG，目录导出与读路由均不联网。
+
+`image_to_mbtiles(image, (west,south,east,north), zooms, path)` 接受北向上的
+EPSG:3857 PIL 影像与像素角点边界，按 WebMercator 网格双线性采样 256px
+瓦片，范围外透明；默认最多 4096 张以限制小样本任务。
+DEM/已配准扫描图需先重投影至 EPSG:3857；不会把工程坐标直接当经纬度。
+
+```bash
+.venv/bin/python scripts/run_tiles_demo.py
+.venv/bin/python -m pytest -q
+```
+
+演示从现有 `data/sample/dem_sample.tif` 晕渲重投影，生成
+`data/sample/demo_tiles.mbtiles`（约 752 KiB，z11–13），并写入
+[配准结果](outputs/georef_results.md) 和 [瓦片结果](outputs/tiles_results.md)。
+
+`create_app(..., tiles_dir=...)` 可指定本地资源目录，默认工程数据库所在目录。
+只读 `/tiles/{name}/{z}/{x}/{y}.png` 返回 PNG；资源或瓦片不存在、越界返回 404，
+只允许目录内名称且拒绝路径穿越。`/api/tiles` 列出资源及 metadata。
+现有图层面板的“离线 MBTiles”下拉框可选择资源或关闭；后端从本地瓦片
+重投影为工程坐标预览，保留原 `CRS.Simple` 工程地图。预览为 512px 单图，
+适用于本演示小样本，大范围交互需另行实现按视窗重投影。
+本步未实现 RPC、MVT 编码、在线底图或多用户。

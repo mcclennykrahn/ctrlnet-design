@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from math import isfinite
 from pathlib import Path
 from typing import Any, Optional
@@ -164,6 +165,7 @@ def create_app(
     project_path: Optional[Path | str] = None,
     *,
     thesis_db: Optional[Path | str] = None,
+    tiles_dir: Optional[Path | str] = None,
 ) -> FastAPI:
     store = ProjectStore(project_path)
     thesis_service = ThesisService(thesis_db)
@@ -175,6 +177,48 @@ def create_app(
         redoc_url=None,
         openapi_url="/api/openapi.json",
     )
+    from ..tiles import MBTiles, render_native_overlay
+    tile_root = Path(tiles_dir).resolve() if tiles_dir else store.project_path.parent.resolve()
+
+    def tile_path(name):
+        if not name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in name):
+            raise HTTPException(404, "未知瓦片资源")
+        path = (tile_root / (name + ".mbtiles")).resolve()
+        if path.parent != tile_root or not path.is_file():
+            raise HTTPException(404, "未知瓦片资源")
+        return path
+
+    @app.get("/api/tiles")
+    def tile_resources():
+        resources = []
+        for path in sorted(tile_root.glob("*.mbtiles")):
+            try:
+                tile_path(path.stem)
+                with MBTiles(path, readonly=True) as db:
+                    resources.append({"name": path.stem, "metadata": db.metadata})
+            except (HTTPException, OSError, sqlite3.Error):
+                continue
+        west, south, east, north = store.dem.bounds
+        return {"resources": resources, "bounds": [[south, west], [north, east]]}
+
+    @app.get("/tiles/{name}/{z}/{x}/{y}.png")
+    def tile_png(name: str, z: int, x: int, y: int):
+        path = tile_path(name)
+        try:
+            with MBTiles(path, readonly=True) as db:
+                data = db.get_tile(z, x, y)
+        except ValueError:
+            raise HTTPException(404, "非法瓦片坐标")
+        if data is None:
+            raise HTTPException(404, "瓦片不存在")
+        return Response(data, media_type="image/png")
+
+    @app.get("/api/tiles/{name}/overlay.png")
+    def tile_overlay(name: str):
+        path = tile_path(name)
+        data = render_native_overlay(path, store.dem.bounds, store.project.get("crs") or "EPSG:32650")
+        return Response(data, media_type="image/png")
+
     app.state.store = store
     app.state.thesis = thesis_service
 

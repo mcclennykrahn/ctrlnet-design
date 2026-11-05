@@ -397,6 +397,22 @@
     state.profileLayer = L.layerGroup().addTo(map);
     applyScenarioLayers(layersPayload);
     bindLayerToggles();
+    getJSON("/api/tiles").then(function (data) {
+      const select = document.getElementById("offline-tiles");
+      data.resources.forEach(function (resource) {
+        const option = document.createElement("option");
+        option.value = resource.name; option.textContent = resource.name;
+        select.appendChild(option);
+      });
+      let overlay = null;
+      select.addEventListener("change", function () {
+        if (overlay) map.removeLayer(overlay);
+        if (select.value) {
+          overlay = L.imageOverlay("/api/tiles/" + encodeURIComponent(select.value) + "/overlay.png",
+            data.bounds, {pane: "hillshadePane", opacity: 0.8}).addTo(map);
+        }
+      });
+    }).catch(function (error) { console.warn("离线瓦片资源读取失败", error); });
   }
 
   function bindLayerToggles() {
