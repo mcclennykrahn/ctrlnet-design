@@ -603,3 +603,6 @@ __all__ += [
     "inspect_project_package",
     "read_manifest",
 ]
+
+from .pareto import ParetoResult, pareto_frontier
+__all__ += ["ParetoResult", "pareto_frontier"]

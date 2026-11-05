@@ -1667,7 +1667,7 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、LandXML |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
 | P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
-| P4 观测优化（C2） | ✅ 小规模精确 | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理 | Pareto 前沿、大规模 MICP、成本模型持久化 |
+| P4 观测优化（C2/E4） | ✅ 小规模精确与 Pareto | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理、成本—精度 Pareto 前沿 | 大规模 MICP、成本模型持久化 |
 | C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计 |
 | E1 工程包 zip/manifest/回读 | ✅ 已完成（单工程） | `package.py`：manifest/版本/快照哈希/逐文件 SHA-256、小资源、导出/校验/导入 CLI、324 KiB 样例包 | 包签名/加密、多工程包、增量更新、外部大资源的自动定位 |
 | C4 设计报告 | ✅ 已完成 | Markdown、自包含 HTML、DOCX（pandoc）、图表与方案对比 | PDF、模板选择、签名 |
@@ -1777,3 +1777,38 @@ DEM/已配准扫描图需先重投影至 EPSG:3857；不会把工程坐标直接
 重投影为工程坐标预览，保留原 `CRS.Simple` 工程地图。预览为 512px 单图，
 适用于本演示小样本，大范围交互需另行实现按视窗重投影。
 本步未实现 RPC、MVT 编码、在线底图或多用户。
+
+
+## 23. Pareto 前沿
+
+E4 使用 `ctrlnet.pareto_frontier` 在观测成本与精度之间生成非支配解集，
+保持现有优化接口不变。A（协方差迹）、D（协方差 log det）、E（最大特征值）、
+max_mp（最大点位中误差）均按越小越好评价，每个准则单独生成二维前沿。
+
+```python
+from ctrlnet import Candidate, Distance, pareto_frontier, section13_base
+
+front = pareto_frontier(section13_base(), [
+    Candidate(Distance("A", "C"), cost=1),
+    Candidate(Distance("B", "D"), cost=1),
+], criterion="max_mp")
+for point in front.points:
+    print(point.spent, point.objective_value, point.selected_labels)
+```
+
+成本为新增候选的成本之和，默认每条 1（观测数）；边长代价可通过
+`Candidate.cost` 输入，`CostModel` 继续支持首次设站固定费用。
+默认枚举全部可达成本，以成本为 ε 约束复用精确求解器，然后去除重复与支配解；
+结果按真实成本递增、精度目标严格递减排列。精度相对容差为 1e-12，同一目标空间点只保留一个方案。
+默认最多 12 个候选，因为可达预算数量可能随候选数指数增长。
+
+显式传入 `budgets=[0, 1, 2]` 可扫描指定预算；此时 `complete=False`，
+仅表示采样解集的非支配性，不声称覆盖预算之间的所有折中点。
+完整扫描且各预算均已证明最优时 `complete=True`；超时解不会标为完整。
+该实现用于小规模设计，不涉及大规模 MICP 或多用户。
+
+运行 `.venv/bin/python scripts/run_pareto_demo.py` 生成
+[`outputs/pareto_results.md`](outputs/pareto_results.md) 和
+[`outputs/pareto_frontier.png`](outputs/pareto_frontier.png)，对比观测数与边长成本
+下的四种精度准则。`tests/test_pareto.py` 检查非支配性、单调性、设站成本及
+小算例与独立子集穷举的一致性。第 13 节及 thesis 黄金期望值未修改。
