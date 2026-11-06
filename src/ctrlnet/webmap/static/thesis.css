@@ -618,3 +618,8 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   .thesis-topbar { position: sticky; top: 0; }
   .obs-grid { grid-template-columns: 1fr; }
 }
+
+.basemap-toolbar,.projection-summary { padding:8px; background:#eef4e9; font-size:12px; line-height:1.7; }
+.basemap-toolbar select { max-width:230px; }
+#basemap-status { margin-left:8px; }
+#coordinate-file { width:185px; }

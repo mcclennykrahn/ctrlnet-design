@@ -761,6 +761,10 @@ def parse_coordinate_text(text: str) -> "Dict[str, Tuple[float, float]]":
             x, y = float(parts[1]), float(parts[2])
         except ValueError as exc:
             raise ValueError(f"坐标不是数值：{raw!r}") from exc
+        if name in result:
+            raise ValueError(f"点号重复：{name}")
+        if not np.isfinite(x) or not np.isfinite(y):
+            raise ValueError(f"坐标必须为有限数：{name}")
         result[name] = (x, y)
     if not result:
         raise ValueError("坐标文本为空")

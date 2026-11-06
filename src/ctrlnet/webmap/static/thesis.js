@@ -1,4 +1,4 @@
-/* 论文模式前端：完全离线，只用本地 Leaflet 与本地 API。 */
+/* 离线优先；仅显式选择网络底图后请求公开 XYZ。 */
 (function () {
   "use strict";
 
@@ -85,7 +85,7 @@
     const map = L.map("map", {
       zoomControl: false,
       attributionControl: false,
-      minZoom: 11,
+      minZoom: 2,
       maxZoom: 20,
       preferCanvas: false,
     });
@@ -106,17 +106,13 @@
     const east = state.baseBounds[2];
     const imageBounds = [[south, west], [north, east]];
     if (!state.data || !state.data.basemap || state.data.basemap.png_exists !== false) {
-      L.imageOverlay("/api/thesis/basemap.png", imageBounds, {
+      state.offlineBase = L.imageOverlay("/api/thesis/basemap.png", imageBounds, {
         opacity: 1,
         interactive: false,
         crossOrigin: false,
       }).addTo(map);
     }
     map.fitBounds(imageBounds);
-    map.setMaxBounds([
-      [south - 0.12, west - 0.18],
-      [north + 0.12, east + 0.18],
-    ]);
 
     const badge = L.DomUtil.create("div", "map-badge-map");
     badge.textContent = "离线 DEM";
@@ -135,6 +131,7 @@
       }).addTo(grid);
     }
     state.layers.grid = grid;
+    setupBasemaps();
 
     state.layers.ellipses = L.layerGroup().addTo(map);
     state.layers.angles = L.layerGroup().addTo(map);
@@ -146,6 +143,60 @@
       $("map-coord").textContent = `${event.latlng.lng.toFixed(6)}°E, ${event.latlng.lat.toFixed(6)}°N`;
     });
     map.on("zoomend", drawAngles);
+  }
+
+  async function setupBasemaps() {
+    const select = $("basemap-select"), status = $("basemap-status");
+    const bases = { offline: state.offlineBase };
+    let active = "offline", timer;
+    function activate(id, failure) {
+      clearTimeout(timer);
+      if (bases[active]) state.map.removeLayer(bases[active]);
+      active = id;
+      select.value = id;
+      state.map.getContainer().querySelector(".map-badge-map").textContent = select.selectedOptions[0].textContent.split("（")[0];
+      if (bases[id]) bases[id].addTo(state.map);
+      const online = id === "road" || id === "satellite";
+      status.textContent = failure || (online ? "正在加载网络瓦片…（WGS84 / EPSG:3857）" : id === "offline" ? "离线 DEM · 不请求网络" : "离线 MBTiles；范围外无数据，已保留 DEM 回退");
+      if (online) timer = setTimeout(() => activate("offline", "瓦片未加载（超时），已回退离线 DEM"), 12000);
+    }
+    try {
+      const [config, tiles] = await Promise.all([api("/api/basemaps"), api("/api/tiles")]);
+      for (const source of config.sources) {
+        const layer = L.tileLayer(source.url, { maxNativeZoom: source.maxNativeZoom, maxZoom: 20, attribution: source.attribution });
+        bases[source.id] = layer;
+        layer.on("tileerror", () => { if (active === source.id) activate("offline", "瓦片未加载（网络错误），已回退离线 DEM"); });
+        layer.on("loading", () => { if (active === source.id) { clearTimeout(timer); status.textContent = "正在加载网络瓦片…"; timer = setTimeout(() => activate("offline", "瓦片未加载（超时），已回退离线 DEM"), 12000); } });
+        layer.on("load", () => { if (active === source.id) { clearTimeout(timer); status.textContent = source.label + " · 当前视窗瓦片已加载 · WGS84 / EPSG:3857"; } });
+        select.add(new Option(source.label, source.id));
+      }
+      for (const resource of tiles.resources) {
+        const m = resource.metadata, bounds = (m.bounds || "").split(",").map(Number);
+        if (bounds.length !== 4 || !bounds.every(Number.isFinite)) continue;
+        const id = "mbtiles:" + resource.name;
+        bases[id] = L.layerGroup([L.imageOverlay("/api/thesis/basemap.png", [[state.baseBounds[1],state.baseBounds[0]],[state.baseBounds[3],state.baseBounds[2]]]),
+          L.tileLayer("/tiles/" + encodeURIComponent(resource.name) + "/{z}/{x}/{y}.png", { minNativeZoom: Number(m.minzoom || 0), maxNativeZoom: Number(m.maxzoom || 18), maxZoom: 20, bounds: [[bounds[1],bounds[0]],[bounds[3],bounds[2]]], attribution: "本地 MBTiles · " + escapeHtml(resource.name) })]);
+        select.add(new Option("离线 MBTiles · " + resource.name + "（" + bounds.map(v => v.toFixed(2)).join(",") + "；z" + m.minzoom + "–" + m.maxzoom + "）", id));
+      }
+      select.addEventListener("change", () => activate(select.value));
+    } catch (err) { status.textContent = "底图配置失败；保留离线 DEM：" + err.message; }
+  }
+
+  async function importCoordinateFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 1000000) throw new Error("文件不得超过 1 MB");
+      const text = await file.text();
+      if (!window.confirm("导入将覆盖当前点/线/角/观测；请先命名保存。继续？")) return;
+      setBusy(true);
+      const payload = await api("/api/thesis/import/coordinates", {method: "POST", body: {text, name: file.name}});
+      state.nameDirty = false;
+      state.gradeTouched = false;
+      applyState(payload, {fit:true});
+      toast("已导入 " + payload.points.length + " 点；请设置已知点并构线构角");
+    } catch (err) { toast(err.message, true); }
+    finally { setBusy(false); event.target.value = ""; }
   }
 
   async function onMapClick(event) {
@@ -388,6 +439,7 @@
           `<td>${escapeHtml(point.name)}</td>` +
           `<td class="num">${num(point.lon, 6)}</td>` +
           `<td class="num">${num(point.lat, 6)}</td>` +
+          `<td class="num">${num(point.x, 3)}</td><td class="num">${num(point.y, 3)}</td>` +
           `<td><select class="fixed-select ${point.fixed ? "known" : ""}" data-action="toggle-fixed" data-id="${escapeHtml(point.id)}">` +
           `<option value="unknown" ${selected === "unknown" ? "selected" : ""}>未知</option>` +
           `<option value="known" ${selected === "known" ? "selected" : ""}>已知</option>` +
@@ -534,6 +586,8 @@
   function applyState(payload, options) {
     const opts = options || {};
     state.data = payload;
+    const projection = payload.projection;
+    $("projection-summary").textContent = projection ? `${projection.ellipsoid} · 中央子午线 ${projection.central_meridian}°E · ${projection.zone_width}°带 / 带号 ${projection.zone_number} · 假东 ${projection.false_easting_m} m · ${projection.axis}。${projection.note}。不使用 BD-09。` : "";
     state.lastResult = opts.keepResult ? state.lastResult : null;
     if (!state.nameDirty && payload.name) $("project-name").value = payload.name;
     renderPoints();
@@ -872,6 +926,7 @@
   }
 
   async function loadProject() {
+    if (state.data.points.length && !window.confirm("读取将覆盖当前工程；请先保存。继续？")) return;
     const name = $("project-select").value;
     if (!name) {
       toast("请选择一个已保存工程", true);
@@ -915,6 +970,7 @@
   }
 
   async function newProject() {
+    if (state.data.points.length && !window.confirm("新建将清空当前四库；请先保存。继续？")) return;
     try {
       setBusy(true);
       state.lastResult = null;
@@ -968,6 +1024,7 @@
   // 事件绑定
   // ------------------------------------------------------------------
   function bindEvents() {
+    $("coordinate-file").addEventListener("change", importCoordinateFile);
     $("project-name").addEventListener("input", () => {
       state.nameDirty = true;
     });

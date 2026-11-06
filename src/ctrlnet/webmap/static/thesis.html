@@ -11,9 +11,11 @@
   <main class="thesis-layout">
     <section class="map-side" aria-label="地图与原理说明">
       <div class="map-card">
+        <div class="basemap-toolbar"><label>底图 <select id="basemap-select" aria-label="底图模式"><option value="offline">离线 DEM</option></select></label>
+          <span id="basemap-status" role="status" aria-live="polite">离线 DEM · 不请求网络</span></div>
         <div id="map"></div>
         <div class="map-caption">
-          <span>离线底图：Copernicus GLO-30 DEM · 徐州 117.1–117.3°E / 34.15–34.25°N</span>
+          <span>离线备用：Copernicus GLO-30 DEM · 徐州 117.1–117.3°E / 34.15–34.25°N</span>
           <span class="map-caption-right">
             <span id="map-coord">点击地图选点</span>
             <a href="/dashboard">旧仪表盘</a>
@@ -41,7 +43,7 @@
           <p class="formula">E,F = Mw√((Qxx+Qyy±K)/2)，K=√((Qxx−Qyy)²+4Qxy²)</p>
         </article>
       </section>
-      <p class="offline-note">本页不使用任何在线瓦片或在线地图 API；底图由本机 DEM 渲染，服务仅绑定 127.0.0.1。</p>
+      <p class="offline-note">默认离线可用；仅选择网络底图时由浏览器请求公开 XYZ。地图经纬度按 WGS84 显示，不使用 BD-09 或百度私有 token。</p>
     </section>
 
     <aside class="library-side" aria-label="点线角网数据库">
@@ -70,13 +72,16 @@
         <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
       </div>
 
+      <div id="projection-summary" class="projection-summary" role="status"></div>
+      <div class="project-load-row"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" /></label>
+      <span>点号；x北，y东（m），117°高斯绝对坐标。替换四库，类型初始为未知。</span></div>
       <section class="panel" id="panel-points">
         <header class="panel-title"><span>点库</span><span class="panel-count" id="point-count">0</span></header>
         <div class="panel-body">
           <div class="panel-hint">在地图上单击选点，点号自动递增；点可切换“未知/已知”。</div>
           <div class="table-wrap">
             <table class="data-table" id="point-table">
-              <thead><tr><th>点号</th><th>经度</th><th>纬度</th><th>类型</th><th>操作</th></tr></thead>
+              <thead><tr><th>点号</th><th>经度</th><th>纬度</th><th>x 北 m</th><th>y 东 m</th><th>类型</th><th>操作</th></tr></thead>
               <tbody id="point-body"></tbody>
             </table>
             <div class="empty-row" id="point-empty">暂无点，请在地图上单击。</div>

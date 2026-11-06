@@ -31,6 +31,7 @@ from ..thesis import (
     error_ellipse,
     export_angle_topology,
     export_coordinate_text,
+    parse_coordinate_text,
     gauss_forward,
     gauss_inverse,
     get_grade,
@@ -337,6 +338,13 @@ def _public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     except ValueError:
         suggested = str(network.get("grade", "二级"))
     payload = {
+        "projection": {
+            "ellipsoid": "CGCS2000", "central_meridian": 117.0,
+            "zone_width": 3, "zone_number": 39, "false_easting_m": 500000,
+            "axis": "x 北 / y 东（m）", "map_crs": "WGS84 经纬度 / EPSG:3857 显示",
+            "local": any(abs(p["x"]) < 100000 for p in points),
+            "note": "局部平面以 34.2°N / 117.2°E 高斯坐标为原点" if any(abs(p["x"]) < 100000 for p in points) else "CGCS2000 三度带高斯平面；WGS84 显示未应用基准七参数",
+        },
         "schema": state.get("schema", SCHEMA),
         "name": state.get("name", "未命名论文工程"),
         "created_at": state.get("created_at"),
@@ -770,6 +778,8 @@ class ThesisService:
         lat = _finite(lat, "纬度")
         if not (-180.0 <= lon <= 180.0 and -90.0 < lat < 90.0):
             raise ThesisError("经纬度超出合理范围")
+        if abs(lon - DEFAULT_CENTRAL_MERIDIAN) > 1.5:
+            raise ThesisError("超出中央子午线 117° 的三度带；请使用测区内坐标，当前不支持切换投影")
         with self._lock:
             _ensure_geometry(self.state)
             seq = int(self.state["seq"].get("point", 0)) + 1
@@ -777,6 +787,8 @@ class ThesisService:
             x, y = gauss_forward(
                 lat, lon, central_meridian=DEFAULT_CENTRAL_MERIDIAN
             )
+            if any(abs(p["x"]) < 100000 for p in self.state["points"]):
+                x, y = _local_from_lonlat(lon, lat)
             point = {
                 "id": f"p{seq}",
                 "name": str(name),
@@ -789,6 +801,32 @@ class ThesisService:
             self.state["points"].append(point)
             self.state["seq"]["point"] = seq
             _touch(self.state)
+            return _public_state(self.state)
+
+    def import_coordinates(self, text: str, name: str) -> Dict[str, Any]:
+        """原子替换：论文高斯坐标文本，不把局部坐标猜成绝对坐标。"""
+        if len(text.encode("utf-8")) > 1_000_000:
+            raise ThesisError("坐标文本不得超过 1 MB")
+        try:
+            coords = parse_coordinate_text(text)
+        except ValueError as exc:
+            raise ThesisError(str(exc)) from exc
+        if len(coords) > 2000:
+            raise ThesisError("本入口最多导入 2000 点")
+        candidate = _empty_state(name.strip() or "导入论文坐标")
+        for index, (label, (x, y)) in enumerate(coords.items(), 1):
+            if not label.isdigit() or int(label) < 1 or str(int(label)) != label:
+                raise ThesisError("点号必须为无前导零的正整数，以便构线构角")
+            if not isfinite(x) or not isfinite(y) or not 0 < x < 10000000 or not 100000 < y < 900000:
+                raise ThesisError(f"点 {label} 需要绝对高斯坐标 x北/y东（m），不接受局部坐标或非有限数")
+            lat, lon = gauss_inverse(x, y, central_meridian=117.0)
+            if abs(lon - 117.0) > 1.5 or not -85 < lat < 85:
+                raise ThesisError(f"点 {label} 超出 117° 三度带")
+            candidate["points"].append(dict(id=f"p{index}", name=label, x=x, y=y,
+                                            lon=lon, lat=lat, fixed=False))
+        candidate["seq"]["point"] = len(coords)
+        with self._lock:
+            self.state = candidate
             return _public_state(self.state)
 
     def set_point_fixed(self, point_id: str, fixed: bool) -> Dict[str, Any]:
@@ -1216,6 +1254,13 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
             return JSONResponse(service.load_example(key))
         except ThesisError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    @router.post("/api/thesis/import/coordinates")
+    def import_coordinates(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+        try:
+            return JSONResponse(service.import_coordinates(str(payload.get("text") or ""), str(payload.get("name") or "导入论文坐标")))
+        except (ThesisError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/thesis/new")
     def new_project(payload: Optional[Dict[str, Any]] = Body(default=None)) -> JSONResponse:

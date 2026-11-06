@@ -188,6 +188,16 @@ def create_app(
             raise HTTPException(404, "未知瓦片资源")
         return path
 
+    @app.get("/api/basemaps")
+    def basemaps():
+        # No server-side network calls, proxy, credentials or tile prefetch.
+        return {"default": "offline", "map_crs": "EPSG:3857", "coordinate_system": "WGS84", "sources": [
+            {"id": "road", "label": "网络道路 · OSM", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "maxNativeZoom": 19,
+             "attribution": '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'},
+            {"id": "satellite", "label": "网络卫星/影像 · Esri", "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", "maxNativeZoom": 19,
+             "attribution": "Source: Esri, Vantor, Earthstar Geographics, GIS User Community"}
+        ]}
+
     @app.get("/api/tiles")
     def tile_resources():
         resources = []

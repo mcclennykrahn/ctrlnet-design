@@ -278,3 +278,48 @@ def test_thesis_page_has_paper_stage_views(client: TestClient):
         assert f'<option value="{value}">' in html
     # 顶栏已移除，页面从地图/面板开始，更接近论文截图。
     assert "thesis-topbar" not in html
+
+
+def test_public_basemaps_and_projection(client):
+    config = client.get('/api/basemaps').json()
+    assert config['default'] == 'offline'
+    assert config['coordinate_system'] == 'WGS84'
+    assert [s['id'] for s in config['sources']] == ['road', 'satellite']
+    assert all(s['url'].startswith('https://') and 'token' not in s['url'] for s in config['sources'])
+    state = client.get('/api/thesis/state').json()
+    assert state['projection']['zone_number'] == 39
+    assert state['projection']['central_meridian'] == 117
+    assert client.post('/api/thesis/points', json={'lon':120, 'lat':34}).status_code == 400
+    assert not client.get('/api/thesis/state').json()['points']
+
+
+def test_coordinate_import_roundtrip_and_atomic_errors(client):
+    state = client.post('/api/thesis/examples/1').json()
+    exported = client.get('/api/thesis/export/coordinates').json()['text']
+    imported = client.post('/api/thesis/import/coordinates', json={'text':exported, 'name':'输入方案'}).json()
+    assert imported['name'] == '输入方案'
+    assert len(imported['points']) == 9
+    assert imported['lines'] == imported['angles'] == []
+    for before, after in zip(state['points'], imported['points']):
+        assert after['x'] == pytest.approx(before['x'], abs=1e-7)
+        x, y = gauss_forward(after['lat'], after['lon'], central_meridian=117)
+        assert x == pytest.approx(after['x'], abs=1e-6)
+        assert y == pytest.approx(after['y'], abs=1e-6)
+    for text in ['点1；nan，500000', '点1；3780000，500000\n点1；3780000，500000', '点1；0，0', 'broken', '点1；3780000，899999']:
+        assert client.post('/api/thesis/import/coordinates', json={'text':text}).status_code == 400
+        assert client.get('/api/thesis/state').json()['points'] == imported['points']
+    line = client.post('/api/thesis/lines', json={'from':'1','to':'2'})
+    assert line.status_code == 200
+    assert client.post('/api/thesis/angles', json={'backsight':'1','station':'2','foresight':'3'}).status_code == 200
+    assert client.post('/api/thesis/projects/save', json={'name':'输入方案'}).status_code == 200
+    client.post('/api/thesis/new')
+    loaded = client.post('/api/thesis/projects/load', json={'name':'输入方案'}).json()
+    assert len(loaded['lines']) == len(loaded['angles']) == 1
+
+
+def test_example2_click_uses_local_plane(client):
+    state = client.post('/api/thesis/examples/2').json()
+    point = state['points'][0]
+    added = client.post('/api/thesis/points', json={'lon':point['lon'], 'lat':point['lat']}).json()['points'][-1]
+    assert added['x'] == pytest.approx(point['x'], abs=1e-6)
+    assert added['y'] == pytest.approx(point['y'], abs=1e-6)
