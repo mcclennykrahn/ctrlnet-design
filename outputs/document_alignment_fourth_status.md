@@ -23,3 +23,5 @@ pytest与旧浏览器脚本现使用各进程临时SQLite，样例资源只读�
 `fa597f57b5952fa603b9464550c5d72e9c7c2b6bd4efc48c8281692b84a204f6`
 
 样例DB未修改、未暂存；`.dsh-prompts/**`与原有codex长日志未暂存。无vendor底图包、无BD09/百度命名。剩余：完整树/合并/重命名、预置DEM方案自动进入论文四库、专用GNSS/robust UI、全状态机、点线吸附和持久历史、任意CRS/七参数等。默认demo地图不随共享工程选择自动转换；面板已明确说明。
+
+实施提交 `e962e523a740553ea8a49f381cf42359a3ea2b41`；推送成功 `cab7246..e962e52 main -> main`。随后独立文档补记；没有 amend。提交后再次核对样例 SHA 一致，git status 仅剩原有未跟踪 `.dsh-prompts/**` 和旧 batch2 codex 日志，无跟踪文件脏写。

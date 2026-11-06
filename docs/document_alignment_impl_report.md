@@ -91,3 +91,5 @@ XYZ中DEM栅格/等高线/扫描图与地图两点剖面尚未重投影；任意
 测试隔离：pytest 对旧用例显式 sample 路径在 store 连接解析入口重定向到进程临时副本；Chromium 旧脚本使用临时 SQLite 与只读资源链接。新增4个后端测试覆盖完整回读/父链/比较、选项改变哈希及椭圆、自由/最小基准、欠约束拒绝、多工程/独立点集、SQL失败整体回滚；第四批 E2E 使用真实 UI 勾选距离与角，保存、增加距离分支、重新打开、切换置信度、仪表盘选择比较。
 
 第四批最终验证：341 passed / 1 skipped / 2 xfailed（8 warnings，20.89秒）；第四批、batch2、第三批、原论文共4个Chromium脚本均通过。当前UI比较真实增加一条距离观测：工作量15→16、冗余1→2、最弱点73.612→70.436 mm。截图已视觉检查；完整证据 `outputs/document_alignment_fourth_status.md` 及同前缀日志/PNG/JSON。样例SQLite SHA256前后均 `fa597f57b5952fa603b9464550c5d72e9c7c2b6bd4efc48c8281692b84a204f6`，全程未修改，不执行共享DB恢复。旧截图恢复，`.dsh-prompts/**`与既有codex长日志不暂存。
+
+第四批实际实施提交：`e962e523a740553ea8a49f381cf42359a3ea2b41`，已成功 `git push origin main`（`cab7246..e962e52`）。此后仅独立补记验证与推送结果，不 amend、不改写历史。样例数据库干净；本批提交不包含 `.dsh-prompts/**`、示例SQLite或既有codex长日志。
