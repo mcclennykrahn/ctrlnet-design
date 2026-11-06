@@ -152,6 +152,7 @@ from .leveling import (
 )
 
 from .gnss import (
+    GnssCovarianceBlock,
     WGS84_A,
     WGS84_B,
     WGS84_E2,
@@ -606,3 +607,5 @@ __all__ += [
 
 from .pareto import ParetoResult, pareto_frontier
 __all__ += ["ParetoResult", "pareto_frontier"]
+
+__all__.append("GnssCovarianceBlock")

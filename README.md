@@ -91,7 +91,7 @@ SQLite 持久化、快照/结果缓存、报告下载与 zip 工程包导出/回
 | §5.8 GNSS 基线网：3×3 VCV、固定/最小约束、基线相对精度 | `gnss.py`；ECEF 平差、ENU 基线旋转、Cholesky 白化、复用可靠性 | ✅ C3 |
 | §5.8/§5.9 联合平差：GNSS + 距离/角度 + 水准 | `gnss.py`；同一 3D 参数集、局部 ENU、ζ 改正 | ✅ C3（局部近似） |
 | §5.9.4 高程异常/geoid、GNSS 大地高→正常高 | `gnss.py`；ζ 常数/平面拟合、参数协方差、可选 EGM96 插值 | ⚠️ 近似（C3）；无高精度 geoid/方差场 |
-| 跨基线相关完整 VCV、LandXML | 逐基线 3×3 与 Helmert 七参数已支持；跨基线块、LandXML 未实现 | ⚠️ 部分完成 |
+| 跨基线相关完整 VCV、LandXML | 同时段 3n×3n VCV、块权白化、LandXML 1.2 GPS 子集往返（§27） | ✅ E7（限定子集） |
 | 方差分量估计（VCE） | 独立组经典 Helmert 迭代、GNSS/地面边桥接、更新权精度 | ✅ E2b |
 | MICP/MILP/Pareto、A/D/E 精确最优 | A/D/E/max_mp/最弱边的精确分支定界（≤20 候选）与 MILP 线性代理；Pareto 前沿未实现 | ✅ C2（小规模精确） |
 
@@ -977,8 +977,8 @@ ctrlnet-design/
 - 基线向量三分量已知时，自由网零空间为 3 个整体平移（固定 1 点即可）；
   方案 §5.8.3 的 7 个缺陷对应距离/方向型或需估计相似变换的网。当前实现按
   实际设计矩阵报告零空间，不强行施加 7 个约束。
-- 逐基线 3×3 VCV 已支持；跨基线相关块与
-  LandXML 导入尚未实现。
+- 逐基线 3×3 与跨基线 3n×3n VCV 已支持；LandXML 仅支持 §27 的米制 ECEF GPS 子集，
+  不进行投影坐标猜测、天线归心或地面测站观测归算。
 - 高程异常平面拟合的 `E,N` 必须与联合平差的 ENU/工程平面一致；模型不含
   geoid 系统误差，外推会失效。EGM96 15′ 格网只作为对照/可选插值，不应当作
   高精度似大地水准面。
@@ -1686,7 +1686,7 @@ E6 / P5 提供离线、固定随机种子的性能基线：
 | P0 基线/架构、§13 黄金回归 | ✅ 已完成 | `examples.py`、`tests/test_section13.py`、文档与目录 | — |
 | P1 平面 MVP：边角/方向、基准、精度、可靠性 | ✅ 已完成 | 设计矩阵、SVD/伪逆、固定/加权/自由基准、mp/椭圆/边、r_i/MDB/外部 | —（投影见 E1） |
 | P2 水准/高程（B1/C3） | ✅ 已完成（局部 geoid） | 1D 水准、路线/环、三角高程、高程可靠性、ζ 平面拟合/正常高转换 | 高精度 geoid、跨基准方差场 |
-| P2 GNSS（C3） | ✅ 已完成（核心） | 3D ECEF/ENU、3×3 VCV、固定/最小约束、联合平差、基线相对精度 | 跨基线相关 VCV、LandXML |
+| P2 GNSS（C3/E7） | ✅ 已完成（核心与 GPS 交换子集） | 3D ECEF/ENU、3×3/3n×3n VCV、块权平差、固定/最小约束、联合平差、基线相对精度、LandXML 1.2 CgPoints/GPSSetup/GPSVector | 通用投影 LandXML、非零天线高归心、GPSPosition/地面原始观测 |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
 | P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
 | P4 观测优化（C2/E4） | ✅ 小规模精确与 Pareto | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理、成本—精度 Pareto 前沿 | 大规模 MICP、成本模型持久化 |
@@ -1884,3 +1884,59 @@ UTF-8 JSON 后计算的 SHA-256。缓存命中及失败回滚不产生审计。
 演示命令：`.venv/bin/python scripts/run_store_concurrency_demo.py`，输出
 `outputs/store_concurrency_demo.json`。4 个线程追加 20 条观测，最终版本 21；
 旧版本写入被拒绝，SQLite 完整性检查为 `ok`。
+
+
+## 27. 同时段 GNSS 相关块 VCV 与 LandXML 1.2（E7）
+
+`GnssCovarianceBlock(indices, covariance, name="session")` 描述同一时段的
+完整 3n×3n 协方差（m²）。`indices` 是 `network.baselines` 的从 0 起索引，
+矩阵按索引指定的基线顺序、各基线自身 ECEF/ENU 三分量排列。可添加多个互不
+重叠的时段块；未包含的基线保持独立。块必须有限、对称正定、索引不重复且不
+越界；对角 3×3 块必须与对应基线 VCV 一致，冲突直接报错。
+
+```python
+from ctrlnet import GnssCovarianceBlock, solve_gnss
+from ctrlnet.landxml import export_landxml, import_landxml
+
+# net 为已有 GnssNetwork，Q 为对应基线顺序的完整 VCV。
+net.covariance_blocks = [GnssCovarianceBlock([0, 1, 2], Q, "epoch-1")]
+result = solve_gnss(net)
+export_landxml(net, "outputs/network.xml")
+restored = import_landxml("outputs/network.xml")
+```
+
+每条 ENU 基线用自己的参考点旋转，跨块按 `R_i.T @ Q_ij @ R_j` 转到 ECEF，
+写入完整 Ql；平差使用 Cholesky 白化，等价于完整块权 `P=Ql⁻¹`，不拆成独立
+基线。未提供相关块时保留原运算路径；显式零交叉块也与旧 Cx/Ql 逐位一致。
+`with_geoid` 保留时段块。可靠性仍以原基线行组报告，跨基线相关会影响结果。
+
+`landxml.py` 仅使用标准库 `xml.etree.ElementTree` 与已有 NumPy，无新依赖。
+支持 LandXML 1.2 命名空间、米制 CgPoints、GPSSetup 和 GPSVector。GPSVector
+使用标准 `setupID_A/setupID_B` 和 `dX/dY/dZ`；GPSSetup 通过 `stationName`
+引用点名。当前只接收已归心的零天线高测站。CgPoint 文本采用 north/east/elev
+顺序，本模块明确的 ECEF profile 将其映射为 Y/X/Z；GPS 向量统一导出 ECEF。
+固定点、原点、参数框架、基线 VCV 和完整时段 VCV 使用 `code="ctrlnet"` 的
+Feature/Property JSON 元数据保存，因而往返保持平差协方差，而不保证保留输入
+文件的 XML 排版或未支持的厂商元数据。
+
+外部文件无 profile 时必须显式传 `coordinate_frame="ECEF"`；缺少协方差时
+必须提供正的 `default_sigma`（米，构造独立各向同性 VCV）。不从点坐标猜测
+投影、坐标框架或精度。拒绝错误版本、非米制、重复测站 ID、未知引用、非零
+天线高及 GPSPosition/原始地面观测；导出含距离、角度、水准或 geoid 的联合网
+会报错，需先明确选取 GPS 子网。此子集不承诺任意 LandXML 文件的无损交换，
+也不提供完整 XSD 验证。
+
+可复现演示：
+
+```bash
+.venv/bin/python scripts/run_gnss_corr_landxml_demo.py
+.venv/bin/python scripts/run_gnss_demo.py
+.venv/bin/python -m pytest -q
+```
+
+新演示包含 3 条基线的 9×9 VCV，相关与独立解的参数协方差迹分别为
+0.000478636363636、0.0004 m²，LandXML 往返 Cx 最大误差为 0。
+输出：`outputs/gnss_corr_landxml.xml`、`outputs/gnss_corr_landxml_results.md`。
+`tests/test_gnss_corr.py` 用独立法方程验证 ECEF/ENU 旋转、联合网块权、无相关
+逐位兼容及非法矩阵/索引；`tests/test_landxml.py` 验证 ECEF/ENU 往返、外部
+CgPoints/GPSSetup/GPSVector 和输入错误。第 13 节及 thesis 黄金期望值未改。

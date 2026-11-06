@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='utf-8'?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2" date="2000-01-01" time="00:00:00">
+  <Units>
+    <Metric linearUnit="meter" areaUnit="squareMeter" volumeUnit="cubicMeter" temperatureUnit="celsius" pressureUnit="milliBars" angularUnit="decimal degrees" directionUnit="decimal degrees" />
+  </Units>
+  <Survey>
+    <SurveyHeader name="E7 GPS" />
+    <CgPoints>
+      <CgPoint name="A">4404013.5281015988 -2147980.9181400654 4069537.8204632956</CgPoint>
+      <CgPoint name="B">4403881.4273542855 -2148106.7844501296 4069629.4162452389</CgPoint>
+      <CgPoint name="C">4403861.7967991447 -2148002.0606797887 4069721.0110665984</CgPoint>
+    </CgPoints>
+    <GPSSetup id="gps_0" stationName="A" antennaHeight="0" />
+    <GPSSetup id="gps_1" stationName="B" antennaHeight="0" />
+    <GPSSetup id="gps_2" stationName="C" antennaHeight="0" />
+    <GPSVector setupID_A="gps_0" setupID_B="gps_1" dX="-125.86631006421521" dY="-132.10074731335044" dZ="91.59578194329515">
+      <TargetPoint pntRef="B" />
+      <Feature code="ctrlnet">
+        <Property label="covariance" value="[[0.0001, 0.0, 0.0], [0.0, 0.0001, 0.0], [0.0, 0.0, 0.0001]]" />
+      </Feature>
+    </GPSVector>
+    <GPSVector setupID_A="gps_0" setupID_B="gps_2" dX="-21.14253972331062" dY="-151.7313024541363" dZ="183.19060330279171">
+      <TargetPoint pntRef="C" />
+      <Feature code="ctrlnet">
+        <Property label="covariance" value="[[0.0001, 0.0, 0.0], [0.0, 0.0001, 0.0], [0.0, 0.0, 0.0001]]" />
+      </Feature>
+    </GPSVector>
+    <GPSVector setupID_A="gps_1" setupID_B="gps_2" dX="104.7237703409046" dY="-19.630555140785873" dZ="91.59482135949656">
+      <TargetPoint pntRef="C" />
+      <Feature code="ctrlnet">
+        <Property label="covariance" value="[[0.0001, 0.0, 0.0], [0.0, 0.0001, 0.0], [0.0, 0.0, 0.0001]]" />
+      </Feature>
+    </GPSVector>
+    <Feature code="ctrlnet">
+      <Property label="coordinate_frame" value="&quot;ECEF&quot;" />
+      <Property label="fixed" value="[&quot;A&quot;]" />
+      <Property label="origin" value="&quot;A&quot;" />
+      <Property label="parameter_frame" value="&quot;ECEF&quot;" />
+      <Property label="sessions" value="[{&quot;indices&quot;: [0, 1, 2], &quot;covariance&quot;: [[0.0001, 0.0, 0.0, 3e-05, 0.0, 0.0, 1e-05, 0.0, 0.0], [0.0, 0.0001, 0.0, 0.0, 3e-05, 0.0, 0.0, 1e-05, 0.0], [0.0, 0.0, 0.0001, 0.0, 0.0, 3e-05, 0.0, 0.0, 1e-05], [3e-05, 0.0, 0.0, 0.0001, 0.0, 0.0, 2e-05, 0.0, 0.0], [0.0, 3e-05, 0.0, 0.0, 0.0001, 0.0, 0.0, 2e-05, 0.0], [0.0, 0.0, 3e-05, 0.0, 0.0, 0.0001, 0.0, 0.0, 2e-05], [1e-05, 0.0, 0.0, 2e-05, 0.0, 0.0, 0.0001, 0.0, 0.0], [0.0, 1e-05, 0.0, 0.0, 2e-05, 0.0, 0.0, 0.0001, 0.0], [0.0, 0.0, 1e-05, 0.0, 0.0, 2e-05, 0.0, 0.0, 0.0001]], &quot;name&quot;: &quot;epoch-1&quot;}]" />
+    </Feature>
+  </Survey>
+</LandXML>

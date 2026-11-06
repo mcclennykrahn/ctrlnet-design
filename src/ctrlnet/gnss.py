@@ -364,6 +364,34 @@ class GnssBaseline:
 
 
 @dataclass
+class GnssCovarianceBlock:
+    """同一时段基线索引（从 0 起）及按各基线原框架排列的 3n×3n VCV。"""
+
+    indices: Sequence[int]
+    covariance: Sequence[Sequence[float]]
+    name: str = "session"
+
+    def __post_init__(self) -> None:
+        self.indices = tuple(self.indices)
+        if not self.indices or any(type(i) is not int or i < 0 for i in self.indices):
+            raise ValueError("块索引必须为非空非负整数序列")
+        if len(set(self.indices)) != len(self.indices):
+            raise ValueError("块内基线索引重复")
+        c = np.asarray(self.covariance, dtype=float)
+        n = 3 * len(self.indices)
+        if c.shape != (n, n) or not np.all(np.isfinite(c)):
+            raise InvalidPrecisionError("块 VCV 必须为有限 3n×3n 矩阵")
+        if not np.allclose(c, c.T, rtol=1e-12, atol=1e-15):
+            raise InvalidPrecisionError("块 VCV 必须对称")
+        c = (c + c.T) / 2
+        try:
+            np.linalg.cholesky(c)
+        except np.linalg.LinAlgError as exc:
+            raise InvalidPrecisionError("块 VCV 必须正定") from exc
+        self.covariance = c
+
+
+@dataclass
 class GnssNetwork:
     """三维 GNSS 基线网 + 可选地面距离/角度/水准观测。"""
 
@@ -375,6 +403,7 @@ class GnssNetwork:
     origin: Optional[str] = None
     parameter_frame: str = "ECEF"
     name: str = "gnss"
+    covariance_blocks: Sequence[GnssCovarianceBlock] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.points = list(self.points)
@@ -399,8 +428,22 @@ class GnssNetwork:
             self.origin = _ref_name(self.origin)
         if self.origin not in self._by_name:
             raise KeyError(f"原点 {self.origin!r} 不在网中")
+        self.covariance_blocks = list(self.covariance_blocks)
+        self._validate_covariance_blocks()
         self._validate_references()
         self.geoid: Optional[Any] = None
+
+    def _validate_covariance_blocks(self) -> None:
+        used = set()
+        for block in self.covariance_blocks:
+            block.__post_init__()
+            for j, i in enumerate(block.indices):
+                if i >= len(self.baselines) or i in used:
+                    raise ValueError("块索引越界或时段块重叠")
+                used.add(i)
+                if not np.allclose(block.covariance[3*j:3*j+3, 3*j:3*j+3],
+                                   self.baselines[i].covariance, rtol=1e-12, atol=1e-15):
+                    raise InvalidPrecisionError("块 VCV 对角块必须与基线协方差一致")
 
     def _validate_references(self) -> None:
         for baseline in self.baselines:
@@ -458,6 +501,7 @@ class GnssNetwork:
             origin=self.origin,
             parameter_frame=self.parameter_frame,
             name=self.name,
+            covariance_blocks=self.covariance_blocks,
         )
         other.geoid = geoid
         return other
@@ -991,6 +1035,22 @@ def solve_gnss(
         blocks.append(block)
         observation_blocks.append(block)
         row += row_count
+
+    network._validate_covariance_blocks()
+    for session in network.covariance_blocks:
+        transforms = []
+        for i in session.indices:
+            b = network.baselines[i]
+            ref = network.point(b.reference)
+            transforms.append(np.eye(3) if b.frame == "ECEF" else
+                              ecef_to_enu_matrix(ref.lat, ref.lon).T)
+        for j, i in enumerate(session.indices):
+            for k, h in enumerate(session.indices):
+                # Preserve the existing diagonal arithmetic exactly.
+                if j != k:
+                    Ql[3*i:3*i+3, 3*h:3*h+3] = (
+                        transforms[j] @ session.covariance[3*j:3*j+3, 3*k:3*k+3]
+                        @ transforms[k].T)
 
     assert row == n_rows
     if n_rows == 0:
@@ -1750,6 +1810,7 @@ __all__ = [
     "covariance_ecef_to_enu",
     "GnssPoint",
     "GnssBaseline",
+    "GnssCovarianceBlock",
     "GnssNetwork",
     "GnssPoint3D",
     "GnssBaseline3D",
