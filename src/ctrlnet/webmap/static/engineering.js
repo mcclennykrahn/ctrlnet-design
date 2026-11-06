@@ -12,7 +12,11 @@
     <select id="engineering-scenario" aria-label="共享方案"></select>
     <select id="engineering-snapshot" aria-label="父快照"></select>
     <button id="engineering-branch">当前四库另存分支快照</button><button id="engineering-open">打开工程方案到论文编辑器</button>
-    <p>联合平差（已选距离 + 角度；已有工程的 GNSS 观测由核心处理，无基线导入编辑器）
+    <details><summary>GNSS 二维基线参数（随保存/派生持久化）</summary>
+    <p>端点使用点号；σ单位米，ρ在(-1,1)。这是二维设计态协方差，不是ECEF/ENU三维导入。打开方案会回读；保存新方案时使用此表。此表草稿保留在当前标签页，刷新不丢失；新工程保存前请检查端点并删除不需要的基线。</p>
+    <table><thead><tr><th>起点</th><th>终点</th><th>σE m</th><th>σN m</th><th>ρ</th><th>操作</th></tr></thead><tbody id="engineering-gnss"></tbody></table>
+    <button id="engineering-add-gnss">添加基线</button></details>
+    <p>联合平差（已选距离 + 角度；GNSS 使用工程平面 E/N 米制分量，二维基线可在下方编辑）
     <label>基准 <select id="engineering-datum"><option value="fixed">固定（默认）</option><option value="free">自由网约束</option><option value="minimal">最小约束</option></select></label>
     <label>椭圆 <select id="engineering-confidence"><option value="0.95">95%置信度</option><option value="0.99">99%置信度</option><option value="false">标准椭圆</option></select></label>
     <button id="engineering-calculate">计算所选存储方案</button></p>
@@ -34,6 +38,26 @@
     else if (value?.snapshot_id) summary = `已保存 · 版本 ${value.version}\n工程 ${value.project_id}\n方案 ${value.scenario_id}\n快照 ${value.snapshot_id}`;
     $('summary').textContent = typeof summary === 'string' ? summary : JSON.stringify(summary);
   };
+  function addGnss(row = {from:'8',to:'1',sigma_E:0.005,sigma_N:0.005,correlation:0}) {
+    const tr = document.createElement('tr');
+    for (const key of ['from','to','sigma_E','sigma_N','correlation']) {
+      const td = document.createElement('td'), input = document.createElement('input');
+      input.dataset.key = key; input.setAttribute('aria-label', key); input.value = row[key];
+      input.style.width = '75px'; td.append(input); tr.append(td);
+    }
+    const td = document.createElement('td'), button = document.createElement('button');
+    button.textContent = '删除'; button.onclick = () => { tr.remove(); persistGnss(); }; td.append(button); tr.append(td); $('gnss').append(tr);
+    tr.oninput = persistGnss;
+  }
+  function gnssRows() {
+    if ([...$('gnss').querySelectorAll('input')].some(i => !i.value.trim())) throw new Error('GNSS 参数不可留空');
+    return [...$('gnss').rows].map(tr => Object.fromEntries([...tr.querySelectorAll('input')].map(i => [i.dataset.key, ['from','to'].includes(i.dataset.key) ? i.value : Number(i.value)])));
+  }
+  function persistGnss() {
+    const rows = [...$('gnss').rows].map(tr => Object.fromEntries([...tr.querySelectorAll('input')].map(i => [i.dataset.key,i.value])));
+    sessionStorage.setItem('ctrlnet-open-gnss', JSON.stringify(rows));
+  }
+  $('add-gnss').onclick = () => { addGnss(); persistGnss(); };
   async function api(path, data) {
     const response = await fetch('/api/engineering/' + path, data === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const value = await response.json();
@@ -69,7 +93,7 @@
   async function save(branch) {
     if (!window.ctrlnetThesis || window.ctrlnetThesis.state.busy) throw new Error("编辑器尚未就绪，请稍后保存");
     await window.ctrlnetThesis.syncNetwork();
-    const data = {name:$('name').value};
+    const data = {name:$('name').value, gnss:gnssRows()};
     if (branch) {
       data.project_id = $('project').value; data.parent_snapshot = $('snapshot').value;
       if (!data.parent_snapshot) throw new Error('请先选择父快照');
@@ -81,10 +105,14 @@
   $('branch').onclick = run(() => save(true));
   $('open').onclick = run(async () => {
     if (!confirm('用所选存储方案覆盖论文编辑器当前四库？')) return;
+    const settings = await api('settings/' + encodeURIComponent($('scenario').value));
+    sessionStorage.setItem('ctrlnet-open-gnss', JSON.stringify(settings.gnss));
     await api('open/' + encodeURIComponent($('scenario').value), {});
     location.href = '/thesis';
   });
   $('calculate').onclick = run(async () => output(await api('calculate/' + encodeURIComponent($('scenario').value), {datum:$('datum').value, confidence:JSON.parse($('confidence').value)})));
   $('compare').onclick = run(async () => output(await api('compare?base=' + encodeURIComponent($('scenario').value) + '&candidate=' + encodeURIComponent($('candidate').value))));
+  const opened = sessionStorage.getItem('ctrlnet-open-gnss');
+  if (thesis && opened) { JSON.parse(opened).forEach(addGnss); }
   run(() => refresh())();
 })();

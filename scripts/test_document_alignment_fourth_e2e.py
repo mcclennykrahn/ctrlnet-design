@@ -45,8 +45,8 @@ with tempfile.TemporaryDirectory(prefix='ctrlnet-fourth-') as temp:
             page.wait_for_function('document.querySelector("#engineering-result").textContent.includes(\'"version": 2\')')
             b=json.loads(page.text_content('#engineering-result'))
             page.select_option('#engineering-scenario',a['scenario_id'])
-            page.click('#engineering-open')
-            page.wait_for_load_state('networkidle')
+            with page.expect_navigation(wait_until='networkidle'):
+                page.click('#engineering-open')
             loaded=page.request.get(base+'/api/thesis/state').json()
             for key in ('points','lines','angles','network','projection'):
                 assert loaded[key] == original[key], key

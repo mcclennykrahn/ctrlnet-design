@@ -3,6 +3,7 @@ import copy
 import json
 import math
 import sqlite3
+import numpy as np
 from fastapi import APIRouter, Body, HTTPException
 from .. import store
 from ..exceptions import CtrlnetError
@@ -23,6 +24,34 @@ def editor_records(state):
                  front=names[a['foresight']], sigma_arcsec=grade['angle_sigma_arcsec'])
             for a in state['angles'] if a['id'] in angles]
     return points, obs
+
+
+def gnss_records(rows, points):
+    """二维工程坐标基线：单位米，协方差必须正定。"""
+    if not isinstance(rows, list) or len(rows) > 500:
+        raise ValueError('GNSS 基线须为数组且最多 500 条')
+    names = {p['name'] for p in points}
+    result = []
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {'from', 'to', 'sigma_E', 'sigma_N', 'correlation'}:
+            raise ValueError('GNSS 字段须为 from/to/sigma_E/sigma_N/correlation')
+        a, b = str(row['from']), str(row['to'])
+        se, sn, rho = (float(row[k]) for k in ('sigma_E', 'sigma_N', 'correlation'))
+        if a not in names or b not in names or a == b:
+            raise ValueError('GNSS 端点须引用两个不同的工程点号')
+        if not all(math.isfinite(v) for v in (se, sn, rho)) or se <= 0 or sn <= 0 or abs(rho) >= 1:
+            raise ValueError('GNSS σ须有限且为正，相关系数须在 (-1,1)')
+        covariance = np.array([[se*se, rho*se*sn], [rho*se*sn, sn*sn]])
+        if not np.isfinite(covariance).all():
+            raise ValueError('GNSS 协方差含非有限值')
+        try:
+            np.linalg.cholesky(covariance)
+            if not np.isfinite(np.linalg.inv(covariance)).all():
+                raise ValueError('GNSS 协方差无法稳定求权')
+        except np.linalg.LinAlgError as exc:
+            raise ValueError('GNSS 协方差须正定') from exc
+        result.append(dict(kind='gnss', **{'from':a, 'to':b}, sigma_E=se, sigma_N=sn, correlation=rho))
+    return result
 
 
 def create_bridge_router(service):
@@ -54,10 +83,20 @@ def create_bridge_router(service):
             with service._lock:
                 state = copy.deepcopy(service.state)
             points, observations = editor_records(state)
+            observations += gnss_records(payload.get('gnss', []), points)
             return store.save_editor_version(path, dict(id=payload.get('project_id'), name=name, points=points),
                 dict(name=name, observations=observations, metadata={'thesis_state':state}),
                 parent_snapshot=payload.get('parent_snapshot'))
         except (ValueError, KeyError, TypeError, sqlite3.IntegrityError, CtrlnetError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @router.get('/settings/{sid}')
+    def settings(sid: str):
+        try:
+            scenario = store.get_scenario(path, sid)
+            return {'gnss': [{k:o[k] for k in ('from', 'to', 'sigma_E', 'sigma_N', 'correlation')}
+                             for o in scenario['observations'] if o['kind'] == 'gnss']}
+        except (KeyError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
     @router.post('/open/{sid}')
