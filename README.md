@@ -2164,3 +2164,5 @@ This is a small-angle approximation, with no CRS or datum inference. Supply
 Cartesian coordinates in compatible frames; geographic degrees and projected
 map coordinates are not automatically converted. Arbitrary CRS and 3D web
 editor integration remain outside this workflow.
+
+未打标签的候选包构建、SHA256 校验和源码目录外全新 venv 安装验证，见 [离线安装说明](docs/offline_install.md#未打标签的候选分发验证)。不代表生产部署认证。

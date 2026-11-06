@@ -1,3 +1,5 @@
 include scripts/build_dist.sh
 include docs/offline_install.md
 recursive-include src/ctrlnet/webmap/static *.html *.css *.js *.png LICENSE
+include scripts/build_release.py
+include scripts/test_release_install.py
