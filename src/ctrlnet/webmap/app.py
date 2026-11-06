@@ -299,6 +299,46 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return JSONResponse(payload)
 
+    @app.get("/api/layers/geographic")
+    def geographic_layers(scenario: Optional[str] = None):
+        """UTM 原生图形转 WGS84；复用 Krüger 正反算，不依赖 pyproj。"""
+        import copy
+        from ..thesis import gauss_inverse
+        crs = str(store.project.get("crs") or "EPSG:32650")
+        try:
+            epsg = int(crs.split(":")[-1])
+            south = 32701 <= epsg <= 32760
+            zone = epsg - (32700 if south else 32600)
+            if not 1 <= zone <= 60:
+                raise ValueError("仅支持 WGS84 UTM EPSG:326xx/327xx")
+            payload = copy.deepcopy(store.layers(_scenario_or_404(scenario), include_contours=False))
+            def convert(coords):
+                if isinstance(coords[0], (int, float)):
+                    lat, lon = gauss_inverse((coords[1] - (10000000 if south else 0)) / .9996,
+                        (coords[0] - 500000) / .9996, false_easting=0,
+                        central_meridian=zone * 6 - 183, zone_width=6, ellipsoid="WGS84")
+                    return [lon, lat]
+                return [convert(c) for c in coords]
+            for layer in payload["layers"]:
+                if layer["kind"] == "geojson":
+                    for feature in layer["geojson"]["features"]:
+                        feature["geometry"]["coordinates"] = convert(feature["geometry"]["coordinates"])
+            payload["crs"] = "WGS84 / EPSG:3857"
+            return payload
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/api/scenarios/compare")
+    def compare_versions(base: str, candidate: str):
+        from ..compare import compare
+        from ..reportgen import _snapshot_network
+        bid, cid = _scenario_or_404(base), _scenario_or_404(candidate)
+        bs, bn = _snapshot_network(store.project_path, bid, {})
+        cs, cn = _snapshot_network(store.project_path, cid, {})
+        result = compare(bn, cn, base_name=store.scenario(bid)["name"], candidate_name=store.scenario(cid)["name"])
+        return {"base": bid, "candidate": cid, "base_hash": bs["input_hash"],
+                "candidate_hash": cs["input_hash"], "summary": result.to_text()}
+
     from .viewport import ViewportTerrain
     from threading import Lock
     viewport = None

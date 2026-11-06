@@ -172,7 +172,7 @@ cd /workspace/ctrlnet-design
   `/api/project`、`/api/scenarios`、`/api/scenario/{id}`、`/api/layers` 方案切换、
   `/api/report` HTML/MD/DOCX、晕渲 PNG、通视/遮挡剖面、配准演示与叠加 PNG。
 
-预期结果：`221 passed, 1 skipped, 2 xfailed`（pyproj 未安装时跳过 PROJ 对照；
+预期结果：`334 passed, 1 skipped, 2 xfailed`（pyproj 未安装时跳过 PROJ 对照；
 两条 xfail 为论文 19/27 角算例的已知不可复现项；FastAPI TestClient 会提示
 一条 httpx 弃用警告，不影响结果）。
 
@@ -2121,3 +2121,11 @@ python3 -m venv /workspace/ctrlnet-design/.venv
 命名保存、列表读取、新建已接 GUI；新建/读取/导入提醒先保存。以不同名称保存可保留备选工程，尚不是多方案版本树。`/` 和 `/dashboard` 为另一套米制只读方案，已加论文编辑器入口；仪表盘未直接接网络 XYZ。
 
 验证：`.venv/bin/python -m pytest -q`；`.venv/bin/python scripts/test_thesis_e2e.py`；`.venv/bin/python scripts/test_document_alignment_e2e.py`（最后一项含公开瓦片实测，联网失败不会把离线回归判为失败）。详见 [差距矩阵](docs/document_alignment_gap_matrix.md) 与 [实施报告](docs/document_alignment_impl_report.md)。
+
+### 文档对齐 batch 2（演示级 UI）
+
+- `/` 与 `/dashboard` 左侧直接选择离线 DEM（默认）、离线 MBTiles、OSM 道路或 Esri 影像；XYZ 使用 WGS84/EPSG:3857，工程计算保留 EPSG:32650。点、观测线、放大椭圆重投影；DEM 晕渲/等高线、配准与两点剖面切回离线 DEM 使用。错误或 12 秒超时自动回退；默认无外网请求，不使用百度/BD-09。
+- 仪表盘“方案版本 / 父链接”可打开版本或父方案，“与当前方案比较”调用实际比较计算，显示快照哈希和精度/工作量差异。
+- `/thesis` 顶部可编辑中央子午线、3°/6°、gauss/utm、假东；保留经纬度重算平面并拒绝带外点，命名保存可回读参数。绝对坐标文本按当前所选参数解算。
+- “导出工程 JSON / 导入完整拓扑 JSON”保存四库、观测选择及投影；覆盖确认、整体验证后才替换。导出文件即 `ctrlnet.thesis.web/1` 模板；“撤销”保留当前页面最近 20 次成功修改（刷新后清空，无重做）。详细字段见 `docs/document_alignment_impl_report.md`。
+- 验证：`.venv/bin/python scripts/test_document_alignment_batch2_e2e.py`；全量 pytest 为 **334 passed, 1 skipped, 2 xfailed**（可选 pyproj 未安装）。

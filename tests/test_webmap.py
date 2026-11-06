@@ -283,3 +283,26 @@ def test_demo_metadata_consistent():
     assert (ROOT / "data" / "sample" / payload["image"]).exists()
     assert TERRAIN_PROJECT.exists()
     assert DB.stat().st_size < 5 * 1024 * 1024
+
+
+def test_dashboard_xyz_reprojects_utm_without_pyproj(client):
+    from ctrlnet.thesis import gauss_forward
+    native = client.get('/api/layers?terrain=false').json()
+    geographic = client.get('/api/layers/geographic').json()
+    for local, geo in zip(native['layers'], geographic['layers']):
+        if local['id'] != 'points':
+            continue
+        for a, b in zip(local['geojson']['features'], geo['geojson']['features']):
+            lon, lat = b['geometry']['coordinates']
+            n, e = gauss_forward(lat, lon, central_meridian=117, false_easting=0, zone_width=6, ellipsoid='WGS84')
+            assert [e * .9996 + 500000, n * .9996] == pytest.approx(a['geometry']['coordinates'], abs=1e-5)
+    assert geographic['crs'] == 'WGS84 / EPSG:3857'
+
+
+def test_dashboard_version_compare_api(client):
+    response = client.get('/api/scenarios/compare?base=s13-base&candidate=s13-added')
+    assert response.status_code == 200
+    payload = response.json()
+    assert '方案对比' in payload['summary']
+    assert payload['base_hash'] != payload['candidate_hash']
+    assert client.get('/api/scenarios/compare?base=missing&candidate=s13-base').status_code == 404

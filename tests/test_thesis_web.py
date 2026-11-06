@@ -323,3 +323,52 @@ def test_example2_click_uses_local_plane(client):
     added = client.post('/api/thesis/points', json={'lon':point['lon'], 'lat':point['lat']}).json()['points'][-1]
     assert added['x'] == pytest.approx(point['x'], abs=1e-6)
     assert added['y'] == pytest.approx(point['y'], abs=1e-6)
+
+
+def test_projection_edit_persist_import_and_atomic_rejection(client):
+    client.post('/api/thesis/examples/1')
+    settings = dict(central_meridian=117.3, zone_width=6, convention='utm', false_easting_m=400000)
+    response = client.post('/api/thesis/projection', json=settings)
+    assert response.status_code == 200
+    state = response.json()
+    point = state['points'][0]
+    x, y = gauss_forward(point['lat'], point['lon'], central_meridian=117.3, false_easting=0, ellipsoid='WGS84', zone_width=6)
+    assert point['x'] == pytest.approx(x * .9996)
+    assert point['y'] == pytest.approx(y * .9996 + 400000)
+    client.post('/api/thesis/projects/save', json={'name':'projection-settings'})
+    client.post('/api/thesis/new', json={})
+    loaded = client.post('/api/thesis/projects/load', json={'name':'projection-settings'}).json()
+    assert loaded['projection']['central_meridian'] == 117.3
+    before = client.get('/api/thesis/state').json()
+    assert client.post('/api/thesis/projection', json={**settings, 'central_meridian':125}).status_code == 400
+    assert client.get('/api/thesis/state').json() == before
+    assert client.post('/api/thesis/points', json={'lat':34, 'lon':125}).status_code == 400
+    # 绝对文本按当前选定 CM/UTM/假东解算。
+    text = f"1;{point['x']},{point['y']}"
+    imported = client.post('/api/thesis/import/coordinates', json={'text':text, 'name':'selected-projection'}).json()
+    assert imported['points'][0]['lon'] == pytest.approx(point['lon'], abs=1e-8)
+    assert imported['projection']['convention'] == 'utm'
+
+
+def test_json_topology_roundtrip_and_atomic_validation(client):
+    import copy
+    state = client.post('/api/thesis/examples/1').json()
+    state['projection']['central_meridian'] = 117
+    imported = client.post('/api/thesis/import/json', json=state)
+    assert imported.status_code == 200
+    before = client.get('/api/thesis/state').json()
+    assert len(before['lines']) == len(state['lines'])
+    assert before['network'] == state['network']
+    for mutate in (
+        lambda s: s['lines'][0].update({'from':'missing'}),
+        lambda s: s['points'][1].update({'id':s['points'][0]['id']}),
+        lambda s: s['points'][0].update({'lon':130}),
+        lambda s: s['points'][0].update({'x':1}),
+        lambda s: s['points'][0].update({'x':'NaN'}),
+        lambda s: s['network'].update({'observed_angles':['missing']}),
+        lambda s: s.update({'schema':'other'}),
+        lambda s: s['projection'].update({'zone_width':4}),
+    ):
+        bad = copy.deepcopy(state); mutate(bad)
+        assert client.post('/api/thesis/import/json', json=bad).status_code == 400
+        assert client.get('/api/thesis/state').json() == before

@@ -30,6 +30,8 @@
     return Number.isFinite(number) ? number.toFixed(digits) : "—";
   }
 
+  const undoStack = [];
+  let restoring = false;
   async function api(path, options) {
     const opts = Object.assign({}, options || {});
     const headers = Object.assign({ Accept: "application/json" }, opts.headers || {});
@@ -50,6 +52,11 @@
         detail = detail.map((item) => item.msg || JSON.stringify(item)).join("；");
       }
       throw new Error(detail || text || `请求失败（HTTP ${response.status}）`);
+    }
+    if (opts.method && opts.method !== "GET" && state.data && !restoring &&
+        !path.includes("calculate") && !path.includes("projects/save")) {
+      undoStack.push(JSON.parse(JSON.stringify(state.data)));
+      if (undoStack.length > 20) undoStack.shift();
     }
     return payload;
   }
@@ -587,7 +594,13 @@
     const opts = options || {};
     state.data = payload;
     const projection = payload.projection;
-    $("projection-summary").textContent = projection ? `${projection.ellipsoid} · 中央子午线 ${projection.central_meridian}°E · ${projection.zone_width}°带 / 带号 ${projection.zone_number} · 假东 ${projection.false_easting_m} m · ${projection.axis}。${projection.note}。不使用 BD-09。` : "";
+    if (projection) {
+      $("projection-cm").value = projection.central_meridian;
+      $("projection-width").value = projection.zone_width;
+      $("projection-convention").value = projection.convention || "gauss";
+      $("projection-fe").value = projection.false_easting_m;
+    }
+    $("projection-summary").textContent = projection ? `${projection.ellipsoid} · ${projection.convention || "gauss"} · 中央子午线 ${projection.central_meridian}°E · ${projection.zone_width}°带 / 带号 ${projection.zone_number} · 假东 ${projection.false_easting_m} m · ${projection.axis}。${projection.note}。不使用 BD-09。` : "";
     state.lastResult = opts.keepResult ? state.lastResult : null;
     if (!state.nameDirty && payload.name) $("project-name").value = payload.name;
     renderPoints();
@@ -1024,6 +1037,44 @@
   // 事件绑定
   // ------------------------------------------------------------------
   function bindEvents() {
+    $("apply-projection").addEventListener("click", async () => {
+      try {
+        applyState(await api("/api/thesis/projection", {method:"POST", body:{
+          central_meridian:Number($("projection-cm").value), zone_width:Number($("projection-width").value),
+          convention:$("projection-convention").value, false_easting_m:Number($("projection-fe").value)}}));
+        toast("投影已更新；平面坐标已重算");
+      } catch (err) { toast(err.message, true); }
+    });
+    $("export-json").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state.data, null, 2)], {type:"application/json"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "thesis-project.json";
+      a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    $("topology-file").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        if (file.size > 4000000) throw new Error("JSON 不得超过 4 MB");
+        const body = JSON.parse(await file.text());
+        if (!window.confirm("完整 JSON 将覆盖当前工程四库及观测。继续？")) return;
+        const payload = await api("/api/thesis/import/json", {method:"POST", body});
+        state.nameDirty = false; state.gradeTouched = true;
+        applyState(payload, {fit:true});
+        toast("JSON 拓扑导入成功");
+      } catch (err) { toast("导入失败：" + err.message, true); }
+      finally { event.target.value = ""; }
+    });
+    $("undo-mutation").addEventListener("click", async () => {
+      if (!undoStack.length) return toast("没有可撤销的修改");
+      restoring = true;
+      try {
+        const payload = await api("/api/thesis/import/json", {method:"POST", body:undoStack[undoStack.length-1]});
+        state.nameDirty = false; state.gradeTouched = true;
+        applyState(payload, {fit:true});
+        undoStack.pop(); toast("已撤销");
+      } catch (err) { toast(err.message, true); }
+      finally { restoring = false; }
+    });
     $("coordinate-file").addEventListener("change", importCoordinateFile);
     $("project-name").addEventListener("input", () => {
       state.nameDirty = true;

@@ -306,3 +306,13 @@ html, body {
   #right-panel { width: 330px; }
   #left-panel { width: 264px; }
 }
+
+/* 仪表盘原地 XYZ / 版本操作，与现有侧栏一致。 */
+.scenario-panel > p { font-size: 12px; line-height: 1.5; margin: 8px 0; }
+.scenario-panel a { color: #7dd3fc; }
+#dashboard-basemap, #compare-base { width: 100%; margin: 5px 0; padding: 6px; background: #0b1728; color: #e2e8f0; border: 1px solid #334155; border-radius: 5px; }
+#dashboard-basemap-status { font-size: 11px; line-height: 1.5; color: #bae6fd; margin: 5px 0 10px; }
+#version-list { font-size: 11px; line-height: 1.7; }
+#version-list button, #compare-versions { background: #172a40; color: #e2e8f0; border: 1px solid #334155; border-radius: 4px; padding: 3px 5px; margin: 2px 0; cursor: pointer; }
+#version-comparison { font-size: 11px; overflow-wrap: anywhere; }
+#xyz-map .leaflet-control-attribution { position: fixed; left: 320px; top: 76px; bottom: auto; margin: 0; max-width: calc(100vw - 740px); color: #172a40; background: #fffffff0; }

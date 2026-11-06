@@ -1,0 +1,4 @@
+[e2e] /thesis 加载成功（仅本地请求）
+[e2e] 算例 1：9 点 / 17 线 / 14 角
+[e2e] 精度计算：最弱点 1，Qxx=0.6502，Qyy=0.3039，M=9.77 mm / 0.98 cm，满足精度要求
+[e2e] 分母表 17 行；截图 outputs/thesis_web_example1.png

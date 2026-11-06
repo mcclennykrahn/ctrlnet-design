@@ -1,4 +1,4 @@
-/* CTRLNET 本地离线网页地图：Leaflet + 原生 JS，无外部网络请求。 */
+/* CTRLNET 本地网页地图：默认离线 DEM，可选公开 XYZ。 */
 (function () {
   "use strict";
 
@@ -811,6 +811,7 @@
       state.lastPayload = payload;
       renderTopStats(payload.summary, payload.scenario);
       applyScenarioLayers(layers);
+      await refreshXYZ();
       fitScenarioView(payload.points, 6);
       updateReportLinks();
       document.getElementById("status-mode").textContent =
@@ -838,6 +839,122 @@
     });
   }
 
+  let xyzMap, xyzBase, xyzLayers = {}, xyzTimer, xyzGeneration = 0;
+  async function refreshXYZ() {
+    if (!xyzMap || document.getElementById("dashboard-basemap").value === "offline") return;
+    const sid = state.selectedScenario;
+    const data = await getJSON("/api/layers/geographic?scenario=" + encodeURIComponent(sid));
+    if (sid !== state.selectedScenario) return;
+    Object.values(xyzLayers).forEach(layer => xyzMap.removeLayer(layer));
+    xyzLayers = {};
+    data.layers.filter(layer => ["points", "observations", "ellipses"].includes(layer.id)).forEach(layer => {
+      const group = L.geoJSON(layer.geojson, {
+        style: layer.id === "observations" ? styleObservations : layer.id === "ellipses" ? styleEllipses : undefined,
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng, {pane:"pointPane", radius:6, fillOpacity:.9, color:feature.properties.fixed ? "#f59e0b" : "#22c55e"}),
+        onEachFeature: (feature, item) => item.bindPopup(layer.id === "points" ? pointPopup(feature.properties) : layer.id === "observations" ? observationPopup(feature.properties) : "95% 误差椭圆（放大）")
+      });
+      // 样式中的原米制 pane 在此地图也创建，保持原有颜色。
+      xyzLayers[layer.id] = group;
+      if (document.getElementById("lyr-" + layer.id).checked) group.addTo(xyzMap);
+    });
+    const bounds = xyzLayers.points.getBounds();
+    if (bounds.isValid()) xyzMap.fitBounds(bounds.pad(.3), {maxZoom:17});
+  }
+
+  async function setupDashboardBasemaps() {
+    const select = document.getElementById("dashboard-basemap");
+    const status = document.getElementById("dashboard-basemap-status");
+    const [config, tiles] = await Promise.all([getJSON("/api/basemaps"), getJSON("/api/tiles")]);
+    const sources = {};
+    config.sources.forEach(source => {sources[source.id] = source; select.add(new Option(source.label, source.id));});
+    tiles.resources.forEach(resource => {
+      const m = resource.metadata, id = "mbtiles:" + resource.name;
+      sources[id] = {url:"/tiles/" + encodeURIComponent(resource.name) + "/{z}/{x}/{y}.png",
+        label:"离线 MBTiles · " + resource.name, attribution:"本地 MBTiles · " + esc(resource.name),
+        minNativeZoom:Number(m.minzoom || 0), maxNativeZoom:Number(m.maxzoom || 18), bounds:(m.bounds || "").split(",").map(Number)};
+      select.add(new Option(sources[id].label + " · " + m.bounds + " · z" + m.minzoom + "–" + m.maxzoom, id));
+    });
+    async function activate(id, failure) {
+      const generation = ++xyzGeneration;
+      clearTimeout(xyzTimer);
+      if (xyzBase) { xyzMap.removeLayer(xyzBase); xyzBase = null; }
+      select.value = id;
+      document.getElementById("map").style.visibility = id === "offline" ? "visible" : "hidden";
+      document.getElementById("xyz-map").style.display = id === "offline" ? "none" : "block";
+      ["lyr-hillshade", "lyr-contours", "lyr-scan", "lyr-gcp", "offline-tiles", "reload-registration"].forEach(key => {
+        const node = document.getElementById(key);
+        if (node) {node.disabled = id !== "offline"; node.title = id !== "offline" ? "请切回离线 DEM 使用" : "";}
+      });
+      document.getElementById("profile-mode").textContent = id === "offline" ? "点击两点" : "剖面请切回 DEM";
+      const crs = "工程 " + state.project.summary.crs;
+      if (id === "offline") {
+        status.textContent = (failure ? failure + "；" : "") + crs + " · DEM / CRS.Simple；剖面、等高线、配准可用";
+        map.invalidateSize(); return;
+      }
+      if (!xyzMap) {
+        xyzMap = L.map("xyz-map", {zoomControl:false});
+        L.control.zoom({position:"bottomright"}).addTo(xyzMap);
+        ["obsPane", "ellipsePane", "pointPane"].forEach((name, i) => { xyzMap.createPane(name).style.zIndex = 420 + i; });
+      }
+      xyzMap.invalidateSize();
+      const source = sources[id];
+      const note = crs + " · WGS84 / EPSG:3857；控制网/椭圆已重投影；DEM晕渲、等高线、配准及两点剖面请切回离线 DEM。";
+      status.textContent = "正在加载瓦片… " + note;
+      function failed(reason) {if (generation === xyzGeneration) activate("offline", "瓦片未加载（" + reason + "），已回退离线 DEM");}
+      try {
+        await refreshXYZ();
+        if (generation !== xyzGeneration) return;
+        if (source.bounds && source.bounds.length === 4 && source.bounds.every(Number.isFinite)) {
+          const b = source.bounds, coverage = L.latLngBounds([[b[1],b[0]],[b[3],b[2]]]);
+          if (!coverage.intersects(xyzMap.getBounds())) return failed("MBTiles 不覆盖当前测区");
+        }
+        xyzBase = L.tileLayer(source.url, {minNativeZoom:source.minNativeZoom, maxNativeZoom:source.maxNativeZoom,
+          maxZoom:20, attribution:source.attribution});
+        let loaded = 0;
+        xyzBase.on("tileload", () => { loaded++; });
+        xyzBase.on("loading", () => {
+          if (generation !== xyzGeneration) return;
+          loaded = 0; clearTimeout(xyzTimer); status.textContent = "正在加载瓦片… " + note;
+          xyzTimer = setTimeout(() => failed("12秒超时"), 12000);
+        });
+        xyzBase.on("tileerror", () => failed("错误"));
+        xyzBase.on("load", () => { if (generation === xyzGeneration && loaded > 0) {clearTimeout(xyzTimer); status.textContent = source.label + " · 当前视窗瓦片已加载 · " + note;} });
+        xyzTimer = setTimeout(() => failed("12秒超时"), 12000);
+        xyzBase.addTo(xyzMap);
+      } catch (err) { failed(err.message); }
+    }
+    select.addEventListener("change", () => activate(select.value));
+    ["points", "observations", "ellipses"].forEach(id => document.getElementById("lyr-" + id).addEventListener("change", event => {
+      if (xyzLayers[id]) { if (event.target.checked) xyzLayers[id].addTo(xyzMap); else xyzMap.removeLayer(xyzLayers[id]); }
+    }));
+    activate("offline");
+  }
+
+  function setupVersionList() {
+    const base = document.getElementById("compare-base"), list = document.getElementById("version-list");
+    list.innerHTML = "<b>方案版本 / 父链接</b><br>";
+    state.scenarios.forEach(item => {
+      base.add(new Option(item.name + " · v" + item.version, item.id));
+      const row = document.createElement("div"), open = document.createElement("button");
+      open.textContent = item.name + " · v" + item.version;
+      open.onclick = () => {document.getElementById("scenario-select").value = item.id; switchScenario(item.id).catch(() => {});};
+      row.append(open, document.createTextNode(" ← "));
+      if (item.parent_id) {
+        const parent = document.createElement("button"); parent.textContent = item.parent_id;
+        parent.onclick = () => {document.getElementById("scenario-select").value = item.parent_id; switchScenario(item.parent_id).catch(() => {});};
+        row.append(parent);
+      } else row.append(document.createTextNode("根版本"));
+      list.append(row);
+    });
+    document.getElementById("compare-versions").onclick = async () => {
+      const node = document.getElementById("version-comparison"); node.textContent = "正在计算比较…";
+      try {
+        const result = await getJSON("/api/scenarios/compare?base=" + encodeURIComponent(base.value) + "&candidate=" + encodeURIComponent(state.selectedScenario));
+        node.textContent = "快照 " + result.base_hash + " → " + result.candidate_hash + "\n" + result.summary;
+      } catch (err) {node.textContent = "比较失败：" + err.message;}
+    };
+  }
+
   async function boot() {
     try {
       const project = await getJSON("/api/project");
@@ -853,6 +970,8 @@
       addLayerGroups(layers);
       await refreshTerrain();
       bindButtons();
+      await setupDashboardBasemaps();
+      setupVersionList();
       updateReportLinks();
       await loadRegistration();
       document.getElementById("loading").classList.add("hidden");

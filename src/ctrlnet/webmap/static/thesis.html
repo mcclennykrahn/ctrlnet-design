@@ -32,7 +32,7 @@
         </article>
         <article>
           <h3>#2 坐标转换原理</h3>
-          <p>将 CGCS2000/WGS84 大地坐标 (B,L) 投影到 3° 带高斯平面。徐州取中央子午线 117°E，东坐标加 500 km 假东；x 为北、y 为东，供间接平差使用。</p>
+          <p>将大地坐标 (B,L) 按右侧所选中央子午线、3°/6°带宽及 gauss/utm 约定投影；x 为北、y 为东。徐州演示默认 117°E、假东 500 km。自定义中央子午线时，带号仅作约定参考，不代表标准 EPSG 编号。</p>
           <p class="formula">L<sub>0</sub> = 3° × round(L/3°)，l = (L−L<sub>0</sub>)/ρ</p>
           <p class="formula">x = X + N sinB cosB l²/2 + …，y = N cosB l + … + 500000</p>
         </article>
@@ -72,9 +72,20 @@
         <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
       </div>
 
+      <div class="project-load-row">
+        <label>中央子午线 °E <input id="projection-cm" type="number" value="117" step="0.1" min="-180" max="180" style="width:80px"></label>
+        <label>带宽 <select id="projection-width"><option>3</option><option>6</option></select></label>
+        <label>约定 <select id="projection-convention"><option>gauss</option><option>utm</option></select></label>
+        <label>假东 m <input id="projection-fe" type="number" value="500000" style="width:100px"></label>
+        <button id="apply-projection">应用投影</button>
+        <span>保留经纬度重算平面；带外点拒绝且保留原工程。轴序 x北/y东。</span>
+      </div>
+      <div class="project-load-row"><label>导入完整拓扑 JSON <input id="topology-file" type="file" accept=".json"></label>
+        <button id="export-json">导出工程 JSON</button><button id="undo-mutation">撤销（最近20步）</button>
+        <span>ctrlnet.thesis.web/1：points、lines、angles、network、projection；导出文件即模板。覆盖四库及观测。</span></div>
       <div id="projection-summary" class="projection-summary" role="status"></div>
       <div class="project-load-row"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" /></label>
-      <span>点号；x北，y东（m），117°高斯绝对坐标。替换四库，类型初始为未知。</span></div>
+      <span>点号；x北，y东（m），按当前所选中央子午线/假东/gauss 或 utm 解算的绝对坐标。替换四库，类型初始为未知。</span></div>
       <section class="panel" id="panel-points">
         <header class="panel-title"><span>点库</span><span class="panel-count" id="point-count">0</span></header>
         <div class="panel-body">

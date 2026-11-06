@@ -9,6 +9,7 @@
 </head>
 <body>
   <div id="terrain-status" role="status" aria-live="polite" style="position:absolute;bottom:28px;left:12px;z-index:1000;background:#0f172a;color:white;max-width:70%;padding:4px;font-size:11px"></div>
+  <div id="xyz-map" style="position:absolute;inset:0;z-index:0;display:none" aria-label="WGS84 XYZ 控制网地图"></div>
   <div id="map" aria-label="离线地形与控制网地图"></div>
 
   <header id="topbar">
@@ -31,9 +32,13 @@
   <aside id="left-panel" class="panel">
     <section class="panel-section scenario-panel">
       <div class="section-kicker">Scenario</div>
-      <h2>方案切换</h2><p><a href="/thesis">论文编辑器 · 道路/卫星底图 · 坐标导入</a></p><p>此页为米制工程只读方案；论文工程独立保存。</p>
+      <h2>方案切换</h2><p><a href="/thesis">论文编辑器 · 道路/卫星底图 · 坐标导入</a></p><p>此页原地切换 DEM / XYZ，论文工程独立保存。</p>
       <label class="scenario-label" for="scenario-select">当前方案</label>
       <select id="scenario-select" class="scenario-select" aria-label="选择方案"></select>
+      <label>底图 <select id="dashboard-basemap"><option value="offline">离线 DEM（默认）</option></select></label>
+      <div id="dashboard-basemap-status" role="status">工程 EPSG:32650 · DEM / CRS.Simple</div>
+      <div id="version-list"></div><label>比较基准 <select id="compare-base"></select></label>
+      <button id="compare-versions">与当前方案比较</button><pre id="version-comparison" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre>
       <div id="scenario-meta" class="scenario-meta">正在载入方案…</div>
     </section>
 

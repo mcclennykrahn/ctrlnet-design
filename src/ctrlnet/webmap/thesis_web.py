@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import math
 import threading
 from datetime import datetime, timezone
@@ -125,6 +126,38 @@ def _local_from_lonlat(lon: float, lat: float) -> Tuple[float, float]:
     return x - origin_x, y - origin_y
 
 
+def _projection(state):
+    raw = state.get("projection", {})
+    cm = _finite(raw.get("central_meridian", 117), "中央子午线")
+    width = _finite(raw.get("zone_width", 3), "带宽")
+    convention = raw.get("convention", "gauss")
+    fe = _finite(raw.get("false_easting_m", 500000), "假东")
+    if not -180 <= cm <= 180 or width not in (3, 6) or convention not in ("gauss", "utm") or abs(fe) > 10000000:
+        raise ThesisError("投影参数无效：中央子午线 -180～180，带宽 3/6，约定 gauss/utm")
+    return dict(central_meridian=cm, zone_width=width, convention=convention,
+                false_easting_m=fe, zone_number=round(cm / width) if convention == "gauss" else round((cm + 183) / 6),
+                ellipsoid="CGCS2000" if convention == "gauss" else "WGS84",
+                axis="x 北 / y 东（m）", map_crs="WGS84 / EPSG:3857")
+
+
+def _project_xy(state, lat, lon):
+    p = _projection(state)
+    if abs(lon - p["central_meridian"]) > p["zone_width"] / 2 or not -85 < lat < 85:
+        raise ThesisError(f"跨带/带外坐标：超出中央子午线 {p['central_meridian']}° 的 {p['zone_width']}° 带")
+    x, y = gauss_forward(lat, lon, central_meridian=p["central_meridian"],
+                         zone_width=p["zone_width"], false_easting=0, ellipsoid=p["ellipsoid"])
+    k = .9996 if p["convention"] == "utm" else 1
+    return x * k, y * k + p["false_easting_m"]
+
+
+def _inverse_xy(state, x, y):
+    p = _projection(state)
+    k = .9996 if p["convention"] == "utm" else 1
+    return gauss_inverse(x / k, (y - p["false_easting_m"]) / k,
+                         central_meridian=p["central_meridian"], zone_width=p["zone_width"],
+                         false_easting=0, ellipsoid=p["ellipsoid"])
+
+
 def _empty_state(name: str = "未命名论文工程") -> Dict[str, Any]:
     return {
         "schema": SCHEMA,
@@ -214,19 +247,18 @@ def _touch(state: Dict[str, Any]) -> None:
 
 
 def _ensure_geometry(state: Dict[str, Any]) -> None:
-    """补齐点的经纬度/平面坐标；用户点默认中央子午线 117°。"""
+    """按工程投影补齐坐标；旧工程沿用徐州默认值。"""
     for point in state.get("points", []):
         lon = point.get("lon")
         lat = point.get("lat")
         x = point.get("x")
         y = point.get("y")
         if (x is None or y is None) and lon is not None and lat is not None:
-            x, y = gauss_forward(
-                float(lat), float(lon), central_meridian=DEFAULT_CENTRAL_MERIDIAN
-            )
+            x, y = _project_xy(state, float(lat), float(lon))
             point["x"], point["y"] = x, y
         if (lon is None or lat is None) and x is not None and y is not None:
-            lon, lat = _lonlat_from_local(float(x), float(y))
+            ox, oy = _project_xy(state, ORIGIN_LAT, ORIGIN_LON) if abs(float(x)) < 100000 else (0, 0)
+            lat, lon = _inverse_xy(state, float(x) + ox, float(y) + oy)
             point["lon"], point["lat"] = lon, lat
         if x is None or y is None or lon is None or lat is None:
             raise ThesisError(f"点 {point.get('name')!r} 缺少坐标")
@@ -338,13 +370,9 @@ def _public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     except ValueError:
         suggested = str(network.get("grade", "二级"))
     payload = {
-        "projection": {
-            "ellipsoid": "CGCS2000", "central_meridian": 117.0,
-            "zone_width": 3, "zone_number": 39, "false_easting_m": 500000,
-            "axis": "x 北 / y 东（m）", "map_crs": "WGS84 经纬度 / EPSG:3857 显示",
-            "local": any(abs(p["x"]) < 100000 for p in points),
-            "note": "局部平面以 34.2°N / 117.2°E 高斯坐标为原点" if any(abs(p["x"]) < 100000 for p in points) else "CGCS2000 三度带高斯平面；WGS84 显示未应用基准七参数",
-        },
+        "projection": dict(_projection(state),
+            local=any(abs(p["x"]) < 100000 for p in points),
+            note="局部平面锚定徐州原点" if any(abs(p["x"]) < 100000 for p in points) else "工程投影；WGS84 显示未应用基准七参数"),
         "schema": state.get("schema", SCHEMA),
         "name": state.get("name", "未命名论文工程"),
         "created_at": state.get("created_at"),
@@ -778,17 +806,15 @@ class ThesisService:
         lat = _finite(lat, "纬度")
         if not (-180.0 <= lon <= 180.0 and -90.0 < lat < 90.0):
             raise ThesisError("经纬度超出合理范围")
-        if abs(lon - DEFAULT_CENTRAL_MERIDIAN) > 1.5:
-            raise ThesisError("超出中央子午线 117° 的三度带；请使用测区内坐标，当前不支持切换投影")
+        _project_xy(self.state, lat, lon)
         with self._lock:
             _ensure_geometry(self.state)
             seq = int(self.state["seq"].get("point", 0)) + 1
             name = _next_name(self.state, "points")
-            x, y = gauss_forward(
-                lat, lon, central_meridian=DEFAULT_CENTRAL_MERIDIAN
-            )
+            x, y = _project_xy(self.state, lat, lon)
             if any(abs(p["x"]) < 100000 for p in self.state["points"]):
-                x, y = _local_from_lonlat(lon, lat)
+                ox, oy = _project_xy(self.state, ORIGIN_LAT, ORIGIN_LON)
+                x, y = x - ox, y - oy
             point = {
                 "id": f"p{seq}",
                 "name": str(name),
@@ -814,20 +840,89 @@ class ThesisService:
         if len(coords) > 2000:
             raise ThesisError("本入口最多导入 2000 点")
         candidate = _empty_state(name.strip() or "导入论文坐标")
+        candidate["projection"] = _projection(self.state)
         for index, (label, (x, y)) in enumerate(coords.items(), 1):
             if not label.isdigit() or int(label) < 1 or str(int(label)) != label:
                 raise ThesisError("点号必须为无前导零的正整数，以便构线构角")
-            if not isfinite(x) or not isfinite(y) or not 0 < x < 10000000 or not 100000 < y < 900000:
+            if not isfinite(x) or not isfinite(y) or not 0 < x < 10000000 or not abs(y - candidate["projection"]["false_easting_m"]) < 900000:
                 raise ThesisError(f"点 {label} 需要绝对高斯坐标 x北/y东（m），不接受局部坐标或非有限数")
-            lat, lon = gauss_inverse(x, y, central_meridian=117.0)
-            if abs(lon - 117.0) > 1.5 or not -85 < lat < 85:
-                raise ThesisError(f"点 {label} 超出 117° 三度带")
+            lat, lon = _inverse_xy(candidate, x, y)
+            _project_xy(candidate, lat, lon)
             candidate["points"].append(dict(id=f"p{index}", name=label, x=x, y=y,
                                             lon=lon, lat=lat, fixed=False))
         candidate["seq"]["point"] = len(coords)
         with self._lock:
             self.state = candidate
             return _public_state(self.state)
+
+    def set_projection(self, settings):
+        with self._lock:
+            candidate = copy.deepcopy(self.state)
+            candidate["projection"] = _projection({"projection": settings})
+            local = any(abs(p["x"]) < 100000 for p in candidate["points"])
+            origin = _project_xy(candidate, ORIGIN_LAT, ORIGIN_LON) if local else (0, 0)
+            for point in candidate["points"]:
+                x, y = _project_xy(candidate, point["lat"], point["lon"])
+                point["x"], point["y"] = x - origin[0], y - origin[1]
+            payload = _public_state(candidate)
+            self.state = candidate
+            return payload
+
+    def import_state(self, raw):
+        """先完整校验副本，再提交；引用使用稳定 id。"""
+        try:
+            if not isinstance(raw, dict) or raw.get("schema") != SCHEMA:
+                raise ThesisError(f"JSON schema 必须为 {SCHEMA}")
+            if len(json.dumps(raw)) > 4000000:
+                raise ThesisError("JSON 不得超过 4 MB")
+            candidate = _empty_state(str(raw.get("name") or "导入工程"))
+            candidate["projection"] = _projection(raw)
+            for key in ("points", "lines", "angles"):
+                rows = raw.get(key)
+                if not isinstance(rows, list) or len(rows) > 2000:
+                    raise ThesisError(f"{key} 必须为数组且不超过 2000 项")
+                candidate[key] = copy.deepcopy(rows)
+                ids = [str(row["id"]) for row in rows]
+                if len(set(ids)) != len(ids) or any(not v for v in ids):
+                    raise ThesisError(f"{key} 编号重复或为空")
+                candidate["seq"][key[:-1] if key != "points" else "point"] = max(
+                    [len(rows)] + [int(v[1:]) for v in ids if v[1:].isdigit()])
+            names = [str(p["name"]) for p in candidate["points"]]
+            if len(set(names)) != len(names) or any(not v.isdigit() or int(v) < 1 for v in names):
+                raise ThesisError("点名必须为唯一正整数")
+            for point in candidate["points"]:
+                for key in ("x", "y", "lon", "lat"):
+                    point[key] = _finite(point[key], key)
+                _project_xy(candidate, point["lat"], point["lon"])
+            local = any(abs(p["x"]) < 100000 for p in candidate["points"])
+            origin = _project_xy(candidate, ORIGIN_LAT, ORIGIN_LON) if local else (0, 0)
+            for point in candidate["points"]:
+                x, y = _project_xy(candidate, point["lat"], point["lon"])
+                if max(abs(point["x"] - (x - origin[0])), abs(point["y"] - (y - origin[1]))) > .05:
+                    raise ThesisError("JSON 双坐标与所选投影不一致（允许 0.05 m 舍入误差）")
+            for line in candidate["lines"]:
+                line.pop("_keep_length", None)
+                line.pop("_keep_azimuth", None)
+                if line["from"] == line["to"]:
+                    raise ThesisError("线的两端不能相同")
+            for angle in candidate["angles"]:
+                if len({angle[k] for k in ("backsight", "station", "foresight")}) != 3:
+                    raise ThesisError("角需要三个不同点")
+            candidate["network"].update(raw.get("network", {}))
+            network = candidate["network"]
+            _grade_payload(network["grade"])
+            for key in ("tolerance_mm", "ellipse_scale"):
+                if _finite(network[key], key) <= 0:
+                    raise ThesisError(f"{key} 必须为正数")
+            for key in ("observed_edges", "added_edges", "observed_angles", "added_angles"):
+                allowed = {r["id"] for r in candidate["lines" if "edges" in key else "angles"]}
+                network[key] = _ids(network.get(key), allowed, key)
+            payload = _public_state(candidate)
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise ThesisError(f"JSON 拓扑无效：{exc}") from exc
+        with self._lock:
+            self.state = candidate
+        return payload
 
     def set_point_fixed(self, point_id: str, fixed: bool) -> Dict[str, Any]:
         with self._lock:
@@ -1023,7 +1118,9 @@ class ThesisService:
     def calculate(self) -> Dict[str, Any]:
         with self._lock:
             _ensure_geometry(self.state)
-            return calculate_state(self.state)
+            result = calculate_state(self.state)
+            result["projection"] = _projection(self.state)
+            return result
 
     def export_coordinates(self) -> Dict[str, Any]:
         with self._lock:
@@ -1261,6 +1358,20 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
             return JSONResponse(service.import_coordinates(str(payload.get("text") or ""), str(payload.get("name") or "导入论文坐标")))
         except (ThesisError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/api/thesis/projection")
+    def projection(payload: Dict[str, Any] = Body(...)):
+        try:
+            return service.set_projection(payload)
+        except (ThesisError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @router.post("/api/thesis/import/json")
+    def import_json(payload: Dict[str, Any] = Body(...)):
+        try:
+            return service.import_state(payload)
+        except ThesisError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @router.post("/api/thesis/new")
     def new_project(payload: Optional[Dict[str, Any]] = Body(default=None)) -> JSONResponse:
