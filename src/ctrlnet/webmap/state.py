@@ -87,7 +87,7 @@ class ProjectStore:
         self.project = load_project(self.project_path)
         self._lock = threading.RLock()
         self._dem: Optional[DEM] = None
-        self._layers: dict[str, dict] = {}
+        self._layers: dict[tuple[str, bool], dict] = {}
         self._hillshade: Optional[bytes] = None
         self._registration: Optional[dict] = None
         self._registration_overlay: Optional[bytes] = None
@@ -396,18 +396,19 @@ class ProjectStore:
         }
 
     # ---- 图层 -----------------------------------------------------
-    def layers(self, scenario_id: Optional[str] = None) -> dict:
+    def layers(self, scenario_id: Optional[str] = None, *, include_contours: bool = True) -> dict:
         sid = self.resolve_scenario_id(scenario_id)
         with self._lock:
-            if sid not in self._layers:
+            key = (sid, include_contours)
+            if key not in self._layers:
                 payload = self.scenario_payload(sid)
                 render_project = self._render_project(payload)
-                layers = build_layers(render_project, self.dem)
+                layers = build_layers(render_project, self.dem, include_contours=include_contours)
                 layers["scenario"] = payload["scenario"]
                 layers["summary"] = payload["summary"]
                 layers["analysis"] = payload["analysis"]
-                self._layers[sid] = layers
-            return self._layers[sid]
+                self._layers[key] = layers
+            return self._layers[key]
 
     # ---- 摘要 / 工程载荷 -----------------------------------------
     def summary(self, scenario_id: Optional[str] = None) -> dict:

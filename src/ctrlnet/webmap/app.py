@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -281,13 +281,36 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/layers", summary="图层清单与 GeoJSON（可指定方案）")
-    def layers(scenario: Optional[str] = Query(None, description="方案 id 或名称")) -> JSONResponse:
+    def layers(scenario: Optional[str] = Query(None, description="方案 id 或名称"), terrain: bool = True) -> JSONResponse:
         sid = _scenario_or_404(scenario)
         try:
-            payload = store.layers(sid)
+            payload = store.layers(sid, include_contours=terrain)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return JSONResponse(payload)
+
+    from .viewport import ViewportTerrain
+    from threading import Lock
+    viewport = None
+    viewport_lock = Lock()
+
+    @app.get("/api/terrain/{kind}")
+    def terrain_view(kind: str, request: Request, bbox: str, zoom: float):
+        nonlocal viewport
+        if kind not in ("contours", "hillshade"):
+            raise HTTPException(404, "Unknown terrain layer")
+        with viewport_lock:
+            if viewport is None:
+                viewport = ViewportTerrain(store.dem)
+        try:
+            body, etag, hit = viewport.render(bbox, zoom, kind)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        headers = {"ETag": etag, "Cache-Control": "private, max-age=0, must-revalidate",
+                   "X-Terrain-Cache": "hit" if hit else "miss"}
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        return Response(body, media_type="application/json" if kind == "contours" else "image/png", headers=headers)
 
     @app.get(
         "/api/overlay/hillshade.png",

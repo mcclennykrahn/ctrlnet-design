@@ -409,7 +409,7 @@ def build_ellipse_geojson(project: dict) -> dict:
     }
 
 
-def build_layers(project: dict, dem: DEM, *, contour_interval: float = 50.0) -> dict:
+def build_layers(project: dict, dem: DEM, *, contour_interval: float = 50.0, include_contours: bool = True) -> dict:
     left, bottom, right, top = dem.bounds
     return {
         "crs": project.get("dem", {}).get("crs", "EPSG:32650"),
@@ -429,7 +429,7 @@ def build_layers(project: dict, dem: DEM, *, contour_interval: float = 50.0) -> 
                 "id": "contours",
                 "title": f"等高线（{contour_interval:g} m）",
                 "kind": "geojson",
-                "geojson": build_contours_geojson(dem, interval=contour_interval),
+                "geojson": build_contours_geojson(dem, interval=contour_interval) if include_contours else {"type": "FeatureCollection", "features": []},
             },
             {
                 "id": "observations",

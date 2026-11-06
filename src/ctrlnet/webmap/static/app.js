@@ -376,12 +376,7 @@
 
     state.groups.hillshade = L.layerGroup();
     const hs = byId.hillshade;
-    if (hs) {
-      const image = L.imageOverlay(hs.url, hs.bounds, {
-        pane: "hillshadePane", opacity: hs.opacity || 0.95, interactive: false,
-      });
-      state.groups.hillshade.addLayer(image);
-    }
+
 
     state.groups.contours = L.geoJSON(byId.contours.geojson, {
       pane: "contourPane", style: styleContours, interactive: false,
@@ -719,6 +714,59 @@
       });
   }
 
+  let terrainSequence = 0;
+  let terrainTimer;
+  async function refreshTerrain() {
+    if (!state.groups.contours) return;
+    const sequence = ++terrainSequence;
+    const b = map.getBounds();
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    const query = "?bbox=" + bbox.join(",") + "&zoom=" + map.getZoom();
+    const status = document.getElementById("terrain-status");
+    status.textContent = "地形加载中…";
+    status.setAttribute("aria-busy", "true");
+    try {
+      const data = await getJSON("/api/terrain/contours" + query);
+      if (sequence !== terrainSequence) return;
+      state.groups.contours.clearLayers();
+      state.groups.contours.addData(data);
+      const image = L.imageOverlay("/api/terrain/hillshade" + query,
+        [[bbox[1], bbox[0]], [bbox[3], bbox[2]]],
+        {pane: "hillshadePane", opacity: 0.92, interactive: false});
+      // The raster is rendered over the DEM intersection, not the full viewport.
+      const d = state.project.summary.dem.bounds_native;
+      if (bbox[2] <= d[0] || bbox[0] >= d[2] || bbox[3] <= d[1] || bbox[1] >= d[3]) {
+        state.groups.hillshade.clearLayers();
+        status.textContent = "视窗在 DEM 范围之外";
+        return;
+      }
+      image.setBounds([[Math.max(bbox[1], d[1]), Math.max(bbox[0], d[0])],
+        [Math.min(bbox[3], d[3]), Math.min(bbox[2], d[2])]]);
+      image.on("load", function () {
+        if (sequence !== terrainSequence) { state.groups.hillshade.removeLayer(image); return; }
+        state.groups.hillshade.clearLayers();
+        state.groups.hillshade.addLayer(image);
+      });
+      image.on("error", function () { if (sequence === terrainSequence) status.textContent = "地形影像加载失败；移动地图重试"; });
+      // Start loading without discarding the previous image.
+      image.addTo(state.groups.hillshade);
+      status.textContent = "视窗 E/N " + bbox.map(function(v) { return v.toFixed(0); }).join(", ") +
+        " · zoom " + data.view.zoom + " · " + data.view.feature_count + " 条 / " +
+        data.view.vertex_count + " 顶点 · 采样 " + fmt(data.view.sample_spacing_m, 1) +
+        " m · 等高距 " + data.view.interval_m + " m";
+      window.ctrlnetTerrainView = data.view;
+    } catch (error) {
+      if (sequence === terrainSequence) status.textContent = "地形加载失败；移动地图重试：" + error.message;
+    } finally {
+      if (sequence === terrainSequence) status.setAttribute("aria-busy", "false");
+    }
+  }
+  map.on("moveend", function () {
+    ++terrainSequence;
+    window.clearTimeout(terrainTimer);
+    terrainTimer = window.setTimeout(refreshTerrain, 180);
+  });
+
   function currentScenario() {
     return (state.scenarios || []).filter(function (scenario) {
       return scenario.id === state.selectedScenario;
@@ -749,7 +797,7 @@
     document.getElementById("scenario-meta").textContent = "正在切换方案…";
     try {
       const payload = await getJSON("/api/scenario/" + encodeURIComponent(scenarioId));
-      const layers = await getJSON("/api/layers?scenario=" + encodeURIComponent(scenarioId));
+      const layers = await getJSON("/api/layers?terrain=false&scenario=" + encodeURIComponent(scenarioId));
       state.selectedScenario = scenarioId;
       state.project.selected_scenario = scenarioId;
       state.project.summary = payload.summary;
@@ -800,9 +848,10 @@
       renderTopStats(project.summary, currentScenario());
       fitInitialView(project);
       bindMapEvents();
-      const layers = await getJSON("/api/layers?scenario=" + encodeURIComponent(state.selectedScenario));
+      const layers = await getJSON("/api/layers?terrain=false&scenario=" + encodeURIComponent(state.selectedScenario));
       state.layers = layers;
       addLayerGroups(layers);
+      await refreshTerrain();
       bindButtons();
       updateReportLinks();
       await loadRegistration();
