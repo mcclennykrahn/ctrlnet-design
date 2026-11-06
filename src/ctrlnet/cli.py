@@ -43,13 +43,16 @@ def tiles_main(argv=None):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    descriptions = {"adjust": "计算与缓存工程平差结果", "report": "生成设计报告", "package": "导出、检查与导入工程包", "serve": "启动离线网页地图", "tiles": "检查或导出离线瓦片"}
+    descriptions = {"helmert": "JSON seven-parameter Cartesian transform", "adjust": "计算与缓存工程平差结果", "report": "生成设计报告", "package": "导出、检查与导入工程包", "serve": "启动离线网页地图", "tiles": "检查或导出离线瓦片"}
     parser = argparse.ArgumentParser(prog="ctrlnet", description="CTRLNET 控制网设计工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name, description in descriptions.items():
         subparsers.add_parser(name, help=description, add_help=False)
     # Dispatch untouched arguments so each existing parser retains its own validation/help.
     args = parser.parse_args(argv[:1])
+    if args.command == "helmert":
+        from .helmert_cli import main as run
+        return run(argv[1:])
     if args.command == "adjust":
         return adjust_main(argv[1:])
     if args.command == "tiles":

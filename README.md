@@ -2146,3 +2146,21 @@ python3 -m venv /workspace/ctrlnet-design/.venv
 候选范围已有：论文四库编辑、共享工程保存/打开/派生/比较/计算、GNSS二维参数、稳健估计参数、投影带外拒绝与DEM/剖面、离线MBTiles及可选无钥OSM/Esri。完整方案合并/重命名树、全状态机、点线吸附/持久历史、任意CRS/七参数、现场盲测与完整安装发布仍未完成。此前各批说明是历史记录，以本节及文档差距矩阵最新增补为准。
 
 验证入口：`pytest`、`scripts/test_v08_e2e.py`、`scripts/test_v08_robust_e2e.py`及既有论文/batch2/third/fourth Chromium脚本；性能复用 `scripts/benchmark.py --sizes 50 200`。本次日志与候选判定在 `/workspace/ctrlnet-v08/`。
+
+### Seven-parameter JSON workflow (post-v0.8)
+
+`ctrlnet helmert estimate common.json --out fit.json` fits the existing
+first-order position-vector model from `{"src": [[x,y,z], ...], "dst":
+[[x,y,z], ...]}` with at least three noncollinear common points. Optional
+`weights` are positive relative inverse variances per point or component.
+Source coordinates are treated as exact. Output includes parameters,
+covariance, destination-minus-prediction residuals and unit-weight variance.
+
+`ctrlnet helmert forward points.json` (or `inverse`) accepts
+`{"points": [[x,y,z], ...], "params": [tx,ty,tz,rx,ry,rz,s]}`.
+Coordinates and translations are metres, rotations radians, scale ppm.
+The model is `t + (1+s*1e-6)x + r×x`; inverse solves this matrix exactly.
+This is a small-angle approximation, with no CRS or datum inference. Supply
+Cartesian coordinates in compatible frames; geographic degrees and projected
+map coordinates are not automatically converted. Arbitrary CRS and 3D web
+editor integration remain outside this workflow.
