@@ -1,0 +1,22 @@
+{
+  "source_pixels": [
+    6000,
+    6000
+  ],
+  "output_pixels": [
+    1188,
+    1536
+  ],
+  "warp_seconds": 0.974,
+  "bounds_wgs84": [
+    [
+      39.899045320792254,
+      115.99839871644754
+    ],
+    [
+      40.000953960867015,
+      116.10127955427666
+    ]
+  ],
+  "note": "Synthetic PNG bounded warp only; DEM rendering uses overview before this stage. Cache hit covered by API/E2E."
+}

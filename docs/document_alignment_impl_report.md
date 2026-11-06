@@ -59,3 +59,16 @@
 XYZ中DEM栅格/等高线/扫描图与地图两点剖面尚未重投影；任意EPSG、基准七参数、南半球绝对文本等更完整CRS交换尚缺；自定义CM的带号仅参考，不等于注册EPSG。thesis命名工程与仪表盘版本仍分离，没有可编辑统一分支树/合并；无拖拽、吸附、重做或持久撤销。全国离线矢量/MVT/RPC与GNSS/自由网等高级编辑器仍缺UI。未启用BD-09。
 
 测试运行会产生示例SQLite缓存；提交前恢复 `data/sample/demo_project.sqlite`，不暂存该文件、`.dsh-prompts/**` 或原有 `outputs/document_alignment_batch2_codex.log`。提交和推送结果：`41577a4` 已推送；未暂存 demo sqlite / `.dsh-prompts` / codex 长日志。
+
+## 第三批（基线 0b55d04，提交结果见末尾补记）
+
+先复审当前代码与计划，交付 Layer 1 地形显示/交互闭环以及 Layer 2 吸附、拖动、重做，未尝试不完整的统一工程存储替换。
+
+- 仪表盘独立离线 EPSG:3857 DEM 入口；DEM 晕渲与扫描配准影像按工程边界真正 warp，最大1536像素，DEM overview、服务锁和实例缓存；缓存及投影提示可见。等高线坐标反算，所有 XYZ 底图共享开关；已知 P1 与地形/扫描背景同屏截图，并记录经纬度/像素/边界。标准 MBTiles 地理 bounds + 原生 Mercator 瓦片保持正确服务。
+- XYZ 两点点击调用地理剖面 API，转换回原工程 CRS 采样原 DEM；图表与地图剖面线接线，Simple 模式保留。
+- thesis 放点/拖动可选米制网格吸附，默认关闭以保留旧交互；PATCH 校验后原子更新，关联线角刷新，观测选择保留。拖动失败恢复显示。撤销/重做最近20步，普通新修改清空 redo，刷新不持久化。
+- 验证：全量337 passed / 1 skipped / 2 xfailed；新增3个后端测试涵盖真实 Mercator 像元/边界、warp缓存/剖面、拖动原子性/关联几何；第三批 Chromium 实际鼠标点击/拖动、吸附、撤销/重做，零 pageerror。batch2 E2E（含真实本地MBTiles、mock网络及12秒回退）与原论文 E2E 均通过。截图已视觉检查，日志 `outputs/document_alignment_third_*`。
+
+剩余：统一可编辑方案树、GNSS高级参数 UI、点/线吸附、持久历史、任意 CRS/基准七参数及非标准地理像元 MBTiles 通用导入，仍未完成。warp 为实例缓存而非跨重启磁盘缓存，图像为有界预览；不承诺任意大区域的全分辨率在线渲染。无 BD-09、百度或全国离线底图包。
+
+大图有界 warp 实测：6000×6000 合成 RGBA PNG → 1188×1536，0.974秒（仅本机 warp 阶段，非完整真实大 DEM 性能保证），见 `outputs/document_alignment_third_performance.json`。固定点默认锁定，先在点库明确切换未知点方可拖动；API 同样拒绝直接移动固定点。

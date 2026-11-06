@@ -299,6 +299,49 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return JSONResponse(payload)
 
+    from threading import Lock
+    from .warp import warp_png
+    warp_cache = {}
+    warp_lock = Lock()
+
+    def warped(kind):
+        with warp_lock:
+            hit = kind in warp_cache
+            if not hit:
+                if kind == "hillshade":
+                    content, bounds = store.hillshade_png(), store.dem.bounds
+                    source_crs = store.dem.crs or store.project.get("crs", "EPSG:32650")
+                elif kind == "scan":
+                    demo = store.registration_demo
+                    b = demo["overlay_bounds"]
+                    bounds = (b[0][1], b[0][0], b[1][1], b[1][0])
+                    content = store.registration_overlay_png()
+                    source_crs = demo.get("crs") or store.project.get("crs", "EPSG:32650")
+                else:
+                    raise HTTPException(404, "未知栅格")
+                warp_cache[kind] = warp_png(content, bounds, source_crs)
+            return warp_cache[kind], hit
+
+    @app.get("/api/warp/{kind}.png")
+    def warped_image(kind: str):
+        (content, _), hit = warped(kind)
+        return Response(content, media_type="image/png", headers={"X-Warp-Cache": "HIT" if hit else "MISS"})
+
+    @app.get("/api/profile/geographic")
+    def geographic_profile(start: str, end: str):
+        from rasterio.warp import transform
+        refs = []
+        try:
+            for text in (start, end):
+                lon, lat = map(float, text.split(","))
+                if not isfinite(lon) or not isfinite(lat) or not -180 <= lon <= 180 or not -85 < lat < 85:
+                    raise ValueError("无效经纬度")
+                x, y = transform("EPSG:4326", store.project.get("crs", "EPSG:32650"), [lon], [lat])
+                refs.append(f"{x[0]},{y[0]}")
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, "剖面坐标须为有效 lon,lat") from exc
+        return build_profile(store, *refs)
+
     @app.get("/api/layers/geographic")
     def geographic_layers(scenario: Optional[str] = None):
         """UTM 原生图形转 WGS84；复用 Krüger 正反算，不依赖 pyproj。"""
@@ -311,7 +354,7 @@ def create_app(
             zone = epsg - (32700 if south else 32600)
             if not 1 <= zone <= 60:
                 raise ValueError("仅支持 WGS84 UTM EPSG:326xx/327xx")
-            payload = copy.deepcopy(store.layers(_scenario_or_404(scenario), include_contours=False))
+            payload = copy.deepcopy(store.layers(_scenario_or_404(scenario), include_contours=True))
             def convert(coords):
                 if isinstance(coords[0], (int, float)):
                     lat, lon = gauss_inverse((coords[1] - (10000000 if south else 0)) / .9996,
@@ -323,6 +366,10 @@ def create_app(
                 if layer["kind"] == "geojson":
                     for feature in layer["geojson"]["features"]:
                         feature["geometry"]["coordinates"] = convert(feature["geometry"]["coordinates"])
+            payload["warps"] = []
+            for kind in ("hillshade", "scan"):
+                (_, bounds), hit = warped(kind)
+                payload["warps"].append({"id": kind, "bounds": bounds, "url": f"/api/warp/{kind}.png", "cache": "HIT" if hit else "MISS"})
             payload["crs"] = "WGS84 / EPSG:3857"
             return payload
         except (ValueError, TypeError) as exc:

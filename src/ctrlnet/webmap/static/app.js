@@ -847,9 +847,9 @@
     if (sid !== state.selectedScenario) return;
     Object.values(xyzLayers).forEach(layer => xyzMap.removeLayer(layer));
     xyzLayers = {};
-    data.layers.filter(layer => ["points", "observations", "ellipses"].includes(layer.id)).forEach(layer => {
+    data.layers.filter(layer => ["points", "observations", "ellipses", "contours"].includes(layer.id)).forEach(layer => {
       const group = L.geoJSON(layer.geojson, {
-        style: layer.id === "observations" ? styleObservations : layer.id === "ellipses" ? styleEllipses : undefined,
+        style: layer.id === "contours" ? styleContours : layer.id === "observations" ? styleObservations : layer.id === "ellipses" ? styleEllipses : undefined,
         pointToLayer: (feature, latlng) => L.circleMarker(latlng, {pane:"pointPane", radius:6, fillOpacity:.9, color:feature.properties.fixed ? "#f59e0b" : "#22c55e"}),
         onEachFeature: (feature, item) => item.bindPopup(layer.id === "points" ? pointPopup(feature.properties) : layer.id === "observations" ? observationPopup(feature.properties) : "95% 误差椭圆（放大）")
       });
@@ -857,6 +857,12 @@
       xyzLayers[layer.id] = group;
       if (document.getElementById("lyr-" + layer.id).checked) group.addTo(xyzMap);
     });
+    data.warps.forEach(item => {
+      const image = L.imageOverlay(item.url, item.bounds, {opacity:item.id === "scan" ? .48 : .85, pane:item.id === "scan" ? "scanPane" : "hillshadePane"});
+      xyzLayers[item.id] = image;
+      if (document.getElementById("lyr-" + item.id).checked) image.addTo(xyzMap);
+    });
+    window.ctrlnetXYZ = {map:xyzMap, layers:xyzLayers, data};
     const bounds = xyzLayers.points.getBounds();
     if (bounds.isValid()) xyzMap.fitBounds(bounds.pad(.3), {maxZoom:17});
   }
@@ -865,7 +871,8 @@
     const select = document.getElementById("dashboard-basemap");
     const status = document.getElementById("dashboard-basemap-status");
     const [config, tiles] = await Promise.all([getJSON("/api/basemaps"), getJSON("/api/tiles")]);
-    const sources = {};
+    const sources = {"warped-dem":{label:"离线 DEM · EPSG:3857", attribution:"本地 DEM"}};
+
     config.sources.forEach(source => {sources[source.id] = source; select.add(new Option(source.label, source.id));});
     tiles.resources.forEach(resource => {
       const m = resource.metadata, id = "mbtiles:" + resource.name;
@@ -874,6 +881,7 @@
         minNativeZoom:Number(m.minzoom || 0), maxNativeZoom:Number(m.maxzoom || 18), bounds:(m.bounds || "").split(",").map(Number)};
       select.add(new Option(sources[id].label + " · " + m.bounds + " · z" + m.minzoom + "–" + m.maxzoom, id));
     });
+    select.add(new Option("离线 DEM · EPSG:3857（重投影）", "warped-dem"));
     async function activate(id, failure) {
       const generation = ++xyzGeneration;
       clearTimeout(xyzTimer);
@@ -881,11 +889,11 @@
       select.value = id;
       document.getElementById("map").style.visibility = id === "offline" ? "visible" : "hidden";
       document.getElementById("xyz-map").style.display = id === "offline" ? "none" : "block";
-      ["lyr-hillshade", "lyr-contours", "lyr-scan", "lyr-gcp", "offline-tiles", "reload-registration"].forEach(key => {
+      ["lyr-gcp", "offline-tiles", "reload-registration"].forEach(key => {
         const node = document.getElementById(key);
         if (node) {node.disabled = id !== "offline"; node.title = id !== "offline" ? "请切回离线 DEM 使用" : "";}
       });
-      document.getElementById("profile-mode").textContent = id === "offline" ? "点击两点" : "剖面请切回 DEM";
+      document.getElementById("profile-mode").textContent = id === "offline" ? "点击两点" : "XYZ 点击两点采样原 DEM";
       const crs = "工程 " + state.project.summary.crs;
       if (id === "offline") {
         status.textContent = (failure ? failure + "；" : "") + crs + " · DEM / CRS.Simple；剖面、等高线、配准可用";
@@ -894,16 +902,37 @@
       if (!xyzMap) {
         xyzMap = L.map("xyz-map", {zoomControl:false});
         L.control.zoom({position:"bottomright"}).addTo(xyzMap);
-        ["obsPane", "ellipsePane", "pointPane"].forEach((name, i) => { xyzMap.createPane(name).style.zIndex = 420 + i; });
+        ["hillshadePane", "scanPane", "contourPane", "obsPane", "ellipsePane", "pointPane"].forEach((name, i) => { xyzMap.createPane(name).style.zIndex = 410 + i; });
+        let picks = [];
+        xyzMap.on("click", async event => {
+          picks.push(event.latlng);
+          if (picks.length !== 2) return;
+          const pair = picks; picks = [];
+          try {
+            const query = pair.map(p => p.lng + "," + p.lat);
+            const data = await getJSON("/api/profile/geographic?start=" + query[0] + "&end=" + query[1]);
+            if (xyzLayers.profile) xyzMap.removeLayer(xyzLayers.profile);
+            xyzLayers.profile = L.polyline(pair, {color:"#fbbf24", weight:4}).addTo(xyzMap);
+            document.getElementById("profile-chart").innerHTML = chartSVG(data);
+            renderProfileSummary(data); window.lastProfile = data;
+            document.getElementById("profile-mode").textContent = "XYZ 剖面已绘制（原 DEM 采样）";
+          } catch (err) {showError(err.message);}
+        });
       }
       xyzMap.invalidateSize();
       const source = sources[id];
-      const note = crs + " · WGS84 / EPSG:3857；控制网/椭圆已重投影；DEM晕渲、等高线、配准及两点剖面请切回离线 DEM。";
+      let note = crs + " → EPSG:3857（WGS84 显示）；DEM/扫描图 warp（最大1536像素，服务缓存）；等高线重投影；XYZ两点剖面可用。";
       status.textContent = "正在加载瓦片… " + note;
       function failed(reason) {if (generation === xyzGeneration) activate("offline", "瓦片未加载（" + reason + "），已回退离线 DEM");}
       try {
         await refreshXYZ();
+        note += " 缓存 " + window.ctrlnetXYZ.data.warps.map(w => w.id + ":" + w.cache).join(" / ");
         if (generation !== xyzGeneration) return;
+        if (id === "warped-dem") {
+          xyzLayers.hillshade.addTo(xyzMap);
+          status.textContent = "离线重投影已加载 · " + note;
+          return;
+        }
         if (source.bounds && source.bounds.length === 4 && source.bounds.every(Number.isFinite)) {
           const b = source.bounds, coverage = L.latLngBounds([[b[1],b[0]],[b[3],b[2]]]);
           if (!coverage.intersects(xyzMap.getBounds())) return failed("MBTiles 不覆盖当前测区");
@@ -924,7 +953,7 @@
       } catch (err) { failed(err.message); }
     }
     select.addEventListener("change", () => activate(select.value));
-    ["points", "observations", "ellipses"].forEach(id => document.getElementById("lyr-" + id).addEventListener("change", event => {
+    ["points", "observations", "ellipses", "hillshade", "contours", "scan"].forEach(id => document.getElementById("lyr-" + id).addEventListener("change", event => {
       if (xyzLayers[id]) { if (event.target.checked) xyzLayers[id].addTo(xyzMap); else xyzMap.removeLayer(xyzLayers[id]); }
     }));
     activate("offline");

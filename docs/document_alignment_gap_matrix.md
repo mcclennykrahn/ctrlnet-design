@@ -43,3 +43,18 @@
 | BD-09 / MVT / 全国离线矢量 / GNSS编辑 | 未完成 | 未启用 BD-09；不把 OSM/Esri 称为百度；高级编辑仍缺 UI |
 
 验证：全量 pytest **334 passed / 1 skipped / 2 xfailed**；batch2 Chromium E2E 与原论文 E2E 通过。截图和日志采用 `outputs/document_alignment_batch2_*` 新名称。网络成功路径用浏览器路由 mock；MBTiles 成功路径读取真实本地瓦片，未宣称本批验证了公网服务可用性。
+
+## 第三批实施后刷新（基线 0b55d04）
+
+复审了 batch2 实现、上述审计/计划及 README、target_spec、original_plan、redesign_plan。选择真实 XYZ 地形闭环及轻编辑闭环，未实现统一方案树。
+
+| 项目 | 当前状态 | GUI 与验证 |
+|---|---|---|
+| XYZ DEM / 扫描配准图 | 已完成（当前工程 CRS 范围） | 仪表盘新增“离线 DEM · EPSG:3857（重投影）”；同样接入 OSM/Esri/MBTiles 视图。rasterio 真正重采样到 EPSG:3857，透明边界，非 Simple 缩放；开关可用 |
+| XYZ 等高线 / 两点剖面 | 已完成 | 等高线逐顶点反投影；XYZ 点击经纬度反投影到工程 DEM 采样；原 Simple 流程保留 |
+| warp 性能与提示 | 已完成（服务实例缓存） | DEM 先用 overview；输出最大1536像素，服务实例锁与缓存，UI 显示工程→显示 CRS、MISS/HIT；非磁盘持久缓存 |
+| 离线 MBTiles | 已完成（现有标准 MBTiles） | 地理 bounds 元数据保持经纬度，瓦片按原生 EPSG:3857 XYZ/TMS 服务，与重投影 DEM/点共图；batch2 E2E 真实本地瓦片回归通过。非标准 geographic 像元 MBTiles / 自定义仿射元数据尚无通用导入 |
+| 论文放点 / 拖动 / 网格吸附 / 重做 | 已完成（轻编辑范围；文档点线吸附仍部分） | 放点/拖动可选0–1000米工程网格，0默认关闭；拖动经 API 原子更新，关联线角刷新，观测选择保留；撤销/重做最近20步，刷新清空。非点对点/线吸附 |
+| 可编辑统一方案树 / GNSS 高级参数 | 未完成 | 本批选择轻编辑闭环；thesis 与仪表盘仍为不同工程源 |
+
+第三批验证：337 passed / 1 skipped / 2 xfailed；第三批 Chromium E2E、batch2 E2E、原论文 E2E 均通过。新截图 `outputs/document_alignment_third_xyz.png` / `profile.png` / `editor.png`；P1 经纬度、屏幕像素和 warp 范围见 `document_alignment_third_coordinates.json`。网络不作为本批公网可用性证据。

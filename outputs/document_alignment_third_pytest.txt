@@ -1,0 +1,29 @@
+........................................................................ [ 21%]
+........................................................................ [ 42%]
+........................................................................ [ 63%]
+...................................s.......................xx........... [ 84%]
+....................................................                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /workspace/ctrlnet-design/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_pyramid.py::test_durable_level_and_accuracy
+tests/test_pyramid.py::test_durable_level_and_accuracy
+tests/test_pyramid.py::test_exact_paths_and_viewport
+tests/test_pyramid.py::test_nodata_and_failed_build
+tests/test_pyramid.py::test_nodata_and_failed_build
+tests/test_pyramid.py::test_low_zoom_api_disk_reuse
+  /workspace/ctrlnet-design/src/ctrlnet/pyramid.py:62: PendingDeprecationWarning: Use `@` matmul instead of `*` mul operator for matrix multiplication
+    transform = src.transform * Affine.scale(dem.width/width, dem.height/height)
+
+tests/test_pyramid.py::test_durable_level_and_accuracy
+  /workspace/ctrlnet-design/tests/test_pyramid.py:35: PendingDeprecationWarning: is_tiled will be removed in a future version. Please consider copying the body of this function into your program or module.
+    assert ds.is_tiled and ds.width == 128 and ds.nodata != ds.nodata
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_thesis.py:80: could not import 'pyproj': No module named 'pyproj'
+XFAIL tests/test_thesis.py::test_example1_19_angles_exact_xfail - 论文称 19 个角，但公布 Q 精确等于 14 个已给角的解；任何真实新增角都会改善 Q，无法同时得到 0.6502/0.3039。
+XFAIL tests/test_thesis.py::test_example1_optimized_27_exact_xfail - 27 角优化的新增角未公布；正确 P=I 最小二乘下无法从线库拓扑唯一确定，搜索结果与 0.4636/0.1861 不符。
+337 passed, 1 skipped, 2 xfailed, 8 warnings in 31.55s

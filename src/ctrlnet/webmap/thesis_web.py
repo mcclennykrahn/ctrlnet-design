@@ -801,7 +801,7 @@ class ThesisService:
         with self._lock:
             return _public_state(self.state)
 
-    def add_point(self, lon: float, lat: float, fixed: bool = False) -> Dict[str, Any]:
+    def add_point(self, lon: float, lat: float, fixed: bool = False, snap_m: float = 0) -> Dict[str, Any]:
         lon = _finite(lon, "经度")
         lat = _finite(lat, "纬度")
         if not (-180.0 <= lon <= 180.0 and -90.0 < lat < 90.0):
@@ -815,6 +815,14 @@ class ThesisService:
             if any(abs(p["x"]) < 100000 for p in self.state["points"]):
                 ox, oy = _project_xy(self.state, ORIGIN_LAT, ORIGIN_LON)
                 x, y = x - ox, y - oy
+            step = _finite(snap_m, "吸附间距")
+            if not 0 <= step <= 1000:
+                raise ThesisError("吸附间距须为0–1000米")
+            if step:
+                x, y = round(x / step) * step, round(y / step) * step
+                ox, oy = _project_xy(self.state, ORIGIN_LAT, ORIGIN_LON) if any(abs(p["x"]) < 100000 for p in self.state["points"]) else (0, 0)
+                lat, lon = _inverse_xy(self.state, x + ox, y + oy)
+                _project_xy(self.state, lat, lon)
             point = {
                 "id": f"p{seq}",
                 "name": str(name),
@@ -923,6 +931,31 @@ class ThesisService:
         with self._lock:
             self.state = candidate
         return payload
+
+    def move_point(self, point_id, lon, lat, snap_m=0):
+        with self._lock:
+            if _point_by_ref(self.state, point_id).get("fixed"):
+                raise ThesisError("已知点默认锁定；请先在点库明确改为未知点后移动")
+            lon, lat = _finite(lon, "经度"), _finite(lat, "纬度")
+            step = _finite(snap_m, "吸附间距")
+            if not 0 <= step <= 1000:
+                raise ThesisError("吸附间距须为0–1000米")
+            x, y = _project_xy(self.state, lat, lon)
+            local = any(abs(p["x"]) < 100000 for p in self.state["points"])
+            ox, oy = _project_xy(self.state, ORIGIN_LAT, ORIGIN_LON) if local else (0, 0)
+            x, y = x - ox, y - oy
+            if step:
+                x, y = round(x / step) * step, round(y / step) * step
+            lat, lon = _inverse_xy(self.state, x + ox, y + oy)
+            _project_xy(self.state, lat, lon)
+            point = _point_by_ref(self.state, point_id)
+            point.update(x=x, y=y, lon=lon, lat=lat)
+            for line in self.state["lines"]:
+                if point_id in (line["from"], line["to"]):
+                    line.pop("_keep_length", None)
+                    line.pop("_keep_azimuth", None)
+            _touch(self.state)
+            return _public_state(self.state)
 
     def set_point_fixed(self, point_id: str, fixed: bool) -> Dict[str, Any]:
         with self._lock:
@@ -1383,7 +1416,7 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
         try:
             return JSONResponse(
                 service.add_point(
-                    payload.get("lon"), payload.get("lat"), bool(payload.get("fixed", False))
+                    payload.get("lon"), payload.get("lat"), bool(payload.get("fixed", False)), payload.get("snap_m", 0)
                 )
             )
         except ThesisError as exc:
@@ -1392,6 +1425,8 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
     @router.patch("/api/thesis/points/{point_id}")
     def patch_point(point_id: str, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
         try:
+            if "lon" in payload or "lat" in payload:
+                return JSONResponse(service.move_point(point_id, payload.get("lon"), payload.get("lat"), payload.get("snap_m", 0)))
             return JSONResponse(
                 service.set_point_fixed(point_id, bool(payload.get("fixed", False)))
             )

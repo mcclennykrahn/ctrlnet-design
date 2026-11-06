@@ -2129,3 +2129,5 @@ python3 -m venv /workspace/ctrlnet-design/.venv
 - `/thesis` 顶部可编辑中央子午线、3°/6°、gauss/utm、假东；保留经纬度重算平面并拒绝带外点，命名保存可回读参数。绝对坐标文本按当前所选参数解算。
 - “导出工程 JSON / 导入完整拓扑 JSON”保存四库、观测选择及投影；覆盖确认、整体验证后才替换。导出文件即 `ctrlnet.thesis.web/1` 模板；“撤销”保留当前页面最近 20 次成功修改（刷新后清空，无重做）。详细字段见 `docs/document_alignment_impl_report.md`。
 - 验证：`.venv/bin/python scripts/test_document_alignment_batch2_e2e.py`；全量 pytest 为 **334 passed, 1 skipped, 2 xfailed**（可选 pyproj 未安装）。
+
+第三批地图/编辑入口：仪表盘底图可选“离线 DEM · EPSG:3857（重投影）”，在 XYZ 下切换 DEM、等高线、配准影像并点击两点生成原 DEM 剖面；状态显示工程→显示 CRS 与 warp 缓存。OSM/Esri/标准本地 MBTiles 共用这些图层。论文页可拖动点，在“放点/拖动吸附网格”设置米制间距（默认0关闭），并撤销/重做最近20步；移动后线角刷新，需重新计算精度。网格吸附不等于点/线吸附；两个页面仍未统一为可编辑方案树。
