@@ -29,7 +29,7 @@
 
 ## Batch 2 已交付（2026-11-06）
 
-基线 `d32607c`；本批代码提交将在提交完成后补记真实哈希，不改写历史。全部本机编辑与 Chromium 验证，没有使用云代理。
+基线 `d32607c`；本批代码提交 `41577a4f15609e4bb5da23ae5582672b1a3ec6bd`，已成功 `git push origin main`。全部本机编辑与 Chromium 验证，没有使用云代理；Codex 中途停滞，由执行代理完成提交卫生与推送。
 
 - `/` 与 `/dashboard` 原地底图选择：默认离线 DEM、离线 MBTiles、OSM 道路、Esri 影像。保留原米制地图，XYZ 在同一区域使用 EPSG:3857 地图；`/api/layers/geographic` 将工程 UTM 的点、观测及椭圆转为经纬度，无新增 pyproj 硬依赖。支持 WGS84 UTM EPSG:326xx/327xx；其他 CRS 明确报错并回退。
 - 可见工程 CRS / 显示 CRS、署名；不代理、不预抓、默认无网络。瓦片错误与12秒超时回退 DEM，至少成功一张瓦片且当轮完成才宣称加载。MBTiles 元数据覆盖与原生级别可见；北京本地瓦片成功加载。XYZ 模式禁用 DEM 晕渲/等高线/配准控件，明确提示两点剖面切回 DEM；离线模式既有剖面、配准、场景、报告保持。
@@ -58,4 +58,4 @@
 
 XYZ中DEM栅格/等高线/扫描图与地图两点剖面尚未重投影；任意EPSG、基准七参数、南半球绝对文本等更完整CRS交换尚缺；自定义CM的带号仅参考，不等于注册EPSG。thesis命名工程与仪表盘版本仍分离，没有可编辑统一分支树/合并；无拖拽、吸附、重做或持久撤销。全国离线矢量/MVT/RPC与GNSS/自由网等高级编辑器仍缺UI。未启用BD-09。
 
-测试运行会产生示例SQLite缓存；提交前恢复 `data/sample/demo_project.sqlite`，不暂存该文件、`.dsh-prompts/**` 或原有 `outputs/document_alignment_batch2_codex.log`。提交和推送结果见本节后补记录。
+测试运行会产生示例SQLite缓存；提交前恢复 `data/sample/demo_project.sqlite`，不暂存该文件、`.dsh-prompts/**` 或原有 `outputs/document_alignment_batch2_codex.log`。提交和推送结果：`41577a4` 已推送；未暂存 demo sqlite / `.dsh-prompts` / codex 长日志。

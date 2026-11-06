@@ -1,6 +1,7 @@
 # CtrlNet document alignment batch 2 status
 
 - Baseline: `d32607c`
+- Commit: `41577a4f15609e4bb5da23ae5582672b1a3ec6bd` (pushed)
 - Machine: local Codex `gpt-6.1-sol` in `/workspace/ctrlnet-design` (no cloud agent for implementation). Codex stalled after code/docs; executor finished commit/push hygiene.
 - Pytest: **334 passed, 1 skipped, 2 xfailed** (`outputs/document_alignment_batch2_pytest.txt`)
 - E2E: `scripts/test_document_alignment_batch2_e2e.py` PASS; `scripts/test_thesis_e2e.py` PASS
