@@ -76,3 +76,11 @@
 | 状态全生命周期 | 部分 | saved/version事务闭环；未实现 original_plan 全套 editing/ready/calculating/valid/stale/failed 状态机 |
 
 第四批测试和截图见 `outputs/document_alignment_fourth_status.md`。底图策略及实现未变；未启用 BD-09，不将 OSM/Esri 称为百度。点/线吸附、持久历史、任意 CRS/七参数、非标准地理像元 MBTiles、全国离线矢量等缺口延续第三批。
+
+
+## v0.8 candidate 增补（2026-11-06）
+
+- GNSS从仅核心推进到共享工程专用二维基线表，端点/σE/σN/ρ可编辑，原生保存、派生、回读与联合计算真实接线；实际协方差正定/有限/可求权校验。三维GNSS完整编辑器仍未完成。
+- 稳健估计新增全观测值数组输入、固定基准LS/Huber/IGG-III参数；直接调用既有内核，返回权、残差、收敛，不使用合成噪声冒充实测。坐标推算模板明确非实测。交互200待定点/500观测；实测输入和结果暂不持久化。
+- 保存/打开/父快照派生/比较延续第四批，未实现合并树/重命名/全状态机/点线吸附。候选版不宣称原方案生产完备。
+- 本次独立审查、全量及Chromium、性能与样例SHA证据在 `/workspace/ctrlnet-v08/`，最终以completed.md/manifest.json为准。

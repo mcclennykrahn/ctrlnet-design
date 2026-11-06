@@ -87,7 +87,7 @@ def create_bridge_router(service):
             return store.save_editor_version(path, dict(id=payload.get('project_id'), name=name, points=points),
                 dict(name=name, observations=observations, metadata={'thesis_state':state}),
                 parent_snapshot=payload.get('parent_snapshot'))
-        except (ValueError, KeyError, TypeError, sqlite3.IntegrityError, CtrlnetError) as exc:
+        except (ValueError, KeyError, TypeError, OverflowError, sqlite3.IntegrityError, CtrlnetError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
     @router.get('/settings/{sid}')
@@ -124,8 +124,24 @@ def create_bridge_router(service):
             if confidence is not False and (isinstance(confidence, bool) or not math.isfinite(float(confidence)) or not 0 < float(confidence) < 1):
                 raise ValueError('置信度必须在 0 与 1 之间，或 false（标准椭圆）')
             return store.get_or_compute_result(path, sid, options=options)
-        except (ValueError, KeyError, TypeError, RuntimeError, CtrlnetError) as exc:
+        except (ValueError, KeyError, TypeError, OverflowError, RuntimeError, CtrlnetError) as exc:
             raise HTTPException(400, f'平差校验/计算失败：{exc}') from exc
+
+    @router.get('/observations/{sid}')
+    def observations(sid: str):
+        try:
+            from .estimation import observation_template, template_payload
+            return template_payload(*observation_template(path, sid))
+        except (ValueError, KeyError, TypeError, OverflowError, RuntimeError, CtrlnetError) as exc:
+            raise HTTPException(400, f'观测模板失败：{exc}') from exc
+
+    @router.post('/estimate/{sid}')
+    def estimate(sid: str, payload: dict = Body(...)):
+        try:
+            from .estimation import estimate_payload
+            return estimate_payload(path, sid, payload)
+        except (ValueError, KeyError, TypeError, OverflowError, RuntimeError, CtrlnetError) as exc:
+            raise HTTPException(400, f'实测估计失败：{exc}') from exc
 
     @router.get('/compare')
     def compare(base: str, candidate: str):

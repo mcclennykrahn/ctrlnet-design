@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctrlnet"
-version = "0.1.0"
+version = "0.8.0"
 readme = "README.md"
 description = "平面控制网精度估算与优化设计 MVP 计算核心"
 requires-python = ">=3.9"

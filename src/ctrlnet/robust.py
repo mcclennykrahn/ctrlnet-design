@@ -1892,7 +1892,8 @@ def robust_estimate(
     final.robust_scale = float(final_scale)
     final.robust_history = history
     final.max_update = float(final.max_update)
-    final.converged = bool(converged)
+    # A stable weight vector cannot establish convergence of the coordinate solve.
+    final.converged = bool(converged and final.converged)
     final.iterations = int(len(history))
     return final
 

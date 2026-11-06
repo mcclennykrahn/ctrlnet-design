@@ -20,6 +20,17 @@
     <label>基准 <select id="engineering-datum"><option value="fixed">固定（默认）</option><option value="free">自由网约束</option><option value="minimal">最小约束</option></select></label>
     <label>椭圆 <select id="engineering-confidence"><option value="0.95">95%置信度</option><option value="0.99">99%置信度</option><option value="false">标准椭圆</option></select></label>
     <button id="engineering-calculate">计算所选存储方案</button></p>
+    <details id="engineering-estimation"><summary>实测值与稳健估计（固定基准）</summary>
+    <p>载入的是当前存储方案的坐标推算参考值，不能当作实测成果。按模板顺序替换全部观测；距离/GNSS为米，角度为弧度。GNSS分量顺序E/N。输入与估计结果仅在当前页面，需自行复制保存。</p>
+    <button id="engineering-template">载入所选方案观测模板</button>
+    <pre id="engineering-observation-labels" style="max-height:100px;overflow:auto"></pre>
+    <textarea id="engineering-values" aria-label="观测值数组" rows="5" style="width:95%" placeholder="载入模板后输入二维数值数组"></textarea>
+    <label>方法 <select id="engineering-method"><option value="ls">普通最小二乘</option><option value="huber" selected>Huber</option><option value="igg3">IGG-III</option></select></label>
+    <label>Huber c <input id="engineering-c" type="number" value="1.345" step="0.1" style="width:70px"></label>
+    <label>IGG k0 <input id="engineering-k0" type="number" value="1.5" step="0.1" style="width:65px"></label>
+    <label>k1 <input id="engineering-k1" type="number" value="3" step="0.1" style="width:65px"></label>
+    <label>迭代上限 <input id="engineering-max-iter" type="number" value="50" min="1" max="100" style="width:65px"></label>
+    <button id="engineering-estimate">运行实测估计</button></details>
     <label>比较对象 <select id="engineering-candidate"></select></label><button id="engineering-compare">比较方案</button>
     <pre id="engineering-summary" role="status" style="white-space:pre-wrap;max-height:230px;overflow:auto"></pre><details><summary>详细结果 JSON</summary><pre id="engineering-result" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre></details>`;
   document.body.prepend(panel);
@@ -34,6 +45,7 @@
     $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     let summary = value;
     if (value?.summary && typeof value.summary === 'string') summary = `基准哈希 ${value.base_hash}\n候选哈希 ${value.candidate_hash}\n${value.summary}`;
+    else if (value?.source === 'user_entered_values') summary = `实测值估计 · ${value.method} · ${value.converged ? '已收敛' : '未收敛：不得采用为最终成果'} · 迭代 ${value.iterations}\n秩 ${value.rank} · 冗余 ${value.redundancy}\n最小行权 ${Math.min(...value.weights).toFixed(6)}\n残差/行单位/权/坐标见详细JSON；基准 fixed；方案哈希 ${value.input_hash}`;
     else if (value?.network) summary = `基准 ${value.datum.kind} · 置信度 ${value.options.confidence === false ? '标准椭圆' : value.options.confidence}\n秩 ${value.network.rank} / 参数 ${value.network.n_params} · 冗余 ${value.network.redundancy} · 观测 ${value.network.n_observations}\n最大点位中误差 ${value.summary.max_mp_mm.toFixed(3)} mm\n` + value.points.map(p => `${p.name}: σE ${p.sigma_E_mm.toFixed(3)} mm / σN ${p.sigma_N_mm.toFixed(3)} mm / 椭圆长轴 ${(p.ellipse.a_m*1000).toFixed(3)} mm`).join('\n');
     else if (value?.snapshot_id) summary = `已保存 · 版本 ${value.version}\n工程 ${value.project_id}\n方案 ${value.scenario_id}\n快照 ${value.snapshot_id}`;
     $('summary').textContent = typeof summary === 'string' ? summary : JSON.stringify(summary);
@@ -107,12 +119,34 @@
     if (!confirm('用所选存储方案覆盖论文编辑器当前四库？')) return;
     const settings = await api('settings/' + encodeURIComponent($('scenario').value));
     sessionStorage.setItem('ctrlnet-open-gnss', JSON.stringify(settings.gnss));
+    sessionStorage.setItem('ctrlnet-open-selection', JSON.stringify({project_id:$('project').value,scenario_id:$('scenario').value}));
     await api('open/' + encodeURIComponent($('scenario').value), {});
     location.href = '/thesis';
   });
   $('calculate').onclick = run(async () => output(await api('calculate/' + encodeURIComponent($('scenario').value), {datum:$('datum').value, confidence:JSON.parse($('confidence').value)})));
+  let template = null;
+  $('template').onclick = run(async () => {
+    template = null;
+    const sid = $('scenario').value;
+    const loaded = await api('observations/' + encodeURIComponent(sid));
+    if (sid !== $('scenario').value) throw new Error('方案已改变，请重新载入模板');
+    template = {...loaded, sid};
+    $('values').value = JSON.stringify(template.observations.map(o => o.values));
+    $('observation-labels').textContent = '坐标推算参考值（非实测）：\n' + template.observations.map(o => `${o.index}: ${o.label} [${o.unit}]`).join('\n');
+  });
+  $('estimate').onclick = run(async () => {
+    if (!template || template.sid !== $('scenario').value) throw new Error('请为当前方案重新载入观测模板');
+    const data = {input_hash:template.input_hash, values:JSON.parse($('values').value), method:$('method').value};
+    for (const key of ['c','k0','k1','max-iter']) {
+      if (!$(key).value.trim()) throw new Error('稳健参数不可留空');
+      data[key.replace('-','_')] = Number($(key).value);
+    }
+    output(await api('estimate/' + encodeURIComponent(template.sid), data));
+  });
   $('compare').onclick = run(async () => output(await api('compare?base=' + encodeURIComponent($('scenario').value) + '&candidate=' + encodeURIComponent($('candidate').value))));
   const opened = sessionStorage.getItem('ctrlnet-open-gnss');
   if (thesis && opened) { JSON.parse(opened).forEach(addGnss); }
-  run(() => refresh())();
+  const selection = sessionStorage.getItem('ctrlnet-open-selection');
+  sessionStorage.removeItem('ctrlnet-open-selection');
+  run(() => refresh(thesis && selection ? JSON.parse(selection) : undefined))();
 })();
