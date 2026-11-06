@@ -13,6 +13,8 @@
     <select id="engineering-snapshot" aria-label="父快照"></select>
     <button id="engineering-branch">当前四库另存分支快照</button><button id="engineering-open">打开工程方案到论文编辑器</button>
     <button id="engineering-rename">重命名所选方案</button>
+    <p>方案流程（单用户记录，不代表独立审核或质量认证）：<span id="engineering-lifecycle"></span></p>
+    <select id="engineering-target" aria-label="目标流程状态"></select><input id="engineering-note" aria-label="流程说明" maxlength="500" placeholder="必填流程说明"><button id="engineering-transition">变更流程状态</button>
     <pre id="engineering-tree" aria-label="方案谱系" style="white-space:pre-wrap"></pre>
     <p>三方合并：当前方案为目标，比较对象为来源；保存为新方案，保留双亲。拓扑整体与GNSS分别合并，不自动拼接几何。冲突须选择目标或来源。</p>
     <button id="engineering-merge-preview">预览合并</button><span id="engineering-conflicts"></span>
@@ -88,6 +90,10 @@
   function snapshots() {
     const p = projects.find(p => p.id === $('project').value);
     const s = p?.scenarios.find(s => s.id === $('scenario').value);
+    $('lifecycle').textContent = s ? s.lifecycle.state + ' · ' + s.lifecycle.history.map(h => h.source + ' → ' + h.target + ': ' + h.note).join('；') : '';
+    options($('target'), (s?.lifecycle.allowed || []).map(x => [x,x]));
+    $('transition').disabled = !s;
+    $('rename').disabled = !s || s.lifecycle.state !== 'draft';
     options($('snapshot'), (s?.snapshots || []).map(s => [s.id,s.id]));
   }
   function scenarios(selected) {
@@ -142,6 +148,12 @@
   }
   $('save').onclick = run(() => save(false));
   $('branch').onclick = run(() => save(true));
+  $('transition').onclick = run(async () => {
+    const s = projects.find(p => p.id === $('project').value)?.scenarios.find(s => s.id === $('scenario').value);
+    if (!s) throw new Error('请选择方案');
+    const result = await api('lifecycle/' + encodeURIComponent(s.id), {target:$('target').value, version:s.version, note:$('note').value});
+    await refresh(); output(result);
+  });
   $('rename').onclick = run(async () => {
     const p = projects.find(p => p.id === $('project').value);
     const s = p?.scenarios.find(s => s.id === $('scenario').value);

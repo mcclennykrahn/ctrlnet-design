@@ -24,6 +24,8 @@ def rename(path, sid, name, version):
                 raise KeyError('方案不存在')
             if type(version) is not int or version != row['version']:
                 raise store.VersionConflictError('方案已改变，请刷新')
+            from ..lifecycle import require_draft
+            require_draft(conn, sid)
             conn.execute('UPDATE scenarios SET name=?,version=version+1,updated_at=? WHERE id=?',
                          (name, store._utcnow(), sid))
         return {'scenario_id': sid, 'name': name, 'version': version + 1}

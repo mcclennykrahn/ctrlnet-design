@@ -729,6 +729,11 @@ def save_project(
                     f"工程 {project_id!r} 已存在；如需覆盖请传 overwrite=True"
                 )
             if existing is not None:
+                from .lifecycle import describe
+                for row in conn.execute('SELECT metadata_json FROM scenarios WHERE project_id=?', (project_id,)):
+                    workflow = describe(_json_load(row['metadata_json'], {}))
+                    if workflow['state'] != 'draft' or workflow['history']:
+                        raise ValueError('Cannot overwrite a project with lifecycle history')
                 conn.execute("DELETE FROM results WHERE project_id=?", (project_id,))
                 conn.execute("DELETE FROM snapshots WHERE project_id=?", (project_id,))
                 conn.execute("DELETE FROM observations WHERE project_id=?", (project_id,))
@@ -976,6 +981,8 @@ def update_observations(
                 raise KeyError(f"方案不存在：{scenario_id!r}")
             if expected_version is not None and row["version"] != expected_version:
                 raise VersionConflictError(f"方案 {scenario_id!r} 版本冲突：期望 {expected_version}，实际 {row['version']}")
+            from .lifecycle import require_draft
+            require_draft(conn, scenario_id)
             pid = str(row["project_id"])
             conn.execute("DELETE FROM observations WHERE scenario_id=?", (scenario_id,))
             used: set = set()
@@ -1610,7 +1617,8 @@ def save_editor_version(
             scenario = dict(scenario, id=sid, parent_id=parent["id"] if parent else None,
                             version=parent["version"]+1 if parent else 1)
             scenario["metadata"] = dict(scenario["metadata"], editor_points=project["points"],
-                                        parent_snapshot=parent_snapshot, status="saved")
+                                        parent_snapshot=parent_snapshot, status="saved",
+                                        lifecycle_state="draft", lifecycle_history=[])
             _insert_scenario(conn, project_id=pid, scenario=scenario,
                              fallback_name="编辑方案", used_observation_ids=set())
             saved = _fetch_scenario_dict(conn, sid, include_observations=True)

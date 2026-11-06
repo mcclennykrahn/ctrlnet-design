@@ -70,11 +70,23 @@ def create_bridge_router(service):
                     s['merge_parents'] = s['metadata'].get('merge_parents', [])
                     s['merge_base'] = s['metadata'].get('merge_base')
                     s['editable'] = 'thesis_state' in s['metadata']
+                    from ..lifecycle import describe
+                    s['lifecycle'] = describe(s['metadata'])
                     s.pop('metadata', None)
                 items.append(dict(id=row['id'], name=row['name'], status=json.loads(row['metadata_json']), scenarios=scenarios))
             return {'projects':items}
         finally:
             conn.close()
+
+    @router.post('/lifecycle/{sid}')
+    def lifecycle(sid: str, payload: dict = Body(...)):
+        from ..lifecycle import transition
+        try:
+            return transition(path, sid, payload.get('target'), payload.get('version'), payload.get('note'))
+        except store.VersionConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @router.post('/rename/{sid}')
     def rename(sid: str, payload: dict = Body(...)):
