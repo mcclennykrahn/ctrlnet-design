@@ -15,3 +15,5 @@ Evidence: `document_alignment_third_xyz.png`, `profile.png`, `editor.png`, `coor
 Remaining: unified editable scheme tree (thesis/dashboard remain separate); GNSS advanced params UI; point/line snapping; persistent history; arbitrary CRS/datum transforms; nonstandard geographic-pixel MBTiles import. Existing standard MBTiles has geographic bounds metadata but native Mercator XYZ tiles, served directly. Warp cache is per service instance, not disk-persistent; rendering is bounded preview. No Baidu/BD-09/vendor packs/CDN introduced.
 
 Sample DB and existing screenshots restored after regression; `.dsh-prompts/**` and preexisting codex log excluded.
+
+Actual implementation commit: `9184088`; `git push origin main` succeeded (`0b55d04..9184088`). Final isolated full pytest: 337 passed / 1 skipped / 2 xfailed in 31.55s. Result recorded in a follow-up docs commit without rewriting history.

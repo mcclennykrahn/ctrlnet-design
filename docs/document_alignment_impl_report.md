@@ -72,3 +72,5 @@ XYZ中DEM栅格/等高线/扫描图与地图两点剖面尚未重投影；任意
 剩余：统一可编辑方案树、GNSS高级参数 UI、点/线吸附、持久历史、任意 CRS/基准七参数及非标准地理像元 MBTiles 通用导入，仍未完成。warp 为实例缓存而非跨重启磁盘缓存，图像为有界预览；不承诺任意大区域的全分辨率在线渲染。无 BD-09、百度或全国离线底图包。
 
 大图有界 warp 实测：6000×6000 合成 RGBA PNG → 1188×1536，0.974秒（仅本机 warp 阶段，非完整真实大 DEM 性能保证），见 `outputs/document_alignment_third_performance.json`。固定点默认锁定，先在点库明确切换未知点方可拖动；API 同样拒绝直接移动固定点。
+
+第三批实际实现提交：`9184088`，已成功 `git push origin main`（`0b55d04..9184088`）。最终独立全量 pytest：337 passed / 1 skipped / 2 xfailed，31.55秒；三个 Chromium 脚本通过。提交后独立补记结果，不 amend、不改写历史。示例数据库与旧截图已恢复，未暂存 `.dsh-prompts/**` 或既有 codex 长日志。
