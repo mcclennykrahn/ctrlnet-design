@@ -10,6 +10,7 @@ description = "平面控制网精度估算与优化设计 MVP 计算核心"
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.24",
+    "geographiclib>=2.0",
     "matplotlib>=3.6",
 ]
 

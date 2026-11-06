@@ -264,6 +264,7 @@ JUPYTER_PATH=/workspace/ctrlnet-design/.jupyter/share/jupyter \
 | `reliability.csv` | `r_i`、MDB、MDB 单位、外部最大分量/向量范数、影响点 |
 | `optimizer.csv` | 初始与每步目标值、收益、成本、已选观测 |
 | `results.md` | 平面网中文汇总表格与说明 |
+| `edge_projection_results.md` | E9 逐边 Simpson 积分、距离改正、弧弦 δ 与独立求积/端点弦长对照 |
 | `projection_results.md` | E1 投影归算：已知点 m/γ、解析级数与数值雅可比对照、UTM 手算近似、grid/ground 往返、跨带告警 |
 | `leveling_points.csv` | 水准点高程、`σ_H`、基准角色与高程类型 |
 | `leveling_results.md` | 水准/三角高程中文结果、闭合环、相对高差与可靠性表 |
@@ -960,9 +961,9 @@ ctrlnet-design/
   长边应做敏感性分析。30 m DSM 无法反映围墙、电杆、树木、车辆等小障碍，
   NoData 或 DSM 地物不确定时输出 `unknown`，不得直接判为通视。
 - DEM 样例采用局部 UTM 50N，只适用于本测区。`projection.py` 已提供投影尺度/
-  子午线收敛角/grid-ground/跨带检查；但仍是 Krüger n⁶ 局部级数与
-  `R/(R+H_m)` 近似，未做逐边曲率积分、跨带分区平差、坐标变形/历元改正与
-  geoid 改正，远离中央经线或高精度成果仍需 PROJ/GeographicLib 复核。
+  子午线收敛角/grid-ground/跨带检查；E9 提供逐边 Simpson 积分与可选观测归算。
+  仍采用 Krüger n⁶ 局部级数与局部球面高程近似，未做跨带分区平差、
+  坐标变形/历元改正与 geoid 改正，远离中央经线或高精度成果仍需 PROJ/GeographicLib 复核。
 - C1 实测模块以“先验 σ 已知、σ0=1”为默认；w 检验临界值 3.29 对应
   α0=0.001 双侧，τ 检验默认 t 分位数。稳健估计使用先验权下的标准化残差
   与 MAD 尺度；IGG-III 淘汰的观测权因子为 0，但其结果仍不能替代 MDB 报告。
@@ -1571,9 +1572,65 @@ print(checked.crosses_zone, checked.max_scale_deviation_ppm,
 grid↔ground 往返，以及 4 个跨带场景。当前最大差异：解析级数 <0.001 ppm /
 <0.001″，数值雅可比 <0.001 ppm / <0.00001″，往返误差 ≤1e-9 m。
 
-限制：仍是局部 Krüger 级数与 `R/(R+H_m)` 近似；未实现逐边曲率积分、跨带
+限制：仍是局部 Krüger 级数与局部球面高程归算近似；E9 逐边积分见下节。未实现跨带
 分区平差、坐标变形/历元改正与 geoid 改正。远离中央经线（>1.5 个带宽）或
 高精度成果应用 PROJ/GeographicLib 复核。
+
+### 20.4 逐边曲率积分与弧弦改正（E9）
+
+`edge_reduction(..., spec=ProjectionSpec(central_meridian=117), intervals=32)`
+沿椭球最短测地线按等弧长取样，使用复合 Simpson（分段数必须为至少 2 的偶整数）。
+椭球参数沿用 `thesis.py`，测地线位置/方位角使用
+[GeographicLib InverseLine/Position](https://geographiclib.sourceforge.io/html/python/code.html)。
+所有点在同一显式中央经线下计算，禁止逐点自动换带。计算式：
+
+- `L_arc = ∫ k(s) ds`，平均投影尺度 `L_arc / S_ellipsoid`；
+- `a(s) = α(s) − γ(s)`（网格切线方位角，北起顺时针），
+  `ΔE = ∫ k sin(a) ds`、`ΔN = ∫ k cos(a) ds`；
+- `L_chord = hypot(ΔE, ΔN)`，不能直接将投影弧长作为平差用直线距离；
+- `S_ground = ∫ [1+H(s)/R(s)] ds`，`H` 按弧长在两端大地高间线性插值，
+  `R=sqrt(MN)` 随纬度变化；综合尺度 `K=L_chord/S_ground`，距离改正 `s_ground·(K−1)`；
+- `δ12 = wrap(atan2(ΔE,ΔN) − [α1−γ1])`，内部弧度，正值顺时针。
+  真北方向归算 `a_chord = α1−γ1+δ12`；反向边须单独计算 `δ21`。
+  水平角改正为前视与后视的 `(δ−γ)` 之差，测站公共 γ 抵消。
+
+短边高斯公式（`k0=1`、`y=E−false_easting`）：
+`δ12 ≈ −(N2−N1)(2y1+y2)/(6R²)`；
+`m_mean ≈ 1+(y1²+y1y2+y2²)/(6R²)`。测试同时对照此公式、独立自适应求积
+`scipy.integrate.quad` 以及端点直接投影弦长/方向，覆盖 UTM、南北半球、中央经线、
+反向边、非法分段/高程/重合点，以及平差接入与默认兼容性。
+
+```python
+from ctrlnet.projection import ProjectionSpec, ProjectionReductionOptions
+from ctrlnet.robust import estimate_network
+
+# dataset 的距离为地面水平距离，方向为真北方向；network 坐标已在指定网格内。
+options = ProjectionReductionOptions(
+    spec=ProjectionSpec(central_meridian=117.0),
+    heights={"A": 500.0, "B": 510.0, "C": 520.0},  # 覆盖所有测量端点的大地高
+    intervals=32,
+)
+result = estimate_network(dataset, projection_reduction=options)
+# 默认 projection_reduction=None：沿用原算法与结果。
+```
+
+也可先 `reduce_observation_dataset(dataset, options)`，再将返回的副本送入平差。
+距离标准差/粗差随 K 缩放，角度标准差不变，GNSS 网格基线块保持原值；
+原观测集不被修改，重复归算会报错。参考坐标为 `dataset.network`，归算因子一次计算，
+不随高斯—牛顿迭代更新；参考网形须足够接近实际网形。已归算的网格观测不可再次启用。
+本选项接入观测值估计 `robust.estimate_network`；设计态 `adjustment.solve` 沿用原定义。
+
+此功能不含斜距转平距、沿线真实高程剖面、垂线偏差或 geoid；高程仍用局部球面近似。
+长边或远离中央经线时应增加偶数分段检查收敛，并复核局部投影适用范围。
+§13 与 thesis 黄金期望值保持原样。
+
+```bash
+.venv/bin/python scripts/run_edge_projection_demo.py
+.venv/bin/python -m pytest -q tests/test_edge_projection.py
+```
+
+演示输出 `outputs/edge_projection_results.md`，列出中央经线、高斯短/长边与南半球 UTM
+的尺度、距离改正、δ、独立求积及端点弦长差异。
 
 ## 21. 工程包导出与回读（E1）
 
@@ -1688,7 +1745,7 @@ E6 / P5 提供离线、固定随机种子的性能基线：
 | P2 水准/高程（B1/C3） | ✅ 已完成（局部 geoid） | 1D 水准、路线/环、三角高程、高程可靠性、ζ 平面拟合/正常高转换 | 高精度 geoid、跨基准方差场 |
 | P2 GNSS（C3/E7） | ✅ 已完成（核心与 GPS 交换子集） | 3D ECEF/ENU、3×3/3n×3n VCV、块权平差、固定/最小约束、联合平差、基线相对精度、LandXML 1.2 CgPoints/GPSSetup/GPSVector | 通用投影 LandXML、非零天线高归心、GPSPosition/地面原始观测 |
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
-| P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
+| P3 投影归算（E1/E9） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带检查、Simpson 逐边尺度/切向量积分、弧弦 δ、可选观测平差接入；公式/数值求积测试与 `edge_projection_results.md` | 跨带分区平差、历元/变形改正、geoid 改正 |
 | P4 观测优化（C2/E4） | ✅ 小规模精确与 Pareto | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理、成本—精度 Pareto 前沿 | 大规模 MICP、成本模型持久化 |
 | C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六张业务表、方案乐观锁/父方案、`input_hash`、结果缓存、WAL、迁移、审计（E5） | 多工程编辑、完整迁移框架 |
 | E1 工程包 zip/manifest/回读 | ✅ 已完成（单工程） | `package.py`：manifest/版本/快照哈希/逐文件 SHA-256、小资源、导出/校验/导入 CLI、324 KiB 样例包 | 包签名/加密、多工程包、增量更新、外部大资源的自动定位 |

@@ -1081,3 +1081,144 @@ __all__ = [
     "check_cross_zone",
     "project_zone_check",
 ]
+
+
+@dataclass(frozen=True)
+class EdgeReduction:
+    """逐边积分成果；δ 为弦方向减起点切线方向（弧度）。"""
+
+    ellipsoid_distance_m: float
+    ground_distance_m: float
+    grid_arc_m: float
+    grid_chord_m: float
+    delta_rad: float
+    gamma_rad: float
+    intervals: int
+
+    @property
+    def projection_scale(self) -> float:
+        return self.grid_arc_m / self.ellipsoid_distance_m
+
+    @property
+    def combined_scale(self) -> float:
+        return self.grid_chord_m / self.ground_distance_m
+
+    def distance_correction(self, ground_distance_m: float) -> float:
+        """地面水平距离应加的改正数（m）。"""
+        s = _finite(ground_distance_m, "ground_distance_m")
+        if s < 0:
+            raise ValueError("距离不能为负")
+        return s * (self.combined_scale - 1.0)
+
+    def direction_correction(self, *, unit: str = "rad") -> float:
+        """真北方向应加的改正 δ−γ；测站方向组中公共 γ 可由定向吸收。"""
+        return _angle_from_rad(self.delta_rad - self.gamma_rad, unit)
+
+
+def edge_reduction(
+    lat1_deg: float, lon1_deg: float, lat2_deg: float, lon2_deg: float,
+    *, spec: ProjectionSpec, height1_m: float = 0.0, height2_m: float = 0.0,
+    intervals: int = 32,
+) -> EdgeReduction:
+    """沿椭球最短测地线作复合 Simpson 尺度/切向量积分。
+
+    必须显式指定统一中央经线；intervals 为正偶数。高程沿弧长线性插值，
+    仍采用局部球面高程因子，不含斜距归算/垂线偏差/geoid。
+    积分 k 得投影弧长，积分 k(sin a,cos a) 得弦向量，其中 a=α−γ。
+    δ=atan2(ΔE,ΔN)−(α1−γ1)，归一到 [-π,π)。反向边须重新计算。
+    """
+    from geographiclib.geodesic import Geodesic
+
+    if spec.central_meridian is None:
+        raise ValueError("逐边积分必须显式指定统一 central_meridian")
+    if isinstance(intervals, bool) or not isinstance(intervals, int) or intervals < 2 or intervals % 2:
+        raise ValueError("intervals 必须是至少为 2 的偶整数")
+    lat1, lon1 = _check_lat(lat1_deg), _check_lon(lon1_deg)
+    lat2, lon2 = _check_lat(lat2_deg), _check_lon(lon2_deg)
+    h1, h2 = _finite(height1_m, "height1_m"), _finite(height2_m, "height2_m")
+    ell = spec.ellipsoid_model
+    line = Geodesic(ell.a, ell.f).InverseLine(lat1, lon1, lat2, lon2)
+    length = line.s13
+    if length <= 1e-8:
+        raise ValueError("逐边积分两端点不能重合")
+    arc, east, north, ground = [], [], [], []
+    for i in range(intervals + 1):
+        t = i / intervals
+        p = line.Position(length * t)
+        k = spec.scale(p['lat2'], p['lon2'])
+        a = radians(p['azi2']) - spec.convergence(p['lat2'], p['lon2'], unit="rad")
+        h = h1 + (h2 - h1) * t
+        r = local_curvature_radius(p['lat2'], ell)
+        height_reduction_factor(h, r)  # 校验高程面半径
+        w = 1 if i in (0, intervals) else (4 if i % 2 else 2)
+        arc.append(w * k)
+        east.append(w * k * sin(a))
+        north.append(w * k * cos(a))
+        ground.append(w * (1 + h / r))
+    step = length / (3 * intervals)
+    de, dn = step * math.fsum(east), step * math.fsum(north)
+    gamma = spec.convergence(lat1, lon1, unit="rad")
+    tangent = radians(line.azi1) - gamma
+    delta = (math.atan2(de, dn) - tangent + pi) % (2 * pi) - pi
+    return EdgeReduction(length, step * math.fsum(ground), step * math.fsum(arc),
+                         math.hypot(de, dn), delta, gamma, intervals)
+
+
+@dataclass(frozen=True)
+class ProjectionReductionOptions:
+    """观测平差的显式归算配置；点坐标必须已经位于 spec 指定的网格中。"""
+
+    spec: ProjectionSpec
+    heights: Mapping[str, float]
+    intervals: int = 32
+
+
+def reduce_observation_dataset(dataset: Any, options: ProjectionReductionOptions) -> Any:
+    """复制地面观测集并归算到网格，供 robust.estimate_network 使用。
+
+    高程必须覆盖所有测量端点；仅支持平面距离/方向/角，GNSS 块保持不变。
+    归算因子由 dataset.network 的参考网格坐标计算一次，不随迭代更新。
+    """
+    from dataclasses import replace
+    from .model import Distance, Direction, Angle, GnssBaseline2D
+    if dataset.kind != "planar":
+        raise ValueError("投影逐边归算仅支持 planar 观测集")
+    if dataset.metadata.get("projection_reduced"):
+        raise ValueError("观测集已经投影归算，不能重复改正")
+    cache = {}
+
+    def edge(frm: str, to: str) -> EdgeReduction:
+        if (frm, to) not in cache:
+            p, q = dataset.network.point(frm), dataset.network.point(to)
+            lat1, lon1 = options.spec.inverse(p.E, p.N)
+            lat2, lon2 = options.spec.inverse(q.E, q.N)
+            cache[frm, to] = edge_reduction(
+                lat1, lon1, lat2, lon2, spec=options.spec,
+                height1_m=options.heights[frm], height2_m=options.heights[to],
+                intervals=options.intervals)
+        return cache[frm, to]
+
+    records = []
+    for record in dataset.records:
+        obs = record.observation
+        factor, offset = 1.0, 0.0
+        if isinstance(obs, Distance):
+            factor = edge(obs.frm, obs.to).combined_scale
+        elif isinstance(obs, Direction):
+            offset = edge(obs.station, obs.target).direction_correction()
+        elif isinstance(obs, Angle):
+            offset = (edge(obs.station, obs.foresight).direction_correction()
+                      - edge(obs.station, obs.backsight).direction_correction())
+        elif not isinstance(obs, GnssBaseline2D):
+            raise TypeError(f"不支持归算的观测类型 {type(obs)!r}")
+        values, truth = record.values * factor + offset, record.truth * factor + offset
+        if isinstance(obs, (Direction, Angle)):
+            values, truth = values % (2 * pi), truth % (2 * pi)
+        records.append(replace(record, values=values, truth=truth,
+                               sigma=record.sigma * factor, blunder=record.blunder * factor))
+    return replace(dataset, records=records,
+                   metadata={**dataset.metadata, "projection_reduced": True})
+
+
+__all__ += ["EdgeReduction", "edge_reduction", "ProjectionReductionOptions",
+            "reduce_observation_dataset"]

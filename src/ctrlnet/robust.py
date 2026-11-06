@@ -986,6 +986,14 @@ def _planar_system(
     if misclosure.size != design.n_rows:
         raise AdjustmentError("内部错误：残差向量与设计矩阵行数不一致")
     Ql = np.asarray(design.Ql, dtype=float)
+    if dataset.metadata.get("projection_reduced"):
+        Ql = Ql.copy()
+        row = 0
+        for i in active_indices:
+            rec = dataset.records[i]
+            if isinstance(rec.observation, Distance):
+                Ql[row, row] = float(rec.sigma[0]) ** 2
+            row += rec.n_rows
     try:
         P = np.linalg.inv(Ql)
     except np.linalg.LinAlgError as exc:  # pragma: no cover - 防御性
@@ -1477,6 +1485,7 @@ def estimate_network(
     max_iter: int = DEFAULT_MAX_ITER,
     tol: float = DEFAULT_TOL,
     method: str = "ls",
+    projection_reduction: Any = None,
 ) -> EstimationResult:
     """对模拟/实测观测做（加权）最小二乘，平面网用高斯-牛顿迭代。
 
@@ -1493,9 +1502,15 @@ def estimate_network(
         参与估计的观测序号；默认全部。数据 snooping 用它剔除观测。
     weight_factors:
         按设计矩阵行给出的先验权因子（稳健估计使用）；缺省全 1。
+    projection_reduction:
+        默认 None；显式传入 ProjectionReductionOptions 将地面距离/真北方向
+        归算到统一网格。参考坐标与逐点大地高由调用者提供。
     """
     if not isinstance(dataset, ObservationDataset):
         raise TypeError("dataset 必须是 ObservationDataset")
+    if projection_reduction is not None:
+        from .projection import reduce_observation_dataset
+        dataset = reduce_observation_dataset(dataset, projection_reduction)
     if method not in ("ls", "huber", "igg3"):
         raise ValueError("method 只能是 'ls'、'huber' 或 'igg3'")
     if active_indices is None:
