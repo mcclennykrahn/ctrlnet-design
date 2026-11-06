@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from .app import app, build_profile, create_app, parse_endpoint
-from .state import ProjectStore, default_project_path
+def __getattr__(name):
+    # CLI help must work before optional dependencies and user data are available.
+    from importlib import import_module
+    if name in {"app", "build_profile", "create_app", "parse_endpoint"}:
+        return getattr(import_module(".app", __name__), name)
+    if name in {"ProjectStore", "default_project_path"}:
+        return getattr(import_module(".state", __name__), name)
+    raise AttributeError(name)
 
 __all__ = [
     "app",

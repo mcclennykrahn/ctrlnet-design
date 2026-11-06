@@ -1696,7 +1696,7 @@ E6 / P5 提供离线、固定随机种子的性能基线：
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
 | D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
-| P5 硬化/试点 | ⚠️ 部分 | 本地回环、离线 Leaflet、工程包校验、WAL 并发写、乐观锁、事务审计、旧库迁移、单元/集成测试（E5）、50/200/1000 点性能压测与热点一致性验证（E6） | 安装包、试点 |
+| P5 硬化/试点 | ⚠️ 部分 | 本地回环、离线 Leaflet、工程包校验、WAL 并发写、乐观锁、事务审计、旧库迁移、单元/集成测试（E5）、50/200/1000 点性能压测与热点一致性验证（E6）、wheel/sdist 安装包、统一 CLI、离线安装与静态资源（E8） | 试点 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分（E3） | 仿射及二/三次多项式/TPS；离线 MBTiles 读写、XYZ 导出、WebMercator 切片、本地路由与图层选择 | RPC、矢量瓦片 MVT、在线底图未实现 |
 | E2 Helmert / VCE | ✅ 已完成（E2a1/E2b） | 七参数恢复、经典 Helmert 分量迭代、两组桥接与演示 | 跨组相关 VCV、MINQUE |
 | 多用户 | ❌ 未完成 | 本地工程管理 | 多用户与权限 |
@@ -1940,3 +1940,29 @@ Feature/Property JSON 元数据保存，因而往返保持平差协方差，而�
 `tests/test_gnss_corr.py` 用独立法方程验证 ECEF/ENU 旋转、联合网块权、无相关
 逐位兼容及非法矩阵/索引；`tests/test_landxml.py` 验证 ECEF/ENU 往返、外部
 CgPoints/GPSSetup/GPSVector 和输入错误。第 13 节及 thesis 黄金期望值未改。
+
+
+## 安装与打包（E8 / P5）
+
+Python >=3.9，使用仓库内虚拟环境：
+
+```bash
+python3 -m venv /workspace/ctrlnet-design/.venv
+/workspace/ctrlnet-design/.venv/bin/pip install /workspace/ctrlnet-design
+# 开发、测试和构建：
+/workspace/ctrlnet-design/.venv/bin/pip install -e '/workspace/ctrlnet-design[test,build]'
+/workspace/ctrlnet-design/scripts/build_dist.sh
+/workspace/ctrlnet-design/.venv/bin/ctrlnet --help
+```
+
+`dist/` 输出 wheel 与 sdist（构建产物不入 Git）。统一入口 `ctrlnet` 汇总
+`adjust`（SQLite 方案计算与 JSON 输出）、`report`、`package`（export/inspect/import）、
+`serve`、`tiles`（MBTiles 元数据检查与 `--out` XYZ 导出）；各子命令支持 `--help`。
+原有 `ctrlnet-web` 与 `ctrlnet-package` 入口继续可用。网页服务依赖 `[webmap]`，
+瓦片操作依赖 `[tiles]`；按需安装，例如 `pip install '.[webmap,tiles]'`。
+
+离线 HTML/CSS/JS、Leaflet 许可证及 PNG 图标通过 package-data 随两种分发包携带；
+工程数据单独提供，安装后请显式传入 `--project` 或 MBTiles 路径。
+完整联网下载依赖、离线 venv 安装步骤见 [离线安装说明](docs/offline_install.md)。
+`tests/test_cli_entry.py` 从临时工作目录用 subprocess 验证全部子命令帮助入口。
+不包含签名或 Windows 安装器。

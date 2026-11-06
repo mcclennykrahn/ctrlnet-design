@@ -1,0 +1,333 @@
+{
+  "datum": {
+    "fixed_points": [
+      "A",
+      "B"
+    ],
+    "kind": "fixed",
+    "summary": "固定基准（Point.fixed=True 的坐标从参数中剔除）"
+  },
+  "edges": [
+    {
+      "from": "A",
+      "is_weakest": true,
+      "label": "AC",
+      "length_m": 100.0,
+      "ratio_denominator": 60565,
+      "ratio_text": "1:60565",
+      "relative": 1.6511074753183144e-05,
+      "sigma_s_m": 0.0016511074753183144,
+      "sigma_s_mm": 1.6511074753183144,
+      "to": "C"
+    },
+    {
+      "from": "B",
+      "is_weakest": false,
+      "label": "BC",
+      "length_m": 141.4213562373095,
+      "ratio_denominator": 119522,
+      "ratio_text": "1:119522",
+      "relative": 8.366662324272386e-06,
+      "sigma_s_m": 0.001183224733078201,
+      "sigma_s_mm": 1.183224733078201,
+      "to": "C"
+    },
+    {
+      "from": "A",
+      "is_weakest": false,
+      "label": "AD",
+      "length_m": 141.4213562373095,
+      "ratio_denominator": 119522,
+      "ratio_text": "1:119522",
+      "relative": 8.366662324272381e-06,
+      "sigma_s_m": 0.0011832247330782004,
+      "sigma_s_mm": 1.1832247330782004,
+      "to": "D"
+    },
+    {
+      "from": "B",
+      "is_weakest": true,
+      "label": "BD",
+      "length_m": 100.0,
+      "ratio_denominator": 60565,
+      "ratio_text": "1:60565",
+      "relative": 1.6511074753183134e-05,
+      "sigma_s_m": 0.0016511074753183135,
+      "sigma_s_mm": 1.6511074753183135,
+      "to": "D"
+    },
+    {
+      "from": "C",
+      "is_weakest": false,
+      "label": "CD",
+      "length_m": 100.0,
+      "ratio_denominator": 155427,
+      "ratio_text": "1:155427",
+      "relative": 6.4338730762970965e-06,
+      "sigma_s_m": 0.0006433873076297096,
+      "sigma_s_mm": 0.6433873076297096,
+      "to": "D"
+    }
+  ],
+  "engine": {
+    "name": "ctrlnet.adjustment",
+    "version": "0.1.0"
+  },
+  "input_hash": "4ed093bfe588842edb2ba4c26090d18997e42ddf3be2422eb177aa2ef72f7f20",
+  "network": {
+    "condition_number": 3.648140067966298,
+    "n_fixed": 2,
+    "n_observations": 7,
+    "n_params": 4,
+    "n_points": 4,
+    "n_rows": 7,
+    "name": "snapshot",
+    "parameter_order": [
+      "E_C",
+      "N_C",
+      "E_D",
+      "N_D"
+    ],
+    "rank": 4,
+    "redundancy": 3
+  },
+  "observations": [
+    {
+      "external_max_mm": 6.663247322637431,
+      "external_max_norm_mm": 6.665600021320954,
+      "external_point": "C",
+      "id": "s13-base-d1",
+      "kind": "distance",
+      "label": "AC",
+      "mdb": 9.874534039786292,
+      "mdb_unit": "mm",
+      "r_i": 0.3252089368683123,
+      "sigma": 0.002009975124224178,
+      "sigma_unit": "mm",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 3.211286717148866,
+      "external_max_norm_mm": 3.216165596068672,
+      "external_point": "C",
+      "id": "s13-base-d2",
+      "kind": "distance",
+      "label": "BC",
+      "mdb": 6.982349980590276,
+      "mdb_unit": "mm",
+      "r_i": 0.6568576546647108,
+      "sigma": 0.0020199009876724155,
+      "sigma_unit": "mm",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 3.2112867171488606,
+      "external_max_norm_mm": 3.2161655960686666,
+      "external_point": "D",
+      "id": "s13-base-d3",
+      "kind": "distance",
+      "label": "AD",
+      "mdb": 6.982349980590274,
+      "mdb_unit": "mm",
+      "r_i": 0.6568576546647112,
+      "sigma": 0.0020199009876724155,
+      "sigma_unit": "mm",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 6.663247322637415,
+      "external_max_norm_mm": 6.665600021320938,
+      "external_point": "D",
+      "id": "s13-base-d4",
+      "kind": "distance",
+      "label": "BD",
+      "mdb": 9.87453403978628,
+      "mdb_unit": "mm",
+      "r_i": 0.32520893686831315,
+      "sigma": 0.002009975124224178,
+      "sigma_unit": "mm",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 0.30451247348546345,
+      "external_max_norm_mm": 0.3207744706868682,
+      "external_point": "C",
+      "id": "s13-base-d5",
+      "kind": "distance",
+      "label": "CD",
+      "mdb": 5.943899660628073,
+      "mdb_unit": "mm",
+      "r_i": 0.8975378149457905,
+      "sigma": 0.002009975124224178,
+      "sigma_unit": "mm",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 4.807434157709283,
+      "external_max_norm_mm": 5.064167420303657,
+      "external_point": "C",
+      "id": "s13-base-a6",
+      "kind": "angle",
+      "label": "∠C-A-B",
+      "mdb": 10.652843344979404,
+      "mdb_unit": "arcsec",
+      "r_i": 0.0691645009940814,
+      "sigma": 4.84813681109536e-06,
+      "sigma_unit": "arcsec",
+      "undetectable": false
+    },
+    {
+      "external_max_mm": 4.807434157709283,
+      "external_max_norm_mm": 5.064167420303657,
+      "external_point": "D",
+      "id": "s13-base-a7",
+      "kind": "angle",
+      "label": "∠A-B-D",
+      "mdb": 10.652843344979404,
+      "mdb_unit": "arcsec",
+      "r_i": 0.0691645009940814,
+      "sigma": 4.84813681109536e-06,
+      "sigma_unit": "arcsec",
+      "undetectable": false
+    }
+  ],
+  "options": {
+    "confidence": 0.95
+  },
+  "points": [
+    {
+      "E": 415900.0,
+      "N": 4420800.0,
+      "ellipse": {
+        "a_m": 0.0,
+        "azimuth_deg": 0.0,
+        "b_m": 0.0,
+        "confidence": 0.95,
+        "scale": 2.447746830680816,
+        "standard_a_m": 0.0,
+        "standard_b_m": 0.0
+      },
+      "fixed": true,
+      "is_weakest": false,
+      "mp_m": 0.0,
+      "mp_mm": 0.0,
+      "name": "A",
+      "role": "fixed",
+      "sigma_E_m": 0.0,
+      "sigma_E_mm": 0.0,
+      "sigma_N_m": 0.0,
+      "sigma_N_mm": 0.0
+    },
+    {
+      "E": 416000.0,
+      "N": 4420800.0,
+      "ellipse": {
+        "a_m": 0.0,
+        "azimuth_deg": 0.0,
+        "b_m": 0.0,
+        "confidence": 0.95,
+        "scale": 2.447746830680816,
+        "standard_a_m": 0.0,
+        "standard_b_m": 0.0
+      },
+      "fixed": true,
+      "is_weakest": false,
+      "mp_m": 0.0,
+      "mp_mm": 0.0,
+      "name": "B",
+      "role": "fixed",
+      "sigma_E_m": 0.0,
+      "sigma_E_mm": 0.0,
+      "sigma_N_m": 0.0,
+      "sigma_N_mm": 0.0
+    },
+    {
+      "E": 415900.0,
+      "N": 4420900.0,
+      "ellipse": {
+        "a_m": 0.004043043283635242,
+        "azimuth_deg": 1.653735034363556,
+        "b_m": 0.0011394408498985964,
+        "confidence": 0.95,
+        "scale": 2.447746830680816,
+        "standard_a_m": 0.0016517407899209534,
+        "standard_b_m": 0.0004655060056115658
+      },
+      "fixed": false,
+      "is_weakest": true,
+      "mp_m": 0.0017160837620434294,
+      "mp_mm": 1.7160837620434295,
+      "name": "C",
+      "role": "unknown",
+      "sigma_E_m": 0.0004677473498557863,
+      "sigma_E_mm": 0.4677473498557863,
+      "sigma_N_m": 0.0016511074753183144,
+      "sigma_N_mm": 1.6511074753183144
+    },
+    {
+      "E": 416000.0,
+      "N": 4420900.0,
+      "ellipse": {
+        "a_m": 0.004043043283635239,
+        "azimuth_deg": 178.34626496563644,
+        "b_m": 0.0011394408498985964,
+        "confidence": 0.95,
+        "scale": 2.447746830680816,
+        "standard_a_m": 0.0016517407899209523,
+        "standard_b_m": 0.0004655060056115658
+      },
+      "fixed": false,
+      "is_weakest": true,
+      "mp_m": 0.0017160837620434286,
+      "mp_mm": 1.7160837620434286,
+      "name": "D",
+      "role": "unknown",
+      "sigma_E_m": 0.0004677473498557863,
+      "sigma_E_mm": 0.4677473498557863,
+      "sigma_N_m": 0.0016511074753183135,
+      "sigma_N_mm": 1.6511074753183135
+    }
+  ],
+  "reliability": {
+    "alpha": 0.05,
+    "expected_redundancy": 3,
+    "lambda0": 7.849,
+    "max_external_mm": 6.663247322637431,
+    "max_mdb_arcsec": 10.652843344979404,
+    "min_r": 0.0691645009940814,
+    "power": 0.8,
+    "trace_r": 3.0000000000000013
+  },
+  "scenario_id": "s13-base",
+  "scenario_version": 1,
+  "schema_version": "2.0",
+  "snapshot_id": "snap-4ed093bfe588842e",
+  "summary": {
+    "chi2_2_95": 5.991464547107982,
+    "condition_number": 3.648140067966298,
+    "confidence": 0.95,
+    "max_external_mm": 6.663247322637431,
+    "max_mdb_arcsec": 10.652843344979404,
+    "max_mp_mm": 1.7160837620434295,
+    "min_r": 0.0691645009940814,
+    "n_fixed": 2,
+    "n_observations": 7,
+    "n_params": 4,
+    "n_points": 4,
+    "n_rows": 7,
+    "rank": 4,
+    "redundancy": 3,
+    "scenario_id": "s13-base",
+    "scenario_name": "第 13 节基准方案",
+    "scenario_version": 1,
+    "weakest_edges": [
+      "AC",
+      "BD"
+    ],
+    "weakest_points": [
+      "C",
+      "D"
+    ],
+    "worst_relative": 1.6511074753183144e-05
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "format": "png",
+    "type": "baselayer",
+    "version": "1.3",
+    "name": "demo_tiles",
+    "minzoom": "11",
+    "maxzoom": "13",
+    "bounds": "115.99840373047967,39.898950356207884,116.10119551820968,40.0009595262309"
+  },
+  "count": 22
+}
