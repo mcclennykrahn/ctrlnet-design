@@ -58,3 +58,21 @@
 | 可编辑统一方案树 / GNSS 高级参数 | 未完成 | 本批选择轻编辑闭环；thesis 与仪表盘仍为不同工程源 |
 
 第三批验证：337 passed / 1 skipped / 2 xfailed；第三批 Chromium E2E、batch2 E2E、原论文 E2E 均通过。新截图 `outputs/document_alignment_third_xyz.png` / `profile.png` / `editor.png`；P1 经纬度、屏幕像素和 warp 范围见 `document_alignment_third_coordinates.json`。网络不作为本批公网可用性证据。
+
+## 第四批实施后刷新（基线 cab7246）
+
+重新审计 store.py、thesis_web.py、app.py、两页静态 UI、现有高级核心及上述三份计划：此前 thesis_projects 仅 JSON、仪表盘默认第一工程；核心有基准/精度 API，但网页无参数路径。此次完成以下实际桥接，未把全部旧预置方案改成论文编辑器。
+
+| 能力 | 状态 | 真实闭环与边界 |
+|---|---|---|
+| 命名新工程 → 原生 SQLite | 已完成（桥接范围） | thesis「工程…」保存当前四库；store.save_editor_version 原子写 projects/points/scenarios/snapshots；完整拓扑保存在方案 metadata，不新建不兼容表 |
+| 快照派生子方案 | 已完成（不可变另存范围） | 选择工程/方案/具体父快照，当前四库另存分支；parent_id、parent_snapshot、version 可见且持久化；点集随版本独立，父方案不被改点污染 |
+| 双页选择/比较/计算 | 已完成（面板范围） | 两页同一路径/API；页面自己的工程/方案选择，不改全局 demo 工程；compare.py 显示双哈希、精度、冗余、工作量及点边差异 |
+| 方案重新打开 + JSON 交换 | 已完成 | 点线角 names/id、观测/新增勾选、等级、投影完整回读；旧 JSON 表与 ctrlnet.thesis.web/1 导入导出保留；旧存档先读取再保存为共享工程 |
+| 事务与多工程快照 | 已完成（保存/分支） | 保存与快照同一事务，错误全回滚；工程 metadata.status=saved/version=方案数、方案 version=父+1/status=saved；快照按方案解析所属工程，拒绝不匹配 project_id |
+| 高级平面联合计算 | 已完成（现有核心能力） | 角/距离观测按等级进入 adjustment.solve；固定/free/minimal、置信度实际驱动 API；UI 显示秩/冗余/精度，欠约束明确400；标准/95/99%椭圆不同 |
+| GNSS 导入/相关模型/稳健估计编辑 | 部分 | 原生 store 的 GNSS 计算核保留；本批无专用基线输入、相关系数/robust 面板，不宣称完整 GNSS 联合编辑器 |
+| 全产品可编辑工程树 | 部分 | 已有保存/派生/打开/比较，未做合并/重命名/权限管理；仪表盘 DEM 预置地图保持原工程，选择共享方案只作用于工程面板 |
+| 状态全生命周期 | 部分 | saved/version事务闭环；未实现 original_plan 全套 editing/ready/calculating/valid/stale/failed 状态机 |
+
+第四批测试和截图见 `outputs/document_alignment_fourth_status.md`。底图策略及实现未变；未启用 BD-09，不将 OSM/Esri 称为百度。点/线吸附、持久历史、任意 CRS/七参数、非标准地理像元 MBTiles、全国离线矢量等缺口延续第三批。

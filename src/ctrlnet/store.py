@@ -1029,7 +1029,7 @@ def _snapshot_payload(
     scenario: Mapping[str, Any],
     options: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    all_points = list(project.get("points") or [])
+    all_points = list(scenario.get("metadata", {}).get("editor_points") or project.get("points") or [])
     selected_names = scenario.get("metadata", {}).get("points") or scenario.get(
         "metadata", {}
     ).get("point_names")
@@ -1116,6 +1116,13 @@ def snapshot(
     conn = connect(path)
     try:
         with _write_transaction(conn):
+            if scenario_id is not None:
+                selected = _fetch_scenario_dict(conn, str(scenario_id), include_observations=False)
+                if selected is None:
+                    raise KeyError(f"方案不存在：{scenario_id!r}")
+                if project_id is not None and selected["project_id"] != project_id:
+                    raise ValueError("方案不属于所选工程")
+                project_id = selected["project_id"]
             pid = _resolve_project_id(conn, project_id)
             sid = _resolve_scenario_id(conn, scenario_id, pid)
             project_row = conn.execute(
@@ -1219,7 +1226,7 @@ def _result_from_snapshot(payload: Mapping[str, Any]) -> Dict[str, Any]:
     ]
     observations = list(payload["observations"])
     network, enabled = _build_network(points, observations)
-    datum_kind = str(payload.get("network", {}).get("datum", {}).get("kind") or "fixed")
+    datum_kind = str(options.get("datum") or payload.get("network", {}).get("datum", {}).get("kind") or "fixed")
     result = solve(network, datum=datum_kind)
     precision = analyze_precision(result, confidence=confidence)
     reliability = analyze_reliability(result)
@@ -1550,6 +1557,7 @@ __all__ = [
     "compute_input_hash",
     "connect",
     "save_project",
+    "save_editor_version",
     "load_project",
     "create_scenario",
     "list_scenarios",
@@ -1565,3 +1573,55 @@ __all__ = [
     "Database",
     "Store",
 ]
+
+
+def save_editor_version(
+    path: Path | str,
+    project: Mapping[str, Any],
+    scenario: Mapping[str, Any],
+    *,
+    parent_snapshot: Optional[str] = None,
+) -> Dict[str, Any]:
+    """原子保存编辑器版本、完整拓扑与计算快照；旧版本从不覆盖。"""
+    conn = connect(path)
+    try:
+        with _write_transaction(conn):
+            pid = str(project.get("id") or f"prj-{uuid.uuid4().hex[:12]}")
+            sid = f"sc-{uuid.uuid4().hex[:12]}"
+            now = _utcnow()
+            parent = None
+            if parent_snapshot:
+                row = conn.execute("SELECT * FROM snapshots WHERE id=?", (parent_snapshot,)).fetchone()
+                if row is None or row["project_id"] != pid:
+                    raise ValueError("父快照不存在或不属于此工程")
+                parent = _fetch_scenario_dict(conn, row["scenario_id"], include_observations=True)
+                if "thesis_state" not in parent["metadata"]:
+                    raise ValueError("父方案不是可编辑论文方案")
+            elif conn.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone():
+                raise ValueError("已有工程必须从明确快照派生")
+            else:
+                conn.execute("INSERT INTO projects(id,name,created_at,updated_at,metadata_json) VALUES (?,?,?,?,?)",
+                             (pid, project["name"], now, now, _json_dump({"status":"saved", "version":1})))
+                for raw in project["points"]:
+                    pt = _point_row(raw)
+                    conn.execute("INSERT INTO points(project_id,name,e,n,fixed) VALUES (?,?,?,?,?)",
+                                 (pid, pt["name"], pt["E"], pt["N"], int(pt["fixed"])))
+            scenario = dict(scenario, id=sid, parent_id=parent["id"] if parent else None,
+                            version=parent["version"]+1 if parent else 1)
+            scenario["metadata"] = dict(scenario["metadata"], editor_points=project["points"],
+                                        parent_snapshot=parent_snapshot, status="saved")
+            _insert_scenario(conn, project_id=pid, scenario=scenario,
+                             fallback_name="编辑方案", used_observation_ids=set())
+            saved = _fetch_scenario_dict(conn, sid, include_observations=True)
+            payload = _snapshot_payload(dict(project, id=pid), saved, {"confidence":0.95})
+            digest = compute_input_hash(payload)
+            snapid = f"snap-{digest[:16]}"
+            payload["snapshot_id"] = snapid
+            conn.execute("INSERT INTO snapshots(id,project_id,scenario_id,input_hash,schema_version,engine_version,payload_json,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                         (snapid,pid,sid,digest,SCHEMA_VERSION,ENGINE_VERSION,_json_dump(payload),now))
+            count = conn.execute("SELECT COUNT(*) FROM scenarios WHERE project_id=?", (pid,)).fetchone()[0]
+            conn.execute("UPDATE projects SET updated_at=?,metadata_json=? WHERE id=?",
+                         (now,_json_dump({"status":"saved", "version":count}),pid))
+        return {"project_id":pid,"scenario_id":sid,"snapshot_id":snapid,"input_hash":digest,"version":saved["version"]}
+    finally:
+        conn.close()

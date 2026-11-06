@@ -5,13 +5,15 @@
 的内存工程。计算时按论文第 3 章的误差方程组装 B 矩阵，返回网页需要的
 最弱点、Qxx/Qyy、M、限差、边长相对中误差分母与误差椭圆。
 
-工程保存复用 :func:`ctrlnet.store.connect` 所打开的 SQLite 文件，新建
-``thesis_projects`` 表存放完整 JSON 状态；不修改 D1 的平差表和黄金算例。
+旧存档通过 ``thesis_projects`` JSON 表兼容读取。共享工程桥接使用
+:mod:`ctrlnet.store` 的原生 projects/scenarios/snapshots 保存可追踪版本，
+完整论文拓扑随方案元数据保留；不修改 D1 计算核和黄金算例。
 """
 
 from __future__ import annotations
 
 import json
+import os
 import copy
 import math
 import threading
@@ -42,7 +44,7 @@ from ..thesis import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SAMPLE_DIR = REPO_ROOT / "data" / "sample"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-DEFAULT_DB = SAMPLE_DIR / "thesis_web.sqlite"
+DEFAULT_DB = Path(os.environ.get("CTRLNET_THESIS_DB", str(SAMPLE_DIR / "thesis_web.sqlite")))
 DEFAULT_CENTRAL_MERIDIAN = 117.0
 ORIGIN_LAT = 34.200
 ORIGIN_LON = 117.200

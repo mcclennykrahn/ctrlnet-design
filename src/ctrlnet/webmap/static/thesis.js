@@ -1271,6 +1271,7 @@
         map: state.map,
         state,
         applyStage,
+        syncNetwork,
         fitToPoints,
       };
       await refreshProjects();

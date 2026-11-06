@@ -1,0 +1,1 @@
+PASS: thesis named project/save/parent snapshot/branch/open topology; 95/99% UI/API/ellipse; dashboard scoped selection/compare; no global map overwrite; zero pageerror

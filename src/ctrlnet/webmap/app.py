@@ -507,6 +507,8 @@ def create_app(
             headers={"Cache-Control": "public, max-age=3600"},
         )
 
+    from .project_bridge import create_bridge_router
+    app.include_router(create_bridge_router(thesis_service))
     app.include_router(create_thesis_router(thesis_service))
 
     return app

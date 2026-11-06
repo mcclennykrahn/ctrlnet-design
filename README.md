@@ -2131,3 +2131,7 @@ python3 -m venv /workspace/ctrlnet-design/.venv
 - 验证：`.venv/bin/python scripts/test_document_alignment_batch2_e2e.py`；全量 pytest 为 **334 passed, 1 skipped, 2 xfailed**（可选 pyproj 未安装）。
 
 第三批地图/编辑入口：仪表盘底图可选“离线 DEM · EPSG:3857（重投影）”，在 XYZ 下切换 DEM、等高线、配准影像并点击两点生成原 DEM 剖面；状态显示工程→显示 CRS 与 warp 缓存。OSM/Esri/标准本地 MBTiles 共用这些图层。论文页可拖动点，在“放点/拖动吸附网格”设置米制间距（默认0关闭），并撤销/重做最近20步；移动后线角刷新，需重新计算精度。网格吸附不等于点/线吸附；两个页面仍未统一为可编辑方案树。
+
+第四批共享工程入口：`/thesis` 顶部及 `/dashboard` 地图上方的「工程… · 共享 SQLite 方案与快照」。在论文四库编辑后，输入名称 →「保存为命名新工程」；选择工程/方案/父快照 → 输入分支名 →「当前四库另存分支快照」；「打开工程方案到论文编辑器」完整回读点、线、角、观测选择及投影。仪表盘同一面板可选择这些工程并比较、计算；选择仅属于当前页面，原 DEM 演示地图不自动切换。旧「保存/读取」继续兼容 JSON 存档，可先读取再保存为共享工程；完整拓扑 JSON 导入/导出保持。
+
+共享工程使用 `ctrlnet.store` 原生 projects/scenarios/snapshots 和事务 API `save_editor_version`，不创建第二套工程表；默认与旧论文存档共用 `data/sample/thesis_web.sqlite`，可用 `CTRLNET_THESIS_DB` 指向自己的 SQLite 文件。联合平差计算已选距离/角度，使用所选等级的线性测距误差模型；面板开放固定/自由/最小基准及95%/99%/标准椭圆，结果显示秩、冗余及点精度。基准遵循核心既有固定点语义，需要无固定点时先在点库修改再保存。GNSS 基线导入、相关系数/稳健估计编辑尚无此 UI；这不是实测残差迭代平差编辑器。回归脚本使用各进程临时 SQLite，避免写入共享示例数据库。

@@ -74,3 +74,20 @@ XYZ中DEM栅格/等高线/扫描图与地图两点剖面尚未重投影；任意
 大图有界 warp 实测：6000×6000 合成 RGBA PNG → 1188×1536，0.974秒（仅本机 warp 阶段，非完整真实大 DEM 性能保证），见 `outputs/document_alignment_third_performance.json`。固定点默认锁定，先在点库明确切换未知点方可拖动；API 同样拒绝直接移动固定点。
 
 第三批实际实现提交：`9184088`，已成功 `git push origin main`（`0b55d04..9184088`）。最终独立全量 pytest：337 passed / 1 skipped / 2 xfailed，31.55秒；三个 Chromium 脚本通过。提交后独立补记结果，不 amend、不改写历史。示例数据库与旧截图已恢复，未暂存 `.dsh-prompts/**` 或既有 codex 长日志。
+
+## 第四批：原生 SQLite 工程桥接与高级计算 UI（基线 cab7246）
+
+先重新审计旧 JSON 持久化、SQLite schema/API、多工程默认解析和现有核心参数，随后实现；实际提交与推送将在下方独立补记，不填猜测哈希。
+
+操作闭环：
+1. `/thesis` 编辑/载入/导入四库，在顶部「工程…」输入名称，点击「保存为命名新工程」。`POST /api/engineering/save` → `store.save_editor_version`，事务写原生工程/方案/快照，非只存 thesis_projects。
+2. 工程、方案、父快照下拉选择明确来源；当前四库可以继续修改，输入新名称后「当前四库另存分支快照」。保存 parent_id、父快照 ID、父版本+1、完整 topology 和独立版本点集；旧快照/父点不覆盖。
+3. 「打开工程方案到论文编辑器」→ `POST /api/engineering/open/{sid}`，回读 names/id、angles、观测/新增选择和 projection。旧保存/读取及 topology JSON 不改协议，旧存档可读取后手工桥接。
+4. `/dashboard` 展开同名「工程…」面板，选择相同工程与方案，选比较对象并点击「比较方案」→ `GET /api/engineering/compare` → 原 compare.py。显示哈希、精度、工作量/冗余、点边差异。该选择仅保存在页面，默认 demo 地形地图保持原工程；没有全局切换或清库。
+5. 选择固定/自由/最小基准，95%/99%/标准椭圆，点击「计算所选存储方案」→ `POST /api/engineering/calculate/{sid}` → store.get_or_compute_result → adjustment.solve / precision / reliability。所选等级的角与距离精度模型形成真实联合设计精度计算；秩、冗余、点精度及椭圆长轴可见，详细 JSON 可展开。非法参数/欠约束回400；不创建未经验证的求解器。GNSS 基线、相关系数和 robust 估计编辑尚无 UI；原生 GNSS 核心保留，不宣称全 GNSS 编辑器。
+
+持久化采用现有 schema 的 metadata 扩展，无破坏性迁移、无 ACL 或 admin。新增 store 原子 API 保证创建/分支/快照整体回滚；项目 updated_at/status/version 与方案 version/status 一起更新。修复快照默认取第一个工程的问题。没有实现完整状态机、合并/重命名/全产品树、仪表盘预置 DEM 方案到论文四库的自动转换。旧 JSON 存档还保留兼容入口，不等同已完成所有数据模型迁移。
+
+测试隔离：pytest 对旧用例显式 sample 路径在 store 连接解析入口重定向到进程临时副本；Chromium 旧脚本使用临时 SQLite 与只读资源链接。新增4个后端测试覆盖完整回读/父链/比较、选项改变哈希及椭圆、自由/最小基准、欠约束拒绝、多工程/独立点集、SQL失败整体回滚；第四批 E2E 使用真实 UI 勾选距离与角，保存、增加距离分支、重新打开、切换置信度、仪表盘选择比较。
+
+第四批最终验证：341 passed / 1 skipped / 2 xfailed（8 warnings，20.89秒）；第四批、batch2、第三批、原论文共4个Chromium脚本均通过。当前UI比较真实增加一条距离观测：工作量15→16、冗余1→2、最弱点73.612→70.436 mm。截图已视觉检查；完整证据 `outputs/document_alignment_fourth_status.md` 及同前缀日志/PNG/JSON。样例SQLite SHA256前后均 `fa597f57b5952fa603b9464550c5d72e9c7c2b6bd4efc48c8281692b84a204f6`，全程未修改，不执行共享DB恢复。旧截图恢复，`.dsh-prompts/**`与既有codex长日志不暂存。

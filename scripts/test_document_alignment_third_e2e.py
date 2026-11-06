@@ -4,12 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from e2e_database import isolated_environment
 from test_thesis_e2e import _free_port, _wait_server
 
 ROOT = Path(__file__).resolve().parents[1]
 port = _free_port()
 base = f'http://127.0.0.1:{port}'
-process = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'ctrlnet.webmap.app:app', '--host', '127.0.0.1', '--port', str(port), '--log-level', 'error'], cwd=ROOT)
+process = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'ctrlnet.webmap.app:app', '--host', '127.0.0.1', '--port', str(port), '--log-level', 'error'], cwd=ROOT, env=isolated_environment())
 try:
     _wait_server(base + '/api/health')
     with sync_playwright() as p:

@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import os
+from e2e_database import isolated_environment
 import socket
 import subprocess
 import sys
@@ -55,7 +56,7 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
-    env = os.environ.copy()
+    env = isolated_environment()
     env.setdefault("MPLCONFIGDIR", str(ROOT / ".mplconfig"))
     process = subprocess.Popen(
         [
