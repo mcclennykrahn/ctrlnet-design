@@ -749,6 +749,122 @@ class DEM:
         return contours(self, *args, **kwargs)
 
 
+class WindowedDEM(DEM):
+    """Read-only GeoTIFF with a bounded native-resolution tile LRU.
+
+    No open dataset is retained. GDAL's block cache is capped at 8 MiB for
+    each read; application tiles occupy at most ``cache_size * tile_size**2
+    * 8`` bytes. Source files must remain unchanged for this object's lifetime.
+    Full-array APIs remain on DEM; use overview() for bounded map rendering.
+    """
+
+    def __init__(self, path, *, tile_size=256, cache_size=16):
+        from pathlib import Path
+        from collections import OrderedDict
+        from threading import RLock
+        import rasterio
+        if not isinstance(tile_size, int) or tile_size < 2:
+            raise ValueError('tile_size must be an integer >= 2')
+        if not isinstance(cache_size, int) or cache_size < 1:
+            raise ValueError('cache_size must be a positive integer')
+        self.path = str(Path(path).resolve())
+        self.tile_size, self.cache_size = tile_size, cache_size
+        self._tiles = OrderedDict()
+        self._tile_lock = RLock()
+        self.read_count = 0
+        with rasterio.open(self.path) as ds:
+            self._shape = (ds.height, ds.width)
+            if min(self._shape) < 2:
+                raise ValueError('DEM requires at least 2x2 cells')
+            self.transform = AffineTransform.coerce(ds.transform)
+            self.transform.inverse()
+            self.nodata, self.crs = ds.nodata, str(ds.crs) if ds.crs else None
+            self.metadata = dict(ds.tags(), source=self.path, width=ds.width, height=ds.height)
+            self.name = self.path
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def height(self):
+        return self._shape[0]
+
+    @property
+    def width(self):
+        return self._shape[1]
+
+    def read_window(self, row, col, height, width):
+        """Read a strictly in-bounds integer pixel window, masking NoData as NaN."""
+        import rasterio
+        from rasterio.windows import Window
+        args = (row, col, height, width)
+        if (any(not isinstance(v, (int, np.integer)) for v in args)
+                or row < 0 or col < 0 or height <= 0 or width <= 0
+                or row + height > self.height or col + width > self.width):
+            raise ValueError('window must contain positive dimensions inside the DEM')
+        # Public reads are also bounded, preventing accidental full-raster reads.
+        if height > self.tile_size or width > self.tile_size:
+            raise ValueError('window exceeds tile_size; use overview or tiled sampling')
+        with rasterio.Env(GDAL_CACHEMAX=8 * 1024 * 1024):
+            with rasterio.open(self.path) as ds:
+                values = ds.read(1, window=Window(col, row, width, height),
+                                 masked=True, out_dtype='float64').filled(np.nan)
+        values[~np.isfinite(values)] = np.nan
+        self.read_count += 1
+        return values
+
+    def _tile(self, row, col):
+        key = (row // self.tile_size, col // self.tile_size)
+        with self._tile_lock:
+            if key not in self._tiles:
+                r, c = (v * self.tile_size for v in key)
+                self._tiles[key] = self.read_window(r, c, min(self.tile_size, self.height-r),
+                                                    min(self.tile_size, self.width-c))
+                if len(self._tiles) > self.cache_size:
+                    self._tiles.popitem(last=False)
+            self._tiles.move_to_end(key)
+            return self._tiles[key]
+
+    def elevation(self, E, N):
+        E, N = np.broadcast_arrays(np.asarray(E, dtype=float), np.asarray(N, dtype=float))
+        inv = self.transform.inverse()
+        col = inv.a*E + inv.b*N + inv.c - .5
+        row = inv.d*E + inv.e*N + inv.f - .5
+        good = np.isfinite(col) & np.isfinite(row) & (col >= 0) & (row >= 0) & (col <= self.width-1) & (row <= self.height-1)
+        out = np.full(E.shape, np.nan)
+        rr, cc = row[good], col[good]
+        r0, c0 = rr.astype(int), cc.astype(int)
+        result = np.zeros(rr.shape)
+        for r, c, weight in (
+            (r0, c0, (1-(rr-r0))*(1-(cc-c0))),
+            (r0, np.minimum(c0+1,self.width-1), (1-(rr-r0))*(cc-c0)),
+            (np.minimum(r0+1,self.height-1), c0, (rr-r0)*(1-(cc-c0))),
+            (np.minimum(r0+1,self.height-1), np.minimum(c0+1,self.width-1), (rr-r0)*(cc-c0))):
+            active = weight > 1e-14
+            ids = (r // self.tile_size) * ((self.width+self.tile_size-1)//self.tile_size) + c // self.tile_size
+            for tile_id in np.unique(ids[active]):
+                selected = active & (ids == tile_id)
+                first = np.flatnonzero(selected)[0]
+                tile = self._tile(int(r[first]), int(c[first]))
+                result[selected] += weight[selected] * tile[r[selected] % self.tile_size, c[selected] % self.tile_size]
+        out[good] = result
+        return float(out) if out.ndim == 0 else out
+
+    def overview(self, max_size=512):
+        """Bounded display grid, sampled through the same native tile reader."""
+        if not isinstance(max_size, int) or max_size < 2:
+            raise ValueError('max_size must be >= 2')
+        factor = max(1, self.width/max_size, self.height/max_size)
+        width, height = max(2, ceil(self.width/factor)), max(2, ceil(self.height/factor))
+        tf = self.transform
+        transform = AffineTransform(tf.a*self.width/width, tf.b*self.height/height, tf.c,
+                                    tf.d*self.width/width, tf.e*self.height/height, tf.f)
+        rows, cols = np.mgrid[:height, :width]
+        x = transform.a*(cols+.5)+transform.b*(rows+.5)+transform.c
+        y = transform.d*(cols+.5)+transform.e*(rows+.5)+transform.f
+        return DEM(self.elevation(x,y), transform, crs=self.crs)
+
 def curvature_refraction_correction(
     x: Any, d: float, k: float = DEFAULT_K, R: float = DEFAULT_R
 ) -> Any:
@@ -911,6 +1027,7 @@ __all__ = [
     "DEFAULT_TARGET_HEIGHT",
     "AffineTransform",
     "DEM",
+    "WindowedDEM",
     "Profile",
     "IntervisibilityResult",
     "curvature_refraction_correction",

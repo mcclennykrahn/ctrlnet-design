@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from ..registration import RegistrationResult, register_affine
 from ..store import get_or_compute_result, load_project
-from ..terrain import DEM
+from ..terrain import DEM, WindowedDEM
 from .render import (
     build_layers,
     rectify_image,
@@ -132,13 +132,13 @@ class ProjectStore:
     def dem(self) -> DEM:
         with self._lock:
             if self._dem is None:
-                self._dem = DEM.from_geotiff(self.dem_path)
+                self._dem = WindowedDEM(self.dem_path)
             return self._dem
 
     def hillshade_png(self) -> bytes:
         with self._lock:
             if self._hillshade is None:
-                self._hillshade = render_hillshade_png(self.dem)
+                self._hillshade = render_hillshade_png(self.dem.overview())
             return self._hillshade
 
     # ---- 方案 -----------------------------------------------------
@@ -403,7 +403,7 @@ class ProjectStore:
             if key not in self._layers:
                 payload = self.scenario_payload(sid)
                 render_project = self._render_project(payload)
-                layers = build_layers(render_project, self.dem, include_contours=include_contours)
+                layers = build_layers(render_project, self.dem.overview() if include_contours else self.dem, include_contours=include_contours)
                 layers["scenario"] = payload["scenario"]
                 layers["summary"] = payload["summary"]
                 layers["analysis"] = payload["analysis"]

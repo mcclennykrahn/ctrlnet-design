@@ -36,6 +36,8 @@ class ViewportTerrain:
         self.lock = RLock()
 
     def render(self, bbox, zoom, kind='contours'):
+        if kind not in ('contours', 'hillshade'):
+            raise ValueError('unknown terrain layer')
         bounds, zoom = parse_view(bbox, zoom)
         key = (bounds, zoom, kind)
         with self.lock:

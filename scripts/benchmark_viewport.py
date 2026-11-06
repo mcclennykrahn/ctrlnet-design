@@ -33,7 +33,7 @@ def measure(name, dem):
 
 
 if __name__ == '__main__':
-    measure('sample DEM', ProjectStore().dem)
+    measure('sample DEM', DEM.from_geotiff(ProjectStore().dem_path))
     y,x = np.mgrid[:1200,:1200]
     measure('synthetic 1200x1200', DEM(300+180*np.sin(x/30)*np.cos(y/40),
         AffineTransform.from_origin(0,12000,10,10)))
