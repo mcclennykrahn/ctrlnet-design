@@ -227,6 +227,8 @@ def analyze_reliability(
     K = 0.5 * (K + K.T)
     k_diag = np.diag(K)
 
+    # 每个观测共用同一参数影响矩阵，避免循环内重复矩阵乘法。
+    influence = Cx @ A.T @ Ql_inv
     records: List[ReliabilityRecord] = []
     source_blocks = (
         result.design.blocks if include_constraints else result.design.observation_blocks
@@ -255,7 +257,7 @@ def analyze_reliability(
         for j, i in enumerate(rows):
             if not isfinite(mdb_comp[j]):
                 continue
-            dx = Cx @ A.T @ Ql_inv[:, i] * mdb_comp[j]
+            dx = influence[:, i] * mdb_comp[j]
             by_point, norm, comp, name = _external_by_point(result, dx)
             if norm > best_norm:
                 best_norm = norm

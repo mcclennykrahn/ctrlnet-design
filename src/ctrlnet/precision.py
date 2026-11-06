@@ -260,7 +260,9 @@ def _edge_precision(
     t = result.network.point(to)
     length = sqrt((t.E - f.E) ** 2 + (t.N - f.N) ** 2)
     g = edge_gradient(result, f.name, t.name)
-    var = float(g @ result.Cx @ g)
+    columns = np.flatnonzero(g)
+    local = g[columns]
+    var = float(local @ result.Cx[np.ix_(columns, columns)] @ local)
     sigma_s = sqrt(max(var, 0.0))
     relative = sigma_s / length if length > 0.0 else float("inf")
     denom = int(round(length / sigma_s)) if sigma_s > 0.0 and length > 0.0 else None

@@ -1656,6 +1656,27 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 - **不做**：包签名/加密、增量包、多工程包、MBTiles/全国 DEM、Pareto、
   多用户鉴权与在线地图；Helmert/VCE 核心已由 E2a1/E2b 补齐。
 
+## 性能压测
+
+E6 / P5 提供离线、固定随机种子的性能基线：
+
+```bash
+/workspace/ctrlnet-design/.venv/bin/python /workspace/ctrlnet-design/scripts/benchmark.py
+```
+
+默认生成 **50 / 200 / 1000 点**随机距离网（含三个固定锚点，每个待定点连接三个锚点），分别测量平差、全部点及距离边精度评定、完整可靠性分析；优化仅在 ≤50 点运行，采用四条候选观测、最多一步的贪心增补。另测 128×128 合成 DEM 的 100 次通视与离线 MBTiles 的 100 次 PNG BLOB 读取，无需下载数据。瓦片读取包含数据库打开，不含图像解码，重复读取可能命中缓存。DEM 与瓦片工作量不随网点数增加。
+
+输出 [`outputs/benchmark_results.md`](outputs/benchmark_results.md)，包含各阶段耗时 / tracemalloc 峰值内存、系统、CPU、逻辑核、物理内存、Python / NumPy 版本与线程设置。脚本固定 BLAS 为单线程；每阶段测一次，耗时包含内存跟踪开销，适合比较同机器趋势。峰值仅统计该阶段新分配的可追踪内存，不包含已有输入，也不是进程 RSS。随机输入生成与临时瓦片构造不计时，临时文件位于仓库 `.tmp/` 并自动删除。
+
+快速验证可运行：
+
+```bash
+/workspace/ctrlnet-design/.venv/bin/python /workspace/ctrlnet-design/scripts/benchmark.py --sizes 8 --io-count 2 --output /workspace/ctrlnet-design/.tmp/benchmark_smoke.md
+/workspace/ctrlnet-design/.venv/bin/python -m pytest -q /workspace/ctrlnet-design/tests/test_benchmark_smoke.py
+```
+
+冒烟测试使用子进程超时保证小规模运行 <10 秒，并用独立稠密公式验证边精度、Qv/R、MDB 与逐点外部影响（包含相关 GNSS 基线）。本次安全优化复用可靠性分析的参数影响矩阵，并按边梯度的非零列计算局部协方差二次型；不改变 SVD 秩判定、基准定义或第 13 节 / thesis 黄金期望值。完整可靠性仍返回稠密 Qv/R 和逐观测逐点影响，大网仍有平方级内存开销；本基线不能代表所有网形或生产并发能力。
+
 ## 22. 路线图完成度
 
 以重设计方案 §9 的 P0–P5 与本仓库的 B1/B2/B3/C1/C2/C4/E1 增量对照：
@@ -1675,7 +1696,7 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
 | D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
-| P5 硬化/试点 | ⚠️ 部分 | 本地回环、离线 Leaflet、工程包校验、WAL 并发写、乐观锁、事务审计、旧库迁移、单元/集成测试（E5） | 安装包、试点、性能压测 |
+| P5 硬化/试点 | ⚠️ 部分 | 本地回环、离线 Leaflet、工程包校验、WAL 并发写、乐观锁、事务审计、旧库迁移、单元/集成测试（E5）、50/200/1000 点性能压测与热点一致性验证（E6） | 安装包、试点 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分（E3） | 仿射及二/三次多项式/TPS；离线 MBTiles 读写、XYZ 导出、WebMercator 切片、本地路由与图层选择 | RPC、矢量瓦片 MVT、在线底图未实现 |
 | E2 Helmert / VCE | ✅ 已完成（E2a1/E2b） | 七参数恢复、经典 Helmert 分量迭代、两组桥接与演示 | 跨组相关 VCV、MINQUE |
 | 多用户 | ❌ 未完成 | 本地工程管理 | 多用户与权限 |
