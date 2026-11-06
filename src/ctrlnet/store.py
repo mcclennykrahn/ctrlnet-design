@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import hashlib
 import json
@@ -1581,11 +1581,12 @@ def save_editor_version(
     scenario: Mapping[str, Any],
     *,
     parent_snapshot: Optional[str] = None,
+    _connection: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
     """原子保存编辑器版本、完整拓扑与计算快照；旧版本从不覆盖。"""
-    conn = connect(path)
+    conn = _connection or connect(path)
     try:
-        with _write_transaction(conn):
+        with (_write_transaction(conn) if _connection is None else nullcontext()):
             pid = str(project.get("id") or f"prj-{uuid.uuid4().hex[:12]}")
             sid = f"sc-{uuid.uuid4().hex[:12]}"
             now = _utcnow()
@@ -1624,4 +1625,5 @@ def save_editor_version(
                          (now,_json_dump({"status":"saved", "version":count}),pid))
         return {"project_id":pid,"scenario_id":sid,"snapshot_id":snapid,"input_hash":digest,"version":saved["version"]}
     finally:
-        conn.close()
+        if _connection is None:
+            conn.close()

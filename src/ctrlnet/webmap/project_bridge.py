@@ -67,12 +67,42 @@ def create_bridge_router(service):
                 scenarios = store.list_scenarios(path, row['id'], include_observations=False)
                 for s in scenarios:
                     s['snapshots'] = [dict(r) for r in conn.execute('SELECT id,input_hash FROM snapshots WHERE scenario_id=? ORDER BY created_at', (s['id'],))]
+                    s['merge_parents'] = s['metadata'].get('merge_parents', [])
+                    s['merge_base'] = s['metadata'].get('merge_base')
                     s['editable'] = 'thesis_state' in s['metadata']
                     s.pop('metadata', None)
                 items.append(dict(id=row['id'], name=row['name'], status=json.loads(row['metadata_json']), scenarios=scenarios))
             return {'projects':items}
         finally:
             conn.close()
+
+    @router.post('/rename/{sid}')
+    def rename(sid: str, payload: dict = Body(...)):
+        from . import scenario_tree
+        try:
+            return scenario_tree.rename(path, sid, payload.get('name'), payload.get('version'))
+        except store.VersionConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @router.get('/merge/preview')
+    def merge_preview(target: str, source: str):
+        from . import scenario_tree
+        try:
+            return scenario_tree.preview(path, target, source)
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @router.post('/merge')
+    def merge(payload: dict = Body(...)):
+        from . import scenario_tree
+        try:
+            return scenario_tree.merge(path, payload)
+        except store.VersionConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (ValueError, KeyError, TypeError, sqlite3.IntegrityError, CtrlnetError) as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @router.post('/save')
     def save(payload: dict = Body(...)):

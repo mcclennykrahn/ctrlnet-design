@@ -12,6 +12,11 @@
     <select id="engineering-scenario" aria-label="共享方案"></select>
     <select id="engineering-snapshot" aria-label="父快照"></select>
     <button id="engineering-branch">当前四库另存分支快照</button><button id="engineering-open">打开工程方案到论文编辑器</button>
+    <button id="engineering-rename">重命名所选方案</button>
+    <pre id="engineering-tree" aria-label="方案谱系" style="white-space:pre-wrap"></pre>
+    <p>三方合并：当前方案为目标，比较对象为来源；保存为新方案，保留双亲。拓扑整体与GNSS分别合并，不自动拼接几何。冲突须选择目标或来源。</p>
+    <button id="engineering-merge-preview">预览合并</button><span id="engineering-conflicts"></span>
+    <button id="engineering-merge" disabled>保存合并新方案</button>
     <details><summary>GNSS 二维基线参数（随保存/派生持久化）</summary>
     <p>端点使用点号；σ单位米，ρ在(-1,1)。这是二维设计态协方差，不是ECEF/ENU三维导入。打开方案会回读；保存新方案时使用此表。此表草稿保留在当前标签页，刷新不丢失；新工程保存前请检查端点并删除不需要的基线。</p>
     <table><thead><tr><th>起点</th><th>终点</th><th>σE m</th><th>σN m</th><th>ρ</th><th>操作</th></tr></thead><tbody id="engineering-gnss"></tbody></table>
@@ -91,6 +96,27 @@
     options($('scenario'), rows, selected);
     options($('candidate'), rows);
     snapshots();
+    renderTree(p?.scenarios || []);
+    invalidateMerge();
+  }
+  let mergePlan = null;
+  function invalidateMerge() {
+    mergePlan = null;
+    $('merge').disabled = true;
+    $('conflicts').replaceChildren();
+  }
+  function renderTree(rows) {
+    const lines = [], visited = new Set();
+    function visit(s, depth) {
+      if (visited.has(s.id)) return;
+      visited.add(s.id);
+      lines.push('  '.repeat(depth) + '└ ' + s.name + ' · v' + s.version + ' [' + s.id + ']' +
+        (s.merge_parents.length ? ' ← 合并 ' + s.merge_parents.join(' + ') + ' · 祖先 ' + s.merge_base : ''));
+      rows.filter(c => c.parent_id === s.id).forEach(c => visit(c, depth+1));
+    }
+    rows.filter(s => !s.parent_id || !rows.some(p => p.id === s.parent_id)).forEach(s => visit(s, 0));
+    rows.forEach(s => visit(s, 0));
+    $('tree').textContent = lines.join('\n');
   }
   async function refresh(selection) {
     const old = $('project').value, sid = $('scenario').value;
@@ -100,7 +126,8 @@
   }
   const run = fn => async () => { try { await fn(); } catch (e) { output(e.message); } };
   $('project').onchange = () => scenarios();
-  $('scenario').onchange = snapshots;
+  $('scenario').onchange = () => { snapshots(); invalidateMerge(); };
+  $('candidate').onchange = invalidateMerge;
   $('refresh').onclick = run(() => refresh());
   async function save(branch) {
     if (!window.ctrlnetThesis || window.ctrlnetThesis.state.busy) throw new Error("编辑器尚未就绪，请稍后保存");
@@ -115,6 +142,33 @@
   }
   $('save').onclick = run(() => save(false));
   $('branch').onclick = run(() => save(true));
+  $('rename').onclick = run(async () => {
+    const p = projects.find(p => p.id === $('project').value);
+    const s = p?.scenarios.find(s => s.id === $('scenario').value);
+    if (!s) throw new Error('请选择方案');
+    const result = await api('rename/' + encodeURIComponent(s.id), {name:$('name').value, version:s.version});
+    await refresh(); output(result);
+  });
+  $('merge-preview').onclick = run(async () => {
+    invalidateMerge();
+    const target = $('scenario').value, source = $('candidate').value;
+    const plan = await api('merge/preview?target=' + encodeURIComponent(target) + '&source=' + encodeURIComponent(source));
+    if (target !== $('scenario').value || source !== $('candidate').value) return;
+    mergePlan = plan;
+    for (const key of plan.conflicts) {
+      const label = document.createElement('label'); label.textContent = key + ' 冲突 ';
+      const select = document.createElement('select'); select.dataset.unit = key;
+      options(select, [['','请选择'],['target','保留目标'],['source','采用来源']]);
+      label.append(select); $('conflicts').append(label);
+    }
+    $('merge').disabled = false; output(plan);
+  });
+  $('merge').onclick = run(async () => {
+    if (!mergePlan) throw new Error('请先预览');
+    const resolutions = Object.fromEntries([...$('conflicts').querySelectorAll('select')].map(s => [s.dataset.unit,s.value]));
+    const result = await api('merge', {...mergePlan, name:$('name').value, resolutions});
+    await refresh(result); output(result);
+  });
   $('open').onclick = run(async () => {
     if (!confirm('用所选存储方案覆盖论文编辑器当前四库？')) return;
     const settings = await api('settings/' + encodeURIComponent($('scenario').value));
