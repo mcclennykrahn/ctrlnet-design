@@ -85,7 +85,7 @@ SQLite 持久化、快照/结果缓存、报告下载与 zip 工程包导出/回
 | 报告与图件 | `report.py`（文本表）、`reportgen.py`（Markdown/HTML/DOCX）、`plot.py`、`scripts/run_demo.py` | ✅ C4 |
 | 地图/离线底图/MBTiles、扫描图配准 | `webmap/` DEM/扫描图叠加；多项式/TPS、离线 MBTiles/XYZ 已实现；RPC/MVT 未实现 | ⚠️ 部分（B3/E3） |
 | GUI、工程树、地图选点、交互编辑 | 本地只读网页地图：图层开关、点/线点击、两点剖面；无工程树与编辑 | ⚠️ 部分（B3/E3） |
-| FastAPI/数据库/工程包/快照持久化 | `store.py` + `package.py` + `webmap/app.py`：SQLite 单工程、快照/结果缓存、zip 工程包；多工程写入/迁移框架未实现 | ✅ C4/E1（单工程） |
+| FastAPI/数据库/工程包/快照持久化 | `store.py` + `package.py` + `webmap/app.py`：SQLite 单工程、快照/结果缓存、zip 工程包；WAL 并发写、轻量迁移与行级审计（E5）；多工程编辑界面未实现 | ✅ C4/E1（单工程） |
 | 投影归算全链路（投影尺度、子午线收敛角、跨带） | `projection.py`：复变 n⁶ 尺度/γ、grid/ground、跨带告警；`scripts/run_projection_demo.py` | ✅ E1 |
 | §5.2 GNSS 三维 ECEF/ENU、局部切平面 | `gnss.py`；WGS84 自实现转换、ENU 原点与旋转 | ✅ C3 |
 | §5.8 GNSS 基线网：3×3 VCV、固定/最小约束、基线相对精度 | `gnss.py`；ECEF 平差、ENU 基线旋转、Cholesky 白化、复用可靠性 | ✅ C3 |
@@ -982,11 +982,11 @@ ctrlnet-design/
 - 高程异常平面拟合的 `E,N` 必须与联合平差的 ENU/工程平面一致；模型不含
   geoid 系统误差，外推会失效。EGM96 15′ 格网只作为对照/可选插值，不应当作
   高精度似大地水准面。
-- C4 SQLite 工程库为**单工程只读演示**：`projects/points/observations/scenarios/
+- C4 网页仍为单工程只读演示；SQLite 工程库：`projects/points/observations/scenarios/
   snapshots/results` 六表已实现，支持方案版本/父方案、规范化快照与
   `input_hash` 结果缓存；E1 增加 zip + manifest 工程包导出/回读与哈希校验，
-  但尚未实现多工程编辑、并发写锁、迁移框架（Alembic/schema_version 升级）、
-  审计、包签名/加密与体积压缩策略。
+  E5 增加 WAL 并发写、方案乐观锁、轻量版本迁移与事务审计。尚未实现
+  多工程编辑界面、完整迁移框架、包签名/加密与体积压缩策略。
 - 工程包默认只打包 ≤1 MiB 的引用资源；更大的原始 DEM/瓦片只在
   `manifest.dependencies` 记录路径、大小与 SHA-256，导入后仍需保持该相对路径
   可访问。包内资源路径拒绝绝对路径、`..`、盘符与符号链接；`format_version`
@@ -1013,6 +1013,7 @@ ctrlnet-design/
 | `observations` | id、scenario_id、kind、ordinal、enabled、payload_json | 按方案保存观测 |
 | `snapshots` | id、scenario_id、input_hash UNIQUE、payload_json | 规范化输入快照 |
 | `results` | input_hash PK、result_json、options_json | 按输入哈希缓存结果 |
+| `audit_log` | timestamp、operation、object_type/id、before/after_hash | E5 行级事务审计 |
 
 方案通过 `metadata.points` 选择本方案使用的点集，因此同一工程可同时容纳
 第 13 节 4 点网与 DEM 7 点网。模块级 API：
@@ -1668,13 +1669,13 @@ project = imported["project"]          # 可直接交给 load_project 的结果
 | P3 DEM 通视/地形渲染（B2） | ✅ 已完成 | GeoTIFF 采样、剖面、曲率折光、四态、晕渲/等高线 | 大范围瓦片化 |
 | P3 投影归算（E1） | ✅ 已完成（局部严格） | `projection.py`：复变 n⁶ 尺度/γ、grid↔ground、跨带/中央经线检查、已知点/级数/雅可比测试与 `projection_results.md` | 逐边曲率积分、跨带分区平差、历元/变形改正、geoid 改正 |
 | P4 观测优化（C2/E4） | ✅ 小规模精确与 Pareto | 贪心/1 换 1、A/D/E/max_mp/最弱边、≤20 候选分支定界、MILP 代理、成本—精度 Pareto 前沿 | 大规模 MICP、成本模型持久化 |
-| C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六表、方案版本/父方案、`input_hash`、结果缓存 | 多工程编辑、迁移框架、审计 |
+| C4 SQLite 工程库/快照/结果缓存 | ✅ 已完成 | 六张业务表、方案乐观锁/父方案、`input_hash`、结果缓存、WAL、迁移、审计（E5） | 多工程编辑、完整迁移框架 |
 | E1 工程包 zip/manifest/回读 | ✅ 已完成（单工程） | `package.py`：manifest/版本/快照哈希/逐文件 SHA-256、小资源、导出/校验/导入 CLI、324 KiB 样例包 | 包签名/加密、多工程包、增量更新、外部大资源的自动定位 |
 | C4 设计报告 | ✅ 已完成 | Markdown、自包含 HTML、DOCX（pandoc）、图表与方案对比 | PDF、模板选择、签名 |
 | C4 网页方案切换/报告下载 | ✅ 已完成 | 四方案下拉、图层/统计刷新、`/api/report` HTML/MD/DOCX | 在线编辑、工程树、鉴权 |
 | D2 论文同款交互网页 | ✅ 已完成 | `/thesis` 四库、离线徐州 DEM、点线角级联、观测/优化、Q/M/椭圆、导出、SQLite 工程、算例 1/2、Playwright E2E | 三维/通视、在线协作 |
 | D3 论文截图复刻 | ✅ 已完成 | 17 张 1280×630 截图、PIL 左右对比/总览、分步视图、离线请求断言、对照自查 | 像素级底图复刻（受离线约束） |
-| P5 硬化/试点 | ⚠️ 部分 | 本地回环、只读、离线 Leaflet、工程包校验、单元/集成测试 | 安装包、并发写、审计、试点、性能压测 |
+| P5 硬化/试点 | ⚠️ 部分 | 本地回环、离线 Leaflet、工程包校验、WAL 并发写、乐观锁、事务审计、旧库迁移、单元/集成测试（E5） | 安装包、试点、性能压测 |
 | 地图资源/MBTiles/矢量瓦片 | ⚠️ 部分（E3） | 仿射及二/三次多项式/TPS；离线 MBTiles 读写、XYZ 导出、WebMercator 切片、本地路由与图层选择 | RPC、矢量瓦片 MVT、在线底图未实现 |
 | E2 Helmert / VCE | ✅ 已完成（E2a1/E2b） | 七参数恢复、经典 Helmert 分量迭代、两组桥接与演示 | 跨组相关 VCV、MINQUE |
 | 多用户 | ❌ 未完成 | 本地工程管理 | 多用户与权限 |
@@ -1812,3 +1813,53 @@ for point in front.points:
 [`outputs/pareto_frontier.png`](outputs/pareto_frontier.png)，对比观测数与边长成本
 下的四种精度准则。`tests/test_pareto.py` 检查非支配性、单调性、设站成本及
 小算例与独立子集穷举的一致性。第 13 节及 thesis 黄金期望值未修改。
+
+
+## 并发写与审计（E5）
+
+工程库 `ctrlnet.store` 每个连接启用 WAL、外键与 30000 ms 的
+`busy_timeout`，所有写事务使用 `BEGIN IMMEDIATE`，异常时整体回滚。
+每个线程/进程独立打开连接；读取工程和方案使用一致的读事务。
+WAL 允许读写并行，写者仍串行，超过等待时间会抛出 SQLite 锁超时异常。
+备份运行中的库应使用 SQLite backup API（工程包导出已使用），不要只复制主库文件。
+
+`update_observations(..., expected_version=v)` 和
+`add_observation(..., expected_version=v)` 支持方案乐观锁：成功后 `version`
+递增，过期版本抛出 `VersionConflictError`，业务数据与审计均不落库。
+调用者应读取最新方案并合并后重试。旧调用可省略版本：整体替换采用最后写入者语义；
+追加操作内部使用版本校验重试，避免并发追加丢失。`save_project(overwrite=True)`
+仍是显式整工程覆盖，不提供工程级乐观锁。
+
+```python
+from ctrlnet.store import ProjectStore, VersionConflictError
+store = ProjectStore("project.sqlite")
+scenario = store.get_scenario("base")
+try:
+    updated = store.update_observations(
+        "base", scenario["observations"], expected_version=scenario["version"]
+    )
+except VersionConflictError:
+    latest = store.get_scenario("base")  # 合并后再提交
+```
+
+新增 `audit_log`：`timestamp`（UTC）、`operation`（INSERT/UPDATE/DELETE）、
+`object_type`、`object_id`、`before_hash`、`after_hash`。
+六张业务表的每次行变更由触发器在同一事务记账，覆盖级联删除、快照与结果缓存；
+创建时前哈希为空，删除时后哈希为空。哈希是按表列顺序将整行值序列化为紧凑
+UTF-8 JSON 后计算的 SHA-256。缓存命中及失败回滚不产生审计。
+审计是变更追踪记录，不提供防篡改或用户身份认证。
+写入连接必须通过 `store.connect` 打开，以注册触发器使用的哈希函数；
+本节覆盖工程库六张业务表，不含独立的论文网页工程表或 MBTiles。
+
+数据库迁移号使用 `PRAGMA user_version=1`，与快照格式 `SCHEMA_VERSION=2.0`
+分开。旧库在首次打开时原子补齐审计表、触发器及缺失的方案 `version`（默认 1），
+保留原业务数据与历史快照；重复打开不会重复迁移，更高版本库会明确拒绝。
+迁移前的历史写入不补造审计条目。无新增 Python 依赖。
+
+验证：`tests/test_store_concurrency.py` 覆盖多进程/多线程并发追加与建方案、
+完整性/外键检查、同版本竞争、失败回滚、六表审计哈希、缓存幂等及旧库迁移。
+
+
+演示命令：`.venv/bin/python scripts/run_store_concurrency_demo.py`，输出
+`outputs/store_concurrency_demo.json`。4 个线程追加 20 条观测，最终版本 21；
+旧版本写入被拒绝，SQLite 完整性检查为 `ok`。

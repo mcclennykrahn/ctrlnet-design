@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import hashlib
 import json
 import math
@@ -385,15 +387,88 @@ def _resolve_db_path(path: Path | str) -> Path:
     return resolved
 
 
+DATABASE_VERSION = 1
+BUSY_TIMEOUT_MS = 30000
+
+
+class VersionConflictError(RuntimeError):
+    """调用者的方案版本已过期；重新读取、合并后重试。"""
+
+
+def _row_hash(*values: Any) -> str:
+    return hashlib.sha256(_json_dump(values).encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def _write_transaction(conn: sqlite3.Connection):
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    # user_version 是数据库迁移版本；SCHEMA_VERSION 仍为快照格式 2.0。
+    with _write_transaction(conn):
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version > DATABASE_VERSION:
+            raise ValueError(f"不支持的数据库版本：{version}")
+        if version == DATABASE_VERSION:
+            return
+        for statement in _SCHEMA_SQL.split(";"):
+            if statement.strip():
+                conn.execute(statement)
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(scenarios)")}
+        if "version" not in columns:
+            conn.execute("ALTER TABLE scenarios ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+        conn.execute("""CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            before_hash TEXT,
+            after_hash TEXT
+        )""")
+        # 行级触发器覆盖级联删除、批量替换和缓存写入，回滚时审计一起回滚。
+        for table in ("projects", "points", "scenarios", "observations", "snapshots", "results"):
+            names = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
+            def digest(prefix):
+                return "store_row_hash(" + ",".join(f'{prefix}."{n}"' for n in names) + ")"
+            def identity(prefix):
+                if table == "points":
+                    return f"json_array({prefix}.project_id,{prefix}.name)"
+                key = "input_hash" if table == "results" else "id"
+                return f'{prefix}."{key}"'
+            for operation in ("INSERT", "UPDATE", "DELETE"):
+                old = digest("OLD") if operation != "INSERT" else "NULL"
+                new = digest("NEW") if operation != "DELETE" else "NULL"
+                obj = identity("OLD" if operation == "DELETE" else "NEW")
+                conn.execute(f"""CREATE TRIGGER IF NOT EXISTS audit_{table}_{operation.lower()}
+                    AFTER {operation} ON {table} BEGIN
+                    INSERT INTO audit_log(timestamp,operation,object_type,object_id,before_hash,after_hash)
+                    VALUES(strftime('%Y-%m-%dT%H:%M:%fZ','now'),'{operation}','{table}',{obj},{old},{new});
+                    END""")
+        conn.execute(f"PRAGMA user_version = {DATABASE_VERSION}")
+
+
 def connect(path: Path | str) -> sqlite3.Connection:
-    """打开（必要时创建）数据库并建立表结构。"""
-    db_path = _resolve_db_path(path)
-    connection = sqlite3.connect(str(db_path))
+    """打开 WAL 工程库，原子迁移旧库；每个线程/进程单独创建连接。"""
+    connection = sqlite3.connect(str(_resolve_db_path(path)), timeout=BUSY_TIMEOUT_MS / 1000)
     connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.executescript(_SCHEMA_SQL)
-    connection.commit()
-    return connection
+    connection.create_function("store_row_hash", -1, _row_hash, deterministic=True)
+    try:
+        connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        _migrate(connection)
+        return connection
+    except BaseException:
+        connection.close()
+        raise
 
 
 def _scenario_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
@@ -645,7 +720,7 @@ def save_project(
 
     conn = connect(db_path)
     try:
-        with conn:
+        with _write_transaction(conn):
             existing = conn.execute(
                 "SELECT id FROM projects WHERE id=?", (project_id,)
             ).fetchone()
@@ -719,6 +794,7 @@ def load_project(
     """读取工程及其全部方案、观测。"""
     conn = connect(path)
     try:
+        conn.execute("BEGIN")
         pid = _resolve_project_id(conn, project_id)
         row = conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
         assert row is not None
@@ -763,6 +839,7 @@ def list_scenarios(
     """列出方案（默认含观测）。"""
     conn = connect(path)
     try:
+        conn.execute("BEGIN")
         pid = _resolve_project_id(conn, project_id)
         rows = conn.execute(
             "SELECT id FROM scenarios WHERE project_id=? ORDER BY created_at, rowid",
@@ -781,6 +858,7 @@ def list_scenarios(
 def get_scenario(path: Path | str, scenario_id: str) -> Dict[str, Any]:
     conn = connect(path)
     try:
+        conn.execute("BEGIN")
         payload = _fetch_scenario_dict(conn, scenario_id, include_observations=True)
         if payload is None:
             raise KeyError(f"方案不存在：{scenario_id!r}")
@@ -825,7 +903,7 @@ def create_scenario(
     """创建方案；给出 ``parent_id`` 时复制父方案的观测并令 version+1。"""
     conn = connect(path)
     try:
-        with conn:
+        with _write_transaction(conn):
             pid = _resolve_project_id(conn, project_id)
             parent = None
             if parent_id is not None:
@@ -884,16 +962,20 @@ def update_observations(
     path: Path | str,
     scenario_id: str,
     observations: Sequence[Mapping[str, Any]],
+    *,
+    expected_version: Optional[int] = None,
 ) -> Dict[str, Any]:
     """整体替换某方案的观测（用于“修改观测后哈希变化”的演示/测试）。"""
     conn = connect(path)
     try:
-        with conn:
+        with _write_transaction(conn):
             row = conn.execute(
-                "SELECT project_id FROM scenarios WHERE id=?", (scenario_id,)
+                "SELECT project_id, version FROM scenarios WHERE id=?", (scenario_id,)
             ).fetchone()
             if row is None:
                 raise KeyError(f"方案不存在：{scenario_id!r}")
+            if expected_version is not None and row["version"] != expected_version:
+                raise VersionConflictError(f"方案 {scenario_id!r} 版本冲突：期望 {expected_version}，实际 {row['version']}")
             pid = str(row["project_id"])
             conn.execute("DELETE FROM observations WHERE scenario_id=?", (scenario_id,))
             used: set = set()
@@ -909,10 +991,10 @@ def update_observations(
                     payload=item,
                 )
             conn.execute(
-                "UPDATE scenarios SET updated_at=? WHERE id=?", (_utcnow(), scenario_id)
+                "UPDATE scenarios SET version=version+1, updated_at=? WHERE id=?", (_utcnow(), scenario_id)
             )
-        result = _fetch_scenario_dict(conn, scenario_id, include_observations=True)
-        assert result is not None
+            result = _fetch_scenario_dict(conn, scenario_id, include_observations=True)
+            assert result is not None
         return result
     finally:
         conn.close()
@@ -922,11 +1004,21 @@ def add_observation(
     path: Path | str,
     scenario_id: str,
     observation: Mapping[str, Any],
+    *,
+    expected_version: Optional[int] = None,
 ) -> Dict[str, Any]:
     """向方案追加一条观测。"""
-    scenario = get_scenario(path, scenario_id)
-    observations = list(scenario["observations"]) + [dict(observation)]
-    return update_observations(path, scenario_id, observations)
+    while True:
+        scenario = get_scenario(path, scenario_id)
+        if expected_version is not None and scenario["version"] != expected_version:
+            raise VersionConflictError(f"方案 {scenario_id!r} 版本冲突")
+        observations = list(scenario["observations"]) + [dict(observation)]
+        try:
+            return update_observations(path, scenario_id, observations,
+                                       expected_version=scenario["version"])
+        except VersionConflictError:
+            if expected_version is not None:
+                raise
 
 
 # ---------------------------------------------------------------------------
@@ -1023,7 +1115,7 @@ def snapshot(
     """创建（或复用）方案快照，返回规范化 payload 与 SHA-256 哈希。"""
     conn = connect(path)
     try:
-        with conn:
+        with _write_transaction(conn):
             pid = _resolve_project_id(conn, project_id)
             sid = _resolve_scenario_id(conn, scenario_id, pid)
             project_row = conn.execute(
@@ -1305,7 +1397,7 @@ def get_or_compute_result(
     digest = snap["input_hash"]
     conn = connect(path)
     try:
-        with conn:
+        with _write_transaction(conn):
             row = conn.execute(
                 "SELECT * FROM results WHERE input_hash=?", (digest,)
             ).fetchone()
@@ -1435,14 +1527,14 @@ class ProjectStore:
         )
 
     def update_observations(
-        self, scenario_id: str, observations: Sequence[Mapping[str, Any]]
+        self, scenario_id: str, observations: Sequence[Mapping[str, Any]], *, expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
-        return update_observations(self.path, scenario_id, observations)
+        return update_observations(self.path, scenario_id, observations, expected_version=expected_version)
 
     def add_observation(
-        self, scenario_id: str, observation: Mapping[str, Any]
+        self, scenario_id: str, observation: Mapping[str, Any], *, expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
-        return add_observation(self.path, scenario_id, observation)
+        return add_observation(self.path, scenario_id, observation, expected_version=expected_version)
 
 
 Database = ProjectStore
@@ -1450,6 +1542,8 @@ Store = ProjectStore
 
 
 __all__ = [
+    "DATABASE_VERSION",
+    "VersionConflictError",
     "SCHEMA_VERSION",
     "ENGINE_VERSION",
     "canonical_json",

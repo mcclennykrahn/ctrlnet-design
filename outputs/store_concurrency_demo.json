@@ -1,0 +1,35 @@
+{
+  "writers": 4,
+  "observations": 20,
+  "version": 21,
+  "stale_version_rejected": true,
+  "journal_mode": "wal",
+  "integrity_check": "ok",
+  "audit_counts": [
+    {
+      "object_type": "observations",
+      "operation": "DELETE",
+      "count": 190
+    },
+    {
+      "object_type": "observations",
+      "operation": "INSERT",
+      "count": 210
+    },
+    {
+      "object_type": "projects",
+      "operation": "INSERT",
+      "count": 1
+    },
+    {
+      "object_type": "scenarios",
+      "operation": "INSERT",
+      "count": 1
+    },
+    {
+      "object_type": "scenarios",
+      "operation": "UPDATE",
+      "count": 20
+    }
+  ]
+}
