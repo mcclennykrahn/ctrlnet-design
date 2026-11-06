@@ -30,8 +30,6 @@
     return Number.isFinite(number) ? number.toFixed(digits) : "—";
   }
 
-  const undoStack = [], redoStack = [];
-  let restoring = false;
   async function api(path, options) {
     const opts = Object.assign({}, options || {});
     const headers = Object.assign({ Accept: "application/json" }, opts.headers || {});
@@ -52,12 +50,6 @@
         detail = detail.map((item) => item.msg || JSON.stringify(item)).join("；");
       }
       throw new Error(detail || text || `请求失败（HTTP ${response.status}）`);
-    }
-    if (opts.method && opts.method !== "GET" && state.data && !restoring &&
-        !path.includes("calculate") && !path.includes("projects/save")) {
-      redoStack.length = 0;
-      undoStack.push(JSON.parse(JSON.stringify(state.data)));
-      if (undoStack.length > 20) undoStack.shift();
     }
     return payload;
   }
@@ -213,7 +205,7 @@
       setBusy(true);
       const payload = await api("/api/thesis/points", {
         method: "POST",
-        body: { lon: event.latlng.lng, lat: event.latlng.lat, snap_m:Number($("snap-m").value) },
+        body: { lon: event.latlng.lng, lat: event.latlng.lat, snap_m:Number($("snap-m").value), snap_geometry_m:Number($("snap-geometry-m").value) },
       });
       applyState(payload);
       toast(`已添加点 ${payload.points[payload.points.length - 1].name}`);
@@ -277,7 +269,7 @@
         try {
           const ll = marker.getLatLng();
           const payload = await api(`/api/thesis/points/${encodeURIComponent(point.id)}`, {
-            method:"PATCH", body:{lon:ll.lng, lat:ll.lat, snap_m:Number($("snap-m").value)}
+            method:"PATCH", body:{lon:ll.lng, lat:ll.lat, snap_m:Number($("snap-m").value), snap_geometry_m:Number($("snap-geometry-m").value)}
           });
           applyState(payload); toast("已移动并按工程米制网格吸附；线角已刷新，请重新计算精度");
         } catch (err) {drawPoints(); toast(err.message, true);}
@@ -1078,28 +1070,19 @@
       } catch (err) { toast("导入失败：" + err.message, true); }
       finally { event.target.value = ""; }
     });
-    $("undo-mutation").addEventListener("click", async () => {
-      if (!undoStack.length) return toast("没有可撤销的修改");
-      restoring = true;
-      try {
-        const payload = await api("/api/thesis/import/json", {method:"POST", body:undoStack[undoStack.length-1]});
-        state.nameDirty = false; state.gradeTouched = true;
-        redoStack.push(JSON.parse(JSON.stringify(state.data)));
-        applyState(payload, {fit:true});
-        undoStack.pop(); toast("已撤销");
-      } catch (err) { toast(err.message, true); }
-      finally { restoring = false; }
-    });
-    $("redo-mutation").addEventListener("click", async () => {
-      if (!redoStack.length) return toast("没有可重做的修改");
-      restoring = true;
-      try {
-        const payload = await api("/api/thesis/import/json", {method:"POST", body:redoStack[redoStack.length-1]});
-        undoStack.push(JSON.parse(JSON.stringify(state.data)));
-        redoStack.pop(); applyState(payload, {fit:true}); toast("已重做");
-      } catch (err) {toast(err.message, true);}
-      finally {restoring = false;}
-    });
+    for (const direction of ["undo", "redo"]) {
+      $(direction + "-mutation").addEventListener("click", async () => {
+        if (state.busy) return;
+        setBusy(true);
+        try {
+          const payload = await api("/api/thesis/history/" + direction, {method:"POST"});
+          state.nameDirty = false; state.gradeTouched = true;
+          applyState(payload, {fit:true});
+          toast(direction === "undo" ? "已撤销" : "已重做");
+        } catch (err) { toast(err.message, true); }
+        finally { setBusy(false); }
+      });
+    }
     $("coordinate-file").addEventListener("change", importCoordinateFile);
     $("project-name").addEventListener("input", () => {
       state.nameDirty = true;

@@ -81,7 +81,7 @@
         <span>保留经纬度重算平面；带外点拒绝且保留原工程。轴序 x北/y东。</span>
       </div>
       <div class="project-load-row"><label>导入完整拓扑 JSON <input id="topology-file" type="file" accept=".json"></label>
-        <button id="export-json">导出工程 JSON</button><button id="undo-mutation">撤销（最近20步）</button><button id="redo-mutation">重做</button><label>放点/拖动吸附网格（米，0关闭）<input id="snap-m" type="number" min="0" max="1000" value="0" style="width:65px"></label>
+        <button id="export-json">导出工程 JSON</button><button id="undo-mutation">撤销（持久化20步）</button><button id="redo-mutation">重做</button><label>点/线段吸附（米，0关闭）<input id="snap-geometry-m" type="number" min="0" max="1000" value="0" style="width:65px"></label><label>放点/拖动吸附网格（米，0关闭）<input id="snap-m" type="number" min="0" max="1000" value="0" style="width:65px"></label>
         <span>ctrlnet.thesis.web/1：points、lines、angles、network、projection；导出文件即模板。覆盖四库及观测。</span></div>
       <div id="projection-summary" class="projection-summary" role="status"></div>
       <div class="project-load-row"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" /></label>

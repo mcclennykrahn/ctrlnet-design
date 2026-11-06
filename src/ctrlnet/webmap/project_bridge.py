@@ -108,7 +108,7 @@ def create_bridge_router(service):
             from .thesis_web import _public_state
             result = _public_state(state)
             with service._lock:
-                service.state = state
+                service.replace_draft(state)
             return result
         except KeyError as exc:
             raise HTTPException(400, '此方案没有论文编辑拓扑') from exc

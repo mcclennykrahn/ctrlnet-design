@@ -17,6 +17,7 @@ import os
 import copy
 import math
 import threading
+from functools import wraps
 from datetime import datetime, timezone
 from math import atan2, degrees, hypot, isfinite
 from pathlib import Path
@@ -707,7 +708,7 @@ class ThesisRepository:
         finally:
             conn.close()
 
-    def save(self, name: str, state: Mapping[str, Any]) -> Dict[str, Any]:
+    def save(self, name: str, state: Mapping[str, Any], *, draft=None) -> Dict[str, Any]:
         text = str(name or "").strip()
         if not text:
             raise ThesisError("工程名不能为空")
@@ -730,6 +731,9 @@ class ThesisRepository:
                         now,
                     ),
                 )
+                if draft is not None:
+                    conn.execute("INSERT INTO thesis_draft(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                                 (json.dumps(draft, ensure_ascii=False),))
         finally:
             conn.close()
         return self.get(text)
@@ -780,6 +784,26 @@ class ThesisRepository:
         return records
 
 
+def _durable_edit(method):
+    """Commit draft and bounded history together; failed edits leave neither changed."""
+    @wraps(method)
+    def edit(self, *args, **kwargs):
+        with self._lock:
+            before = copy.deepcopy(self.state)
+            undo, redo = copy.deepcopy(self._undo), copy.deepcopy(self._redo)
+            try:
+                result = method(self, *args, **kwargs)
+                if self.state != before:
+                    self._undo = (undo + [before])[-20:]
+                    self._redo = []
+                    self._persist_draft()
+                return result
+            except Exception:
+                self.state, self._undo, self._redo = before, undo, redo
+                raise
+    return edit
+
+
 class ThesisService:
     """当前浏览器工程的进程内状态；页面单用户使用。"""
 
@@ -793,7 +817,88 @@ class ThesisService:
         self.repository = ThesisRepository(db_path)
         self._lock = threading.RLock()
         self.state = _empty_state()
+        self._undo, self._redo = [], []
+        conn = connect(self.repository.path)
+        try:
+            with conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS thesis_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)")
+                row = conn.execute("SELECT payload FROM thesis_draft WHERE id=1").fetchone()
+            if row:
+                draft = json.loads(row["payload"])
+                self.state = draft["state"]
+                self._undo, self._redo = draft["undo"], draft["redo"]
+        finally:
+            conn.close()
 
+    def _persist_draft(self):
+        conn = connect(self.repository.path)
+        try:
+            with conn:
+                conn.execute("INSERT INTO thesis_draft(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                             (json.dumps(dict(state=self.state, undo=self._undo, redo=self._redo), ensure_ascii=False),))
+        finally:
+            conn.close()
+
+    def save_named(self, name):
+        with self._lock:
+            candidate = copy.deepcopy(self.state)
+            candidate["name"] = name.strip() or candidate["name"]
+            undo = (self._undo + [copy.deepcopy(self.state)])[-20:] if candidate != self.state else self._undo
+            redo = [] if candidate != self.state else self._redo
+            saved = self.repository.save(name, candidate, draft=dict(state=candidate, undo=undo, redo=redo))
+            self.state, self._undo, self._redo = candidate, undo, redo
+            return saved
+
+    def restore_history(self, direction):
+        with self._lock:
+            source, target = (self._undo, self._redo) if direction == "undo" else (self._redo, self._undo)
+            if not source:
+                raise ThesisError("没有可撤销/重做的修改")
+            before = copy.deepcopy((self.state, self._undo, self._redo))
+            try:
+                target.append(copy.deepcopy(self.state))
+                self.state = source.pop()
+                result = _public_state(self.state)
+                self._persist_draft()
+                return result
+            except Exception:
+                self.state, self._undo, self._redo = before
+                raise
+
+    @_durable_edit
+    def replace_draft(self, state):
+        self.state = copy.deepcopy(state)
+        return _public_state(self.state)
+
+    def _snap_geometry(self, x, y, tolerance, exclude=None):
+        tolerance = _finite(tolerance, "点线吸附距离")
+        if not 0 <= tolerance <= 1000:
+            raise ThesisError("点线吸附距离须为0–1000米")
+        if not tolerance:
+            return x, y
+        points = {p["id"]: p for p in self.state["points"]}
+        candidates = []
+        for pid, point in points.items():
+            if pid != exclude:
+                candidates.append((hypot(x-point["x"], y-point["y"]), 0, str(pid), point["x"], point["y"]))
+        for line in self.state["lines"]:
+            if exclude in (line["from"], line["to"]):
+                continue
+            a, b = points[line["from"]], points[line["to"]]
+            dx, dy = b["x"]-a["x"], b["y"]-a["y"]
+            length2 = dx*dx + dy*dy
+            if not length2:
+                continue
+            t = max(0, min(1, ((x-a["x"])*dx + (y-a["y"])*dy)/length2))
+            sx, sy = a["x"]+t*dx, a["y"]+t*dy
+            candidates.append((hypot(x-sx, y-sy), 1, str(line["id"]), sx, sy))
+        eligible = [c for c in candidates if c[0] <= tolerance]
+        if eligible:
+            best = min(eligible)
+            return best[3], best[4]
+        return x, y
+
+    @_durable_edit
     def reset(self, name: str = "未命名论文工程") -> Dict[str, Any]:
         with self._lock:
             self.state = _empty_state(name)
@@ -803,7 +908,8 @@ class ThesisService:
         with self._lock:
             return _public_state(self.state)
 
-    def add_point(self, lon: float, lat: float, fixed: bool = False, snap_m: float = 0) -> Dict[str, Any]:
+    @_durable_edit
+    def add_point(self, lon: float, lat: float, fixed: bool = False, snap_m: float = 0, snap_geometry_m: float = 0) -> Dict[str, Any]:
         lon = _finite(lon, "经度")
         lat = _finite(lat, "纬度")
         if not (-180.0 <= lon <= 180.0 and -90.0 < lat < 90.0):
@@ -822,6 +928,8 @@ class ThesisService:
                 raise ThesisError("吸附间距须为0–1000米")
             if step:
                 x, y = round(x / step) * step, round(y / step) * step
+            x, y = self._snap_geometry(x, y, snap_geometry_m)
+            if step or snap_geometry_m:
                 ox, oy = _project_xy(self.state, ORIGIN_LAT, ORIGIN_LON) if any(abs(p["x"]) < 100000 for p in self.state["points"]) else (0, 0)
                 lat, lon = _inverse_xy(self.state, x + ox, y + oy)
                 _project_xy(self.state, lat, lon)
@@ -839,6 +947,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def import_coordinates(self, text: str, name: str) -> Dict[str, Any]:
         """原子替换：论文高斯坐标文本，不把局部坐标猜成绝对坐标。"""
         if len(text.encode("utf-8")) > 1_000_000:
@@ -865,6 +974,7 @@ class ThesisService:
             self.state = candidate
             return _public_state(self.state)
 
+    @_durable_edit
     def set_projection(self, settings):
         with self._lock:
             candidate = copy.deepcopy(self.state)
@@ -878,6 +988,7 @@ class ThesisService:
             self.state = candidate
             return payload
 
+    @_durable_edit
     def import_state(self, raw):
         """先完整校验副本，再提交；引用使用稳定 id。"""
         try:
@@ -934,7 +1045,8 @@ class ThesisService:
             self.state = candidate
         return payload
 
-    def move_point(self, point_id, lon, lat, snap_m=0):
+    @_durable_edit
+    def move_point(self, point_id, lon, lat, snap_m=0, snap_geometry_m=0):
         with self._lock:
             if _point_by_ref(self.state, point_id).get("fixed"):
                 raise ThesisError("已知点默认锁定；请先在点库明确改为未知点后移动")
@@ -948,6 +1060,7 @@ class ThesisService:
             x, y = x - ox, y - oy
             if step:
                 x, y = round(x / step) * step, round(y / step) * step
+            x, y = self._snap_geometry(x, y, snap_geometry_m, point_id)
             lat, lon = _inverse_xy(self.state, x + ox, y + oy)
             _project_xy(self.state, lat, lon)
             point = _point_by_ref(self.state, point_id)
@@ -959,6 +1072,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def set_point_fixed(self, point_id: str, fixed: bool) -> Dict[str, Any]:
         with self._lock:
             point = _point_by_ref(self.state, point_id)
@@ -966,6 +1080,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def delete_point(self, point_id: str) -> Dict[str, Any]:
         with self._lock:
             point = _point_by_ref(self.state, point_id)
@@ -1009,6 +1124,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def add_line(self, from_ref: str, to_ref: str) -> Dict[str, Any]:
         with self._lock:
             _ensure_geometry(self.state)
@@ -1034,6 +1150,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def delete_line(self, line_id: str) -> Dict[str, Any]:
         with self._lock:
             line = _line_by_id(self.state, line_id)
@@ -1052,6 +1169,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def add_angle(
         self, backsight_ref: str, station_ref: str, foresight_ref: str
     ) -> Dict[str, Any]:
@@ -1083,6 +1201,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def delete_angle(self, angle_id: str) -> Dict[str, Any]:
         with self._lock:
             angle = _angle_by_id(self.state, angle_id)
@@ -1101,6 +1220,7 @@ class ThesisService:
             _touch(self.state)
             return _public_state(self.state)
 
+    @_durable_edit
     def configure_network(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
         network = self.state["network"]
         known_edges = {str(line["id"]) for line in self.state["lines"]}
@@ -1214,6 +1334,7 @@ class ThesisService:
                 "unknown_ids": unknown_ids,
             }
 
+    @_durable_edit
     def load_example(self, key: str) -> Dict[str, Any]:
         name = str(key).strip().lower().replace("example", "").strip("_- ")
         if name not in ("1", "2"):
@@ -1342,6 +1463,15 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
     def state() -> JSONResponse:
         return JSONResponse(service.snapshot())
 
+    @router.post("/api/thesis/history/{direction}")
+    def history(direction: str):
+        if direction not in ("undo", "redo"):
+            raise HTTPException(400, "无效历史操作")
+        try:
+            return service.restore_history(direction)
+        except ThesisError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
+
     @router.get("/api/thesis/basemap")
     def basemap_meta() -> JSONResponse:
         return JSONResponse(_basemap_payload())
@@ -1418,7 +1548,7 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
         try:
             return JSONResponse(
                 service.add_point(
-                    payload.get("lon"), payload.get("lat"), bool(payload.get("fixed", False)), payload.get("snap_m", 0)
+                    payload.get("lon"), payload.get("lat"), bool(payload.get("fixed", False)), payload.get("snap_m", 0), payload.get("snap_geometry_m", 0)
                 )
             )
         except ThesisError as exc:
@@ -1428,7 +1558,7 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
     def patch_point(point_id: str, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
         try:
             if "lon" in payload or "lat" in payload:
-                return JSONResponse(service.move_point(point_id, payload.get("lon"), payload.get("lat"), payload.get("snap_m", 0)))
+                return JSONResponse(service.move_point(point_id, payload.get("lon"), payload.get("lat"), payload.get("snap_m", 0), payload.get("snap_geometry_m", 0)))
             return JSONResponse(
                 service.set_point_fixed(point_id, bool(payload.get("fixed", False)))
             )
@@ -1515,8 +1645,7 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
         name = str(payload.get("name") or "")
         try:
             with service._lock:
-                service.state["name"] = name.strip() or service.state["name"]
-                saved = service.repository.save(name, service.state)
+                saved = service.save_named(name)
             return JSONResponse(
                 {
                     "ok": True,
@@ -1535,8 +1664,7 @@ def create_thesis_router(service: ThesisService) -> APIRouter:
             state = service.repository.get(name)
             with service._lock:
                 state.setdefault("seq", {"point": 0, "line": 0, "angle": 0})
-                service.state = state
-                return JSONResponse(_public_state(service.state))
+                return JSONResponse(service.replace_draft(state))
         except ThesisError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
