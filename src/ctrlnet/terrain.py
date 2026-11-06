@@ -758,7 +758,7 @@ class WindowedDEM(DEM):
     Full-array APIs remain on DEM; use overview() for bounded map rendering.
     """
 
-    def __init__(self, path, *, tile_size=256, cache_size=16):
+    def __init__(self, path, *, tile_size=256, cache_size=16, pyramid_dir="data/cache/terrain-pyramid"):
         from pathlib import Path
         from collections import OrderedDict
         from threading import RLock
@@ -772,6 +772,9 @@ class WindowedDEM(DEM):
         self._tiles = OrderedDict()
         self._tile_lock = RLock()
         self.read_count = 0
+        self.pyramid_dir = pyramid_dir
+        self.pyramid_builds = 0
+        self._levels = {}
         with rasterio.open(self.path) as ds:
             self._shape = (ds.height, ds.width)
             if min(self._shape) < 2:
@@ -850,6 +853,16 @@ class WindowedDEM(DEM):
                 result[selected] += weight[selected] * tile[r[selected] % self.tile_size, c[selected] % self.tile_size]
         out[good] = result
         return float(out) if out.ndim == 0 else out
+
+    def display_elevation(self, E, N, spacing):
+        """Average-resampled disk pyramid for display; elevation/profile stay exact.
+
+        Levels are at most half the requested sample spacing. Below four native
+        cells per display sample the original reader is used unchanged.
+        Pass pyramid_dir=None to disable disk levels.
+        """
+        from .pyramid import display_elevation
+        return display_elevation(self, E, N, spacing)
 
     def overview(self, max_size=512):
         """Bounded display grid, sampled through the same native tile reader."""

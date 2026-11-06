@@ -55,7 +55,9 @@ class ViewportTerrain:
                 cols, rows = max(2, ceil((e-w)/spacing)), max(2, ceil((n-s)/spacing))
                 dx, dy = (e-w)/cols, (n-s)/rows
                 x, y = np.meshgrid(w + (np.arange(cols)+.5)*dx, n - (np.arange(rows)+.5)*dy)
-                values = self.dem.elevation(x, y)
+                values = (self.dem.display_elevation(x, y, min(dx, dy))
+                          if zoom < 0 and hasattr(self.dem, 'display_elevation')
+                          else self.dem.elevation(x, y))
                 local = DEM(values, AffineTransform.from_origin(w, n, dx, dy))
                 if kind == 'hillshade' and local.valid_mask.any():
                     body = render_hillshade_png(local, scale=1)
