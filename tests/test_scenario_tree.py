@@ -152,7 +152,7 @@ def test_disjoint_point_coordinates_merge_and_refresh(bridge):
     assert service.state['points'] == expected['points']
 
 
-@pytest.mark.parametrize('mutation', ['settings', 'measured', 'reorder', 'delete'])
+@pytest.mark.parametrize('mutation', ['settings', 'reorder', 'delete'])
 def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     c, service = bridge
     root = save(c, 'base')
@@ -162,8 +162,6 @@ def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     service.state['points'][1]['y'] += 2
     if mutation == 'settings':
         service.state['network']['sigma_angle_sec'] = 42
-    elif mutation == 'measured':
-        service.state['lines'][0].update(_keep_length=True, length=123.)
     elif mutation == 'reorder':
         service.state['points'].reverse()
     elif mutation == 'delete':
@@ -213,3 +211,57 @@ def test_conflicting_names_keep_topology_choice(bridge):
     assert r.status_code == 200, r.text
     actual = store.get_scenario(service.repository.path, r.json()['scenario_id'])
     assert actual['metadata']['thesis_state']['points'][0]['name'] == 901
+
+
+@pytest.mark.parametrize('field', ['length', 'azimuth'])
+def test_measured_override_merges_with_coordinates_and_reopens(bridge, field):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 5
+    left = save(c, 'coordinates', root)
+    expected_x = service.state['points'][0]['x']
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0].update({field: 123.25, '_keep_'+field: True})
+    right = save(c, 'measurement', root)
+    before = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='combined', resolutions={}))
+    assert r.status_code == 200, r.text
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['points'][0]['x'] == expected_x
+    assert service.state['lines'][0][field] == 123.25
+    assert service.state['lines'][0]['_keep_'+field] is True
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == before
+
+
+def test_line_override_units_and_clear_conflict(bridge):
+    c, service = bridge
+    service.state['lines'][0].update(length=123., _keep_length=True)
+    root = save(c, 'measured base')
+    # Independent length and azimuth changes on the same line combine.
+    service.state['lines'][0]['length'] = 124.
+    left = save(c, 'length', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0].update(azimuth=42., _keep_azimuth=True)
+    right = save(c, 'azimuth', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='both', resolutions={}))
+    assert r.status_code == 200, r.text
+    state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
+    assert state['lines'][0]['length'] == 124.
+    assert state['lines'][0]['azimuth'] == 42.
+    # Clearing an override competes with editing its measured value.
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0].pop('_keep_length')
+    clear = save(c, 'clear', root)
+    plan = preview(c, left, clear)
+    assert plan['conflicts'] == ['topology']
+    before = c.get('/api/engineering/projects').json()
+    assert c.post('/api/engineering/merge', json=dict(plan, name='unresolved', resolutions={})).status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='cleared', resolutions={'topology': 'source'}))
+    assert r.status_code == 200, r.text
+    state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
+    assert '_keep_length' not in state['lines'][0]

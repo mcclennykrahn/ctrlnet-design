@@ -1,6 +1,6 @@
 """Conservative three-way merge of saved editor scenarios.
 
-Disjoint existing-point coordinate, name and fixed edits merge automatically; other topology
+Disjoint existing-point edits and measured line overrides merge automatically; other topology
 conflicts retain whole-topology choices. Both parents remain durable.
 """
 import copy
@@ -55,10 +55,10 @@ def _same(key, a, b):
 
 
 def _merge_point_coordinates(base, target, source):
-    """Merge existing-point coordinates, names and fixed flags by authored field.
+    """Merge existing-point fields and measured line overrides by authored field.
 
     A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
-    are ignored, while measured line overrides remain authored data.
+    are ignored. Each measured override flag/value pair is indivisible.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
@@ -74,10 +74,13 @@ def _merge_point_coordinates(base, target, source):
         for point in value.get('points', []):
             for field in (*coordinates, 'name', 'fixed'):
                 point.pop(field, None)
+        line_ids = [line.get('id') for line in value.get('lines', [])]
+        if any(not isinstance(i, str) or not i for i in line_ids) or len(set(line_ids)) != len(line_ids):
+            return None
         for line in value.get('lines', []):
             for field in ('length', 'azimuth'):
-                if not line.get('_keep_' + field):
-                    line.pop(field, None)
+                line.pop(field, None)
+                line.pop('_keep_' + field, None)
         for angle in value.get('angles', []):
             angle.pop('value', None)
         return value
@@ -101,6 +104,25 @@ def _merge_point_coordinates(base, target, source):
                     out[field] = chosen[field]
                 else:
                     out.pop(field, None)
+    for bl, tl, sl, out in zip(base['lines'], target['lines'], source['lines'], result['lines']):
+        for field in ('length', 'azimuth'):
+            flag = '_keep_' + field
+            def authored(line):
+                # Unkept values are computed, so geometry changes are not edits.
+                return ((flag in line, line.get(flag)),
+                        (field in line, line.get(field)) if line.get(flag) else None)
+            b, t, s = (authored(line) for line in (bl, tl, sl))
+            if t == s or s == b:
+                chosen = tl
+            elif t == b:
+                chosen = sl
+            else:
+                return None
+            for key in (flag, field):
+                if key in chosen:
+                    out[key] = chosen[key]
+                else:
+                    out.pop(key, None)
     _ensure_geometry(result)
     _refresh_derived(result)
     return result
