@@ -4,7 +4,7 @@ Disjoint existing-point edits, measured line overrides and network settings
 merge automatically; competing existing-point edits offer whole-point choices.
 Competing network settings offer whole-object choices; measured override
 conflicts offer whole-line choices when structure is unchanged.
-Combined field merges match points/lines by ID and retain target list order.
+Combined field merges match points/lines/angles by ID and retain target list order.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -90,9 +90,12 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             for field in ('length', 'azimuth'):
                 line.pop(field, None)
                 line.pop('_keep_' + field, None)
+        angle_ids = [angle.get('id') for angle in value.get('angles', [])]
+        if any(not isinstance(i, str) or not i for i in angle_ids) or len(set(angle_ids)) != len(angle_ids):
+            return None
         # Sort comparison copies only: IDs define identity, while the
         # result retains the target branch's presentation order.
-        for collection in ('points', 'lines'):
+        for collection in ('points', 'lines', 'angles'):
             value[collection].sort(key=lambda item: item['id'])
         for angle in value.get('angles', []):
             angle.pop('value', None)

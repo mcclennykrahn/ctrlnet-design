@@ -566,3 +566,79 @@ def test_reordered_merge_still_declines_changed_structure(bridge, mutation):
         extra['id'] = 'new-point'
         source['points'].append(extra)
     assert _merge_point_coordinates(base, target, source) is None
+
+
+@pytest.mark.parametrize('reordered', ['target', 'source', 'both'])
+@pytest.mark.parametrize('conflict', [False, True])
+def test_identity_merge_across_angle_order(bridge, reordered, conflict):
+    c, service = bridge
+    root = save(c, 'base')
+    base = copy.deepcopy(service.state)
+    pid = base['points'][0]['id']
+    lid = base['lines'][0]['id']
+    other_lid = base['lines'][1]['id']
+    service.state['points'][0]['name'] = 'target point'
+    service.state['lines'][0].update(length=111.25, _keep_length=True)
+    if reordered in ('target', 'both'):
+        service.state['points'].reverse()
+        service.state['lines'].reverse()
+        service.state['angles'].reverse()
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][0]['fixed'] = not base['points'][0]['fixed']
+    if conflict:
+        service.state['points'][0]['name'] = 'source point'
+        service.state['lines'][0].update(length=222.5, _keep_length=True)
+    service.state['lines'][1].update(length=333.75, _keep_length=True)
+    if reordered in ('source', 'both'):
+        service.state['points'].reverse()
+        service.state['lines'].reverse()
+        service.state['angles'].reverse()
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    choices = {'point:'+pid: 'source', 'line:'+lid: 'target'} if conflict else {}
+    assert set(plan['conflicts']) == set(choices)
+    r = c.post('/api/engineering/merge', json=dict(plan, name='ordered merge', resolutions=choices))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    for collection in ('points', 'lines', 'angles'):
+        assert [x['id'] for x in state[collection]] == [x['id'] for x in target[collection]]
+    point = next(x for x in state['points'] if x['id'] == pid)
+    assert point['name'] == ('source point' if conflict else 'target point')
+    assert point['fixed'] == (not base['points'][0]['fixed'])
+    lines = {x['id']: x for x in state['lines']}
+    assert lines[lid]['length'] == 111.25
+    assert lines[other_lid]['length'] == 333.75
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['points'] == state['points']
+    assert service.state['lines'] == state['lines']
+
+
+
+@pytest.mark.parametrize('mutation', ['duplicate', 'missing_id', 'added', 'deleted', 'station', 'name', 'extra'])
+def test_angle_order_merge_declines_authored_structure_changes(bridge, mutation):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    assert len(base['angles']) > 1
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    target['points'][0]['name'] = 'target name'
+    source['angles'].reverse()
+    angle = source['angles'][0]
+    if mutation == 'duplicate':
+        angle['id'] = source['angles'][1]['id']
+    elif mutation == 'missing_id':
+        angle.pop('id')
+    elif mutation == 'added':
+        extra = copy.deepcopy(angle)
+        extra['id'] = 'new-angle'
+        source['angles'].append(extra)
+    elif mutation == 'deleted':
+        source['angles'].pop()
+    else:
+        angle[mutation] = 'changed'
+    assert _merge_point_coordinates(base, target, source) is None
