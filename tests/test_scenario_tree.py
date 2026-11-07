@@ -260,11 +260,12 @@ def test_line_override_units_and_clear_conflict(bridge):
     service.state['lines'][0].pop('_keep_length')
     clear = save(c, 'clear', root)
     plan = preview(c, left, clear)
-    assert plan['conflicts'] == ['topology']
+    key = 'line:' + service.state['lines'][0]['id']
+    assert plan['conflicts'] == [key]
     before = c.get('/api/engineering/projects').json()
     assert c.post('/api/engineering/merge', json=dict(plan, name='unresolved', resolutions={})).status_code == 400
     assert c.get('/api/engineering/projects').json() == before
-    r = c.post('/api/engineering/merge', json=dict(plan, name='cleared', resolutions={'topology': 'source'}))
+    r = c.post('/api/engineering/merge', json=dict(plan, name='cleared', resolutions={key: 'source'}))
     assert r.status_code == 200, r.text
     state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
     assert '_keep_length' not in state['lines'][0]
@@ -417,3 +418,82 @@ def test_network_choice_declines_structural_changes(bridge):
     service.state['points'].reverse()
     right = save(c, 'source', root)
     assert preview(c, left, right)['conflicts'] == ['topology']
+
+
+@pytest.mark.parametrize('choice', ['target', 'source'])
+@pytest.mark.parametrize('field', ['length', 'azimuth'])
+def test_whole_line_choice_preserves_other_merges_and_guards(bridge, choice, field):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['lines'][0].update({field: 123., '_keep_'+field: True})
+    service.state['lines'][0].update(azimuth=41., _keep_azimuth=True)
+    if field == 'azimuth':
+        # A later azimuth conflict must discard the earlier length merge
+        # when choosing the source's whole line.
+        service.state['lines'][0].update(length=124., _keep_length=True)
+    service.state['points'][0]['x'] += 3
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0].update({field: 125., '_keep_'+field: True})
+    service.state['points'][1]['y'] += 4
+    service.state['network']['tolerance_mm'] = 35
+    right = save(c, 'source', root)
+    source = copy.deepcopy(service.state)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    key = 'line:' + source['lines'][0]['id']
+    assert plan['conflicts'] == [key]
+    before = c.get('/api/engineering/projects').json()
+    for resolutions in ({}, {key: ''}, {key: 'source', 'topology': 'target'}):
+        assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions=resolutions)).status_code == 400
+        assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='choice', resolutions={key: choice}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    assert saved['metadata']['merge_resolutions'] == {key: choice}
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    expected = (target if choice == 'target' else source)['lines'][0]
+    for measured in ('length', 'azimuth'):
+        assert service.state['lines'][0].get('_keep_'+measured) == expected.get('_keep_'+measured)
+        if expected.get('_keep_'+measured):
+            assert service.state['lines'][0][measured] == expected[measured]
+    assert service.state['points'][0] == target['points'][0]
+    assert service.state['points'][1] == source['points'][1]
+    assert service.state['network'] == source['network']
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    c.post('/api/engineering/rename/'+left['scenario_id'], json=dict(name='changed', version=left['version']))
+    assert c.post('/api/engineering/merge', json=dict(plan, name='stale', resolutions={key: choice})).status_code == 409
+
+
+def test_line_choices_coexist_and_structural_changes_fall_back(bridge):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 3
+    service.state['network']['tolerance_mm'] = 31
+    for line in service.state['lines'][:2]:
+        line.update(length=123., _keep_length=True)
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][0]['x'] -= 4
+    service.state['network']['tolerance_mm'] = 32
+    for line in service.state['lines'][:2]:
+        line.update(length=125., _keep_length=True)
+    right = save(c, 'source', root)
+    source = copy.deepcopy(service.state)
+    point = 'point:' + source['points'][0]['id']
+    lines = ['line:' + line['id'] for line in source['lines'][:2]]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == ['network', point, *lines]
+    choices = {'network': 'source', point: 'target', lines[0]: 'target', lines[1]: 'source'}
+    r = c.post('/api/engineering/merge', json=dict(plan, name='mixed', resolutions=choices))
+    assert r.status_code == 200, r.text
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['points'][0] == target['points'][0]
+    assert service.state['network'] == source['network']
+    assert [line['length'] for line in service.state['lines'][:2]] == [123., 125.]
+    c.post('/api/engineering/open/'+right['scenario_id'], json={})
+    service.state['lines'].reverse()
+    structural = save(c, 'reordered', root)
+    assert preview(c, left, structural)['conflicts'] == ['topology']

@@ -2,7 +2,8 @@
 
 Disjoint existing-point edits, measured line overrides and network settings
 merge automatically; competing existing-point edits offer whole-point choices.
-Competing network settings offer whole-object choices.
+Competing network settings offer whole-object choices; measured override
+conflicts offer whole-line choices when structure is unchanged.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -63,7 +64,8 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
     are ignored. Each measured override flag/value pair and the entire network
     settings object are indivisible. Competing point edits select a whole point;
-    competing network edits select the whole settings object.
+    competing network edits select the whole settings object. Competing measured
+    overrides select a whole line, with unkept geometry recomputed afterward.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
@@ -150,7 +152,14 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             elif t == b:
                 chosen = sl
             else:
-                return None
+                if point_conflicts is None:
+                    return None
+                key = 'line:' + bl['id']
+                point_conflicts.append(key)
+                chosen = sl if (choices or {}).get(key) == 'source' else tl
+                out.clear()
+                out.update(copy.deepcopy(chosen))
+                break
             for key in (flag, field):
                 if key in chosen:
                     out[key] = chosen[key]
@@ -235,9 +244,9 @@ def merge(path, payload):
             for key, choice in resolutions.items():
                 if choice not in ('target', 'source'):
                     raise ValueError('冲突选择须为 target/source')
-                if key != 'network' and not key.startswith('point:'):
+                if key != 'network' and not key.startswith(('point:', 'line:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
-            if 'network' in resolutions or any(key.startswith('point:') for key in resolutions):
+            if 'network' in resolutions or any(key.startswith(('point:', 'line:')) for key in resolutions):
                 merged['topology'] = _merge_point_coordinates(
                     *(u['topology'] for u in units), point_conflicts=[], choices=resolutions)
             state = copy.deepcopy(merged['topology'])
