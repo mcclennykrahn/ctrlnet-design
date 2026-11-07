@@ -152,7 +152,7 @@ def test_disjoint_point_coordinates_merge_and_refresh(bridge):
     assert service.state['points'] == expected['points']
 
 
-@pytest.mark.parametrize('mutation', ['settings', 'reorder', 'delete'])
+@pytest.mark.parametrize('mutation', ['projection', 'reorder', 'delete'])
 def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     c, service = bridge
     root = save(c, 'base')
@@ -160,8 +160,8 @@ def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     left = save(c, 'left', root)
     c.post('/api/engineering/open/'+root['scenario_id'], json={})
     service.state['points'][1]['y'] += 2
-    if mutation == 'settings':
-        service.state['network']['sigma_angle_sec'] = 42
+    if mutation == 'projection':
+        service.state['projection'] = {'unsupported_change': True}
     elif mutation == 'reorder':
         service.state['points'].reverse()
     elif mutation == 'delete':
@@ -265,3 +265,44 @@ def test_line_override_units_and_clear_conflict(bridge):
     assert r.status_code == 200, r.text
     state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
     assert '_keep_length' not in state['lines'][0]
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_network_unit_merges_with_geometry_and_reopens(bridge, reverse):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 5
+    left = save(c, 'geometry', root)
+    expected_point = copy.deepcopy(service.state['points'][0])
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.configure_network({'tolerance_mm': 35, 'ellipse_scale': 300})
+    expected_network = copy.deepcopy(service.state['network'])
+    right = save(c, 'settings', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, right, left) if reverse else preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='combined', resolutions={}))
+    assert r.status_code == 200, r.text
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['network'] == expected_network
+    assert service.state['points'][0] == expected_point
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+
+
+def test_network_competing_changes_keep_whole_topology_choice(bridge):
+    c, service = bridge
+    root = save(c, 'base')
+    service.configure_network({'tolerance_mm': 35})
+    left = save(c, 'tolerance', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.configure_network({'ellipse_scale': 300})
+    right = save(c, 'scale', root)
+    expected = copy.deepcopy(service.state)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == ['topology']
+    before = c.get('/api/engineering/projects').json()
+    assert c.post('/api/engineering/merge', json=dict(plan, name='unresolved', resolutions={})).status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='source', resolutions={'topology': 'source'}))
+    assert r.status_code == 200, r.text
+    assert store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state'] == expected

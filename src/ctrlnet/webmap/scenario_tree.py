@@ -1,7 +1,8 @@
 """Conservative three-way merge of saved editor scenarios.
 
-Disjoint existing-point edits and measured line overrides merge automatically; other topology
-conflicts retain whole-topology choices. Both parents remain durable.
+Disjoint existing-point edits, measured line overrides and network settings
+merge automatically; other topology conflicts retain whole-topology choices.
+Both parents remain durable.
 """
 import copy
 from .. import store
@@ -58,7 +59,8 @@ def _merge_point_coordinates(base, target, source):
     """Merge existing-point fields and measured line overrides by authored field.
 
     A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
-    are ignored. Each measured override flag/value pair is indivisible.
+    are ignored. Each measured override flag/value pair and the entire network
+    settings object are indivisible.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
@@ -68,6 +70,7 @@ def _merge_point_coordinates(base, target, source):
         value = copy.deepcopy(state)
         for field in ('created_at', 'updated_at', 'saved_created_at', 'saved_updated_at'):
             value.pop(field, None)
+        value.pop('network', None)
         ids = [p.get('id') for p in value.get('points', [])]
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
@@ -89,6 +92,20 @@ def _merge_point_coordinates(base, target, source):
     if shapes[0] is None or not shapes[0] == shapes[1] == shapes[2]:
         return None
     result = copy.deepcopy(target)
+    # Keep observation selections, grade and display settings together. Their
+    # internal dependencies are not safe to resolve field by field.
+    b, t, s = (("network" in state, state.get("network"))
+               for state in (base, target, source))
+    if t == s or s == b:
+        chosen = target
+    elif t == b:
+        chosen = source
+    else:
+        return None
+    if 'network' in chosen:
+        result['network'] = copy.deepcopy(chosen['network'])
+    else:
+        result.pop('network', None)
     for bp, tp, sp, out in zip(base['points'], target['points'], source['points'], result['points']):
         for fields in groups:
             # Presence is authored too: absent and explicit null are distinct.
