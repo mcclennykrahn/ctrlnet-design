@@ -121,3 +121,63 @@ def test_noop_ui_save_and_topology_conflict(bridge):
         actual = store.get_scenario(service.repository.path,r.json()['scenario_id'])
         parent = store.get_scenario(service.repository.path,expected['scenario_id'])
         assert actual['metadata']['thesis_state'] == parent['metadata']['thesis_state']
+
+
+def test_disjoint_point_coordinates_merge_and_refresh(bridge):
+    from ctrlnet.webmap.thesis_web import _refresh_derived
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 5
+    left = save(c, 'left', root)
+    left_state = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][1]['y'] -= 7
+    right = save(c, 'right', root, [GNSS])
+    expected = copy.deepcopy(left_state)
+    expected['points'][1] = copy.deepcopy(service.state['points'][1])
+    _refresh_derived(expected)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    before = [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)]
+    result = c.post('/api/engineering/merge', json=dict(plan, name='combined', resolutions={}))
+    assert result.status_code == 200, result.text
+    sid = result.json()['scenario_id']
+    actual = store.get_scenario(service.repository.path, sid)
+    assert actual['metadata']['thesis_state']['points'] == expected['points']
+    assert actual['metadata']['thesis_state']['lines'] == expected['lines']
+    assert actual['metadata']['thesis_state']['angles'] == expected['angles']
+    assert c.get('/api/engineering/settings/'+sid).json()['gnss'] == [GNSS]
+    assert [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)] == before
+    assert c.post('/api/engineering/open/'+sid, json={}).status_code == 200
+    assert service.state['points'] == expected['points']
+
+
+@pytest.mark.parametrize('mutation', ['fixed', 'name', 'settings', 'measured', 'reorder', 'delete'])
+def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 1
+    left = save(c, 'left', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][1]['y'] += 2
+    if mutation == 'fixed':
+        service.state['points'][1]['fixed'] = not service.state['points'][1]['fixed']
+    elif mutation == 'name':
+        service.state['points'][1]['name'] = 900
+    elif mutation == 'settings':
+        service.state['network']['sigma_angle_sec'] = 42
+    elif mutation == 'measured':
+        service.state['lines'][0].update(_keep_length=True, length=123.)
+    elif mutation == 'reorder':
+        service.state['points'].reverse()
+    elif mutation == 'delete':
+        # Exercise the planner helper: saving dangling edges is already rejected.
+        from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+        base = store.get_scenario(service.repository.path, root['scenario_id'])['metadata']['thesis_state']
+        target = store.get_scenario(service.repository.path, left['scenario_id'])['metadata']['thesis_state']
+        source = copy.deepcopy(service.state)
+        source['points'].pop()
+        assert _merge_point_coordinates(base, target, source) is None
+        return
+    right = save(c, 'right', root)
+    assert preview(c, left, right)['conflicts'] == ['topology']

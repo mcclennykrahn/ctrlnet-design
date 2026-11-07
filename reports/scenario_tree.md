@@ -13,7 +13,9 @@ To merge saved editor scenarios in the same project:
 3. Resolve each conflicting unit explicitly, enter a new name, and use
    **保存合并新方案**. A changed input requires a fresh preview.
 
-This is a conservative three-way merge. Complete editor topology (including
+The initial implementation described below is a conservative three-way merge.
+The later bounded coordinate extension is documented in
+[post_v08_point_merge.md](post_v08_point_merge.md). Complete editor topology (including
 projection and network settings) is one unit, and the GNSS list is another.
 Unchanged units and identical changes merge automatically. Divergent edits in
 the same unit require choosing the target or source. Timestamps and recomputed

@@ -1,7 +1,7 @@
 """Conservative three-way merge of saved editor scenarios.
 
-Topology is one indivisible unit; GNSS is another. No geometry splicing is
-attempted. Both parents and the chosen common ancestor remain durable.
+Disjoint existing-point coordinate edits merge automatically; other topology
+conflicts retain whole-topology choices. Both parents remain durable.
 """
 import copy
 from .. import store
@@ -54,6 +54,55 @@ def _same(key, a, b):
     return normalized(a) == normalized(b)
 
 
+def _merge_point_coordinates(base, target, source):
+    """Merge coordinates only when point identities and other authored data match.
+
+    A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
+    are ignored, while measured line overrides remain authored data.
+    """
+    from .thesis_web import _ensure_geometry, _refresh_derived
+    coordinates = ('x', 'y', 'lon', 'lat')
+
+    def skeleton(state):
+        value = copy.deepcopy(state)
+        for field in ('created_at', 'updated_at', 'saved_created_at', 'saved_updated_at'):
+            value.pop(field, None)
+        ids = [p.get('id') for p in value.get('points', [])]
+        if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
+            return None
+        for point in value.get('points', []):
+            for field in coordinates:
+                point.pop(field, None)
+        for line in value.get('lines', []):
+            for field in ('length', 'azimuth'):
+                if not line.get('_keep_' + field):
+                    line.pop(field, None)
+        for angle in value.get('angles', []):
+            angle.pop('value', None)
+        return value
+
+    shapes = [skeleton(s) for s in (base, target, source)]
+    if shapes[0] is None or not shapes[0] == shapes[1] == shapes[2]:
+        return None
+    result = copy.deepcopy(target)
+    for bp, tp, sp, out in zip(base['points'], target['points'], source['points'], result['points']):
+        b, t, s = (tuple(p.get(k) for k in coordinates) for p in (bp, tp, sp))
+        if t == s or s == b:
+            chosen = tp
+        elif t == b:
+            chosen = sp
+        else:
+            return None
+        for field in coordinates:
+            if field in chosen:
+                out[field] = chosen[field]
+            else:
+                out.pop(field, None)
+    _ensure_geometry(result)
+    _refresh_derived(result)
+    return result
+
+
 def _plan(conn, target, source):
     if target == source:
         raise ValueError('请选择两个不同方案')
@@ -93,7 +142,11 @@ def _plan(conn, target, source):
         elif _same(key, tv, b):
             merged[key] = sv
         else:
-            conflicts.append(key)
+            combined = _merge_point_coordinates(b, tv, sv) if key == 'topology' else None
+            if combined is None:
+                conflicts.append(key)
+            else:
+                merged[key] = combined
     versions = {r['id']: r['version'] for r in (base, t, s)}
     return dict(target=target, source=source, base=base['id'], versions=versions,
                 conflicts=conflicts), merged, units, t
