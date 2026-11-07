@@ -1,7 +1,8 @@
 """Conservative three-way merge of saved editor scenarios.
 
 Disjoint existing-point edits, measured line overrides and network settings
-merge automatically; other topology conflicts retain whole-topology choices.
+merge automatically; competing existing-point edits offer whole-point choices.
+Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
 import copy
@@ -55,12 +56,12 @@ def _same(key, a, b):
     return normalized(a) == normalized(b)
 
 
-def _merge_point_coordinates(base, target, source):
+def _merge_point_coordinates(base, target, source, point_conflicts=None, choices=None):
     """Merge existing-point fields and measured line overrides by authored field.
 
     A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
     are ignored. Each measured override flag/value pair and the entire network
-    settings object are indivisible.
+    settings object are indivisible. Competing point edits select a whole point.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
@@ -107,6 +108,7 @@ def _merge_point_coordinates(base, target, source):
     else:
         result.pop('network', None)
     for bp, tp, sp, out in zip(base['points'], target['points'], source['points'], result['points']):
+        conflicted = False
         for fields in groups:
             # Presence is authored too: absent and explicit null are distinct.
             b, t, s = (tuple((k in p, p.get(k)) for k in fields) for p in (bp, tp, sp))
@@ -115,12 +117,21 @@ def _merge_point_coordinates(base, target, source):
             elif t == b:
                 chosen = sp
             else:
-                return None
+                if point_conflicts is None:
+                    return None
+                conflicted = True
+                break
             for field in fields:
                 if field in chosen:
                     out[field] = chosen[field]
                 else:
                     out.pop(field, None)
+        if conflicted:
+            key = 'point:' + bp['id']
+            point_conflicts.append(key)
+            chosen = sp if (choices or {}).get(key) == 'source' else tp
+            out.clear()
+            out.update(copy.deepcopy(chosen))
     for bl, tl, sl, out in zip(base['lines'], target['lines'], source['lines'], result['lines']):
         for field in ('length', 'azimuth'):
             flag = '_keep_' + field
@@ -184,11 +195,13 @@ def _plan(conn, target, source):
         elif _same(key, tv, b):
             merged[key] = sv
         else:
-            combined = _merge_point_coordinates(b, tv, sv) if key == 'topology' else None
+            point_conflicts = []
+            combined = _merge_point_coordinates(b, tv, sv, point_conflicts) if key == 'topology' else None
             if combined is None:
                 conflicts.append(key)
             else:
                 merged[key] = combined
+                conflicts.extend(point_conflicts)
     versions = {r['id']: r['version'] for r in (base, t, s)}
     return dict(target=target, source=source, base=base['id'], versions=versions,
                 conflicts=conflicts), merged, units, t
@@ -217,7 +230,11 @@ def merge(path, payload):
             for key, choice in resolutions.items():
                 if choice not in ('target', 'source'):
                     raise ValueError('冲突选择须为 target/source')
-                merged[key] = units[1 if choice == 'target' else 2][key]
+                if not key.startswith('point:'):
+                    merged[key] = units[1 if choice == 'target' else 2][key]
+            if any(key.startswith('point:') for key in resolutions):
+                merged['topology'] = _merge_point_coordinates(
+                    *(u['topology'] for u in units), point_conflicts=[], choices=resolutions)
             state = copy.deepcopy(merged['topology'])
             points, observations = editor_records(state)
             observations += gnss_records(merged['gnss'], points)
