@@ -5,7 +5,7 @@ merge automatically; competing existing-point edits offer whole-point choices.
 Competing network settings offer whole-object choices; measured override
 conflicts offer whole-line choices when structure is unchanged.
 Combined field merges match points/lines/angles by ID and retain target list order.
-Existing-angle names merge by ID with whole-angle conflict choices.
+Existing-line and existing-angle names merge by ID with whole-object conflict choices.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -88,6 +88,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         if any(not isinstance(i, str) or not i for i in line_ids) or len(set(line_ids)) != len(line_ids):
             return None
         for line in value.get('lines', []):
+            line.pop('name', None)
             for field in ('length', 'azimuth'):
                 line.pop(field, None)
                 line.pop('_keep_' + field, None)
@@ -156,10 +157,12 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             out.clear()
             out.update(copy.deepcopy(chosen))
     for bl, tl, sl, out in aligned('lines'):
-        for field in ('length', 'azimuth'):
+        for field in ('name', 'length', 'azimuth'):
             flag = '_keep_' + field
             def authored(line):
                 # Unkept values are computed, so geometry changes are not edits.
+                if field == 'name':
+                    return (field in line, line.get(field))
                 return ((flag in line, line.get(flag)),
                         (field in line, line.get(field)) if line.get(flag) else None)
             b, t, s = (authored(line) for line in (bl, tl, sl))
@@ -176,7 +179,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
                 out.clear()
                 out.update(copy.deepcopy(chosen))
                 break
-            for key in (flag, field):
+            for key in ((field,) if field == 'name' else (flag, field)):
                 if key in chosen:
                     out[key] = chosen[key]
                 else:

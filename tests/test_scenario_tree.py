@@ -676,3 +676,68 @@ def test_angle_name_merge_and_choices(bridge, choice):
     assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
     assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
     assert service.state['angles'] == state['angles']
+
+
+@pytest.mark.parametrize('choice', [None, 'target', 'source'])
+def test_line_name_merge_and_choices(bridge, choice):
+    c, service = bridge
+    root = save(c, 'base')
+    lid = service.state['lines'][0]['id']
+    service.state['points'][0]['name'] = 'retained point'
+    if choice:
+        service.state['lines'][0]['name'] = 901
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0]['name'] = 902
+    service.state['lines'].reverse()
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    resolutions = {'line:'+lid: choice} if choice else {}
+    assert plan['conflicts'] == list(resolutions)
+    if choice:
+        before = c.get('/api/engineering/projects').json()
+        for bad in ({}, {'line:'+lid: 'invalid'}, dict(resolutions, topology='target')):
+            assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions=bad)).status_code == 400
+            assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='line merge', resolutions=resolutions))
+    assert r.status_code == 200, r.text
+    state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
+    assert [a['id'] for a in state['lines']] == [a['id'] for a in target['lines']]
+    assert next(a for a in state['lines'] if a['id'] == lid)['name'] == (901 if choice == 'target' else 902)
+    assert state['points'][0]['name'] == 'retained point'
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['lines'] == state['lines']
+
+
+@pytest.mark.parametrize('conflict', ['name', 'length', None])
+@pytest.mark.parametrize('choice', ['target', 'source'])
+def test_line_name_with_measurement_merge(bridge, conflict, choice):
+    c, service = bridge
+    root = save(c, 'base')
+    lid = service.state['lines'][0]['id']
+    service.state['lines'][0]['name'] = 901
+    if conflict == 'length':
+        service.state['lines'][0].update(length=111.25, _keep_length=True)
+    left = save(c, 'target', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0].update(length=222.5, _keep_length=True)
+    if conflict == 'name':
+        service.state['lines'][0]['name'] = 902
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    resolutions = {'line:'+lid: choice} if conflict else {}
+    assert plan['conflicts'] == list(resolutions)
+    r = c.post('/api/engineering/merge', json=dict(plan, name='line fields', resolutions=resolutions))
+    assert r.status_code == 200, r.text
+    state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
+    line = next(x for x in state['lines'] if x['id'] == lid)
+    if conflict:
+        assert line == parents[0 if choice == 'target' else 1]['metadata']['thesis_state']['lines'][0]
+    else:
+        assert line['name'] == 901
+        assert line['length'] == 222.5
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
