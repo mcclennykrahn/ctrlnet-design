@@ -619,7 +619,7 @@ def test_identity_merge_across_angle_order(bridge, reordered, conflict):
 
 
 
-@pytest.mark.parametrize('mutation', ['duplicate', 'missing_id', 'added', 'deleted', 'station', 'name', 'extra'])
+@pytest.mark.parametrize('mutation', ['duplicate', 'missing_id', 'added', 'deleted', 'station', 'backsight', 'foresight', 'extra'])
 def test_angle_order_merge_declines_authored_structure_changes(bridge, mutation):
     from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
     _, service = bridge
@@ -642,3 +642,37 @@ def test_angle_order_merge_declines_authored_structure_changes(bridge, mutation)
     else:
         angle[mutation] = 'changed'
     assert _merge_point_coordinates(base, target, source) is None
+
+
+@pytest.mark.parametrize('choice', [None, 'target', 'source'])
+def test_angle_name_merge_and_choices(bridge, choice):
+    c, service = bridge
+    root = save(c, 'base')
+    aid = service.state['angles'][0]['id']
+    service.state['points'][0]['name'] = 'retained point'
+    if choice:
+        service.state['angles'][0]['name'] = 801
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['angles'][0]['name'] = 802
+    service.state['angles'].reverse()
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    resolutions = {'angle:'+aid: choice} if choice else {}
+    assert plan['conflicts'] == list(resolutions)
+    if choice:
+        before = c.get('/api/engineering/projects').json()
+        for bad in ({}, {'angle:'+aid: 'invalid'}, dict(resolutions, topology='target')):
+            assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions=bad)).status_code == 400
+            assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='angle merge', resolutions=resolutions))
+    assert r.status_code == 200, r.text
+    state = store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']
+    assert [a['id'] for a in state['angles']] == [a['id'] for a in target['angles']]
+    assert next(a for a in state['angles'] if a['id'] == aid)['name'] == (801 if choice == 'target' else 802)
+    assert state['points'][0]['name'] == 'retained point'
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['angles'] == state['angles']
