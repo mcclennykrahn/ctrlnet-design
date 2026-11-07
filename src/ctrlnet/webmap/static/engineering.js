@@ -169,7 +169,7 @@
     mergePlan = plan;
     for (const key of plan.conflicts) {
       const label = document.createElement('label');
-      label.textContent = key.startsWith('point:') ? '点 ' + key.slice(6) + ' 冲突（选择整点） ' : key + ' 冲突 ';
+      label.textContent = key.startsWith('point:') ? '点 ' + key.slice(6) + ' 冲突（选择整点） ' : key === 'network' ? '网形设置冲突（选择整组设置） ' : key + ' 冲突 ';
       const select = document.createElement('select'); select.dataset.unit = key;
       options(select, [['','请选择'],['target','保留目标'],['source','采用来源']]);
       label.append(select); $('conflicts').append(label);
