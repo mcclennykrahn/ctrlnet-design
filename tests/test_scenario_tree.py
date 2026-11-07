@@ -152,7 +152,7 @@ def test_disjoint_point_coordinates_merge_and_refresh(bridge):
     assert service.state['points'] == expected['points']
 
 
-@pytest.mark.parametrize('mutation', ['fixed', 'name', 'settings', 'measured', 'reorder', 'delete'])
+@pytest.mark.parametrize('mutation', ['settings', 'measured', 'reorder', 'delete'])
 def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     c, service = bridge
     root = save(c, 'base')
@@ -160,11 +160,7 @@ def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
     left = save(c, 'left', root)
     c.post('/api/engineering/open/'+root['scenario_id'], json={})
     service.state['points'][1]['y'] += 2
-    if mutation == 'fixed':
-        service.state['points'][1]['fixed'] = not service.state['points'][1]['fixed']
-    elif mutation == 'name':
-        service.state['points'][1]['name'] = 900
-    elif mutation == 'settings':
+    if mutation == 'settings':
         service.state['network']['sigma_angle_sec'] = 42
     elif mutation == 'measured':
         service.state['lines'][0].update(_keep_length=True, length=123.)
@@ -181,3 +177,39 @@ def test_coordinate_merge_declines_other_authored_changes(bridge, mutation):
         return
     right = save(c, 'right', root)
     assert preview(c, left, right)['conflicts'] == ['topology']
+
+
+@pytest.mark.parametrize('field,value', [('name', 900), ('fixed', True)])
+def test_existing_point_field_merge_reopens(bridge, field, value):
+    c, service = bridge
+    root = save(c, 'base')
+    index = next(i for i, p in enumerate(service.state['points']) if not p['fixed'])
+    service.state['points'][index]['x'] += 5
+    left = save(c, 'coordinates', root)
+    expected_x = service.state['points'][index]['x']
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][index][field] = value
+    right = save(c, 'field', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='fields', resolutions={}))
+    assert r.status_code == 200, r.text
+    assert c.post('/api/engineering/open/'+r.json()['scenario_id'], json={}).status_code == 200
+    assert service.state['points'][index]['x'] == expected_x
+    assert service.state['points'][index][field] == value
+
+
+def test_conflicting_names_keep_topology_choice(bridge):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['name'] = 900
+    left = save(c, 'left', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][0]['name'] = 901
+    right = save(c, 'right', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == ['topology']
+    r = c.post('/api/engineering/merge', json=dict(plan, name='choice', resolutions={'topology': 'source'}))
+    assert r.status_code == 200, r.text
+    actual = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    assert actual['metadata']['thesis_state']['points'][0]['name'] == 901

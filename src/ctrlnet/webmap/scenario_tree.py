@@ -1,6 +1,6 @@
 """Conservative three-way merge of saved editor scenarios.
 
-Disjoint existing-point coordinate edits merge automatically; other topology
+Disjoint existing-point coordinate, name and fixed edits merge automatically; other topology
 conflicts retain whole-topology choices. Both parents remain durable.
 """
 import copy
@@ -55,13 +55,14 @@ def _same(key, a, b):
 
 
 def _merge_point_coordinates(base, target, source):
-    """Merge coordinates only when point identities and other authored data match.
+    """Merge existing-point coordinates, names and fixed flags by authored field.
 
     A point's x/y/lon/lat tuple is indivisible. Derived geometry and timestamps
     are ignored, while measured line overrides remain authored data.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
+    groups = (coordinates, ('name',), ('fixed',))
 
     def skeleton(state):
         value = copy.deepcopy(state)
@@ -71,7 +72,7 @@ def _merge_point_coordinates(base, target, source):
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
         for point in value.get('points', []):
-            for field in coordinates:
+            for field in (*coordinates, 'name', 'fixed'):
                 point.pop(field, None)
         for line in value.get('lines', []):
             for field in ('length', 'azimuth'):
@@ -86,18 +87,20 @@ def _merge_point_coordinates(base, target, source):
         return None
     result = copy.deepcopy(target)
     for bp, tp, sp, out in zip(base['points'], target['points'], source['points'], result['points']):
-        b, t, s = (tuple(p.get(k) for k in coordinates) for p in (bp, tp, sp))
-        if t == s or s == b:
-            chosen = tp
-        elif t == b:
-            chosen = sp
-        else:
-            return None
-        for field in coordinates:
-            if field in chosen:
-                out[field] = chosen[field]
+        for fields in groups:
+            # Presence is authored too: absent and explicit null are distinct.
+            b, t, s = (tuple((k in p, p.get(k)) for k in fields) for p in (bp, tp, sp))
+            if t == s or s == b:
+                chosen = tp
+            elif t == b:
+                chosen = sp
             else:
-                out.pop(field, None)
+                return None
+            for field in fields:
+                if field in chosen:
+                    out[field] = chosen[field]
+                else:
+                    out.pop(field, None)
     _ensure_geometry(result)
     _refresh_derived(result)
     return result
