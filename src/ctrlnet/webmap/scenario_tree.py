@@ -4,6 +4,7 @@ Disjoint existing-point edits, measured line overrides and network settings
 merge automatically; competing existing-point edits offer whole-point choices.
 Competing network settings offer whole-object choices; measured override
 conflicts offer whole-line choices when structure is unchanged.
+Combined field merges match points/lines by ID and retain target list order.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -89,6 +90,10 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             for field in ('length', 'azimuth'):
                 line.pop(field, None)
                 line.pop('_keep_' + field, None)
+        # Sort comparison copies only: IDs define identity, while the
+        # result retains the target branch's presentation order.
+        for collection in ('points', 'lines'):
+            value[collection].sort(key=lambda item: item['id'])
         for angle in value.get('angles', []):
             angle.pop('value', None)
         return value
@@ -114,7 +119,13 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         result['network'] = copy.deepcopy(chosen['network'])
     else:
         result.pop('network', None)
-    for bp, tp, sp, out in zip(base['points'], target['points'], source['points'], result['points']):
+    def aligned(collection):
+        indexes = [{item['id']: item for item in state[collection]}
+                   for state in (base, target, source)]
+        for out in result[collection]:
+            yield tuple(index[out['id']] for index in indexes) + (out,)
+
+    for bp, tp, sp, out in aligned('points'):
         conflicted = False
         for fields in groups:
             # Presence is authored too: absent and explicit null are distinct.
@@ -139,7 +150,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             chosen = sp if (choices or {}).get(key) == 'source' else tp
             out.clear()
             out.update(copy.deepcopy(chosen))
-    for bl, tl, sl, out in zip(base['lines'], target['lines'], source['lines'], result['lines']):
+    for bl, tl, sl, out in aligned('lines'):
         for field in ('length', 'azimuth'):
             flag = '_keep_' + field
             def authored(line):
