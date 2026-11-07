@@ -3,9 +3,11 @@
 Disjoint existing-point edits, measured line overrides and network settings
 merge automatically; competing existing-point edits offer whole-point choices.
 Competing network settings offer whole-object choices; measured override
-conflicts offer whole-line choices when structure is unchanged.
+conflicts offer whole-line choices for existing lines.
 Combined field merges match points/lines/angles by ID and retain target list order.
 Existing-line and existing-angle names merge by ID with whole-object conflict choices.
+Existing-line endpoint changes merge as whole authored lines, so measurements
+never transfer automatically between different endpoint pairs.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -68,6 +70,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     settings object are indivisible. Competing point edits select a whole point;
     competing network edits select the whole settings object. Competing measured
     overrides select a whole line, with unkept geometry recomputed afterward.
+    Changed endpoint pairs make the entire authored line indivisible.
     """
     from .thesis_web import _ensure_geometry, _refresh_derived
     coordinates = ('x', 'y', 'lon', 'lat')
@@ -88,6 +91,12 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         if any(not isinstance(i, str) or not i for i in line_ids) or len(set(line_ids)) != len(line_ids):
             return None
         for line in value.get('lines', []):
+            # Only references to distinct existing point IDs are in scope.
+            if (line.get('from') not in ids or line.get('to') not in ids
+                    or line['from'] == line['to']):
+                return None
+            line.pop('from', None)
+            line.pop('to', None)
             line.pop('name', None)
             for field in ('length', 'azimuth'):
                 line.pop(field, None)
@@ -157,6 +166,31 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             out.clear()
             out.update(copy.deepcopy(chosen))
     for bl, tl, sl, out in aligned('lines'):
+        endpoints = [(line['from'], line['to']) for line in (bl, tl, sl)]
+        if not endpoints[0] == endpoints[1] == endpoints[2]:
+            # An observation belongs to its endpoint pair. Treat the whole line
+            # as indivisible whenever endpoints change, including measurements
+            # and names, rather than grafting old measurements onto a new edge.
+            def authored_line(line):
+                value = copy.deepcopy(line)
+                for field in ('length', 'azimuth'):
+                    if not line.get('_keep_' + field):
+                        value.pop(field, None)
+                return value
+            b, t, s = map(authored_line, (bl, tl, sl))
+            if t == s or s == b:
+                chosen = tl
+            elif t == b:
+                chosen = sl
+            else:
+                if point_conflicts is None:
+                    return None
+                key = 'line:' + bl['id']
+                point_conflicts.append(key)
+                chosen = sl if (choices or {}).get(key) == 'source' else tl
+            out.clear()
+            out.update(copy.deepcopy(chosen))
+            continue
         for field in ('name', 'length', 'azimuth'):
             flag = '_keep_' + field
             def authored(line):

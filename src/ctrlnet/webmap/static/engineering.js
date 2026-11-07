@@ -16,7 +16,7 @@
     <p>方案流程（单用户记录，不代表独立审核或质量认证）：<span id="engineering-lifecycle"></span></p>
     <select id="engineering-target" aria-label="目标流程状态"></select><input id="engineering-note" aria-label="流程说明" maxlength="500" placeholder="必填流程说明"><button id="engineering-transition">变更流程状态</button>
     <pre id="engineering-tree" aria-label="方案谱系" style="white-space:pre-wrap"></pre>
-    <p>三方合并：当前方案为目标，比较对象为来源；保存为新方案，保留双亲。拓扑整体与GNSS分别合并，不自动拼接几何。冲突须选择目标或来源。</p>
+    <p>三方合并：当前方案为目标，比较对象为来源；保存为新方案，保留双亲。按现有对象合并字段，GNSS单独合并；边端点改变时整边合并（含观测值）。增删对象及角引用改变仍按整体拓扑处理。冲突须选择目标或来源。</p>
     <button id="engineering-merge-preview">预览合并</button><span id="engineering-conflicts"></span>
     <button id="engineering-merge" disabled>保存合并新方案</button>
     <details><summary>GNSS 二维基线参数（随保存/派生持久化）</summary>

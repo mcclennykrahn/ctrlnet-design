@@ -741,3 +741,101 @@ def test_line_name_with_measurement_merge(bridge, conflict, choice):
         assert line['name'] == 901
         assert line['length'] == 222.5
     assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+
+
+@pytest.mark.parametrize('edit', ['none', 'same', 'different', 'measurement', 'name'])
+@pytest.mark.parametrize('choice', ['target', 'source'])
+def test_existing_line_endpoint_merge(bridge, edit, choice):
+    from ctrlnet.webmap.thesis_web import _line_geometry
+    c, service = bridge
+    root = save(c, 'base')
+    base = copy.deepcopy(service.state)
+    original = base['lines'][0]
+    lid = original['id']
+    alternatives = [p['id'] for p in base['points'] if p['id'] not in (original['from'], original['to'])]
+    assert len(alternatives) >= 2
+    service.state['points'][0]['name'] = 'retained point'
+    if edit in ('same', 'different'):
+        service.state['lines'][0]['to'] = alternatives[0 if edit == 'same' else 1]
+    elif edit == 'measurement':
+        service.state['lines'][0].update(length=111.25, _keep_length=True)
+    elif edit == 'name':
+        service.state['lines'][0]['name'] = 987
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['lines'][0]['to'] = alternatives[0]
+    service.state['lines'].reverse()
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    conflict = edit in ('different', 'measurement', 'name')
+    resolutions = {'line:'+lid: choice} if conflict else {}
+    assert plan['conflicts'] == list(resolutions)
+    before = c.get('/api/engineering/projects').json()
+    if conflict:
+        assert c.post('/api/engineering/merge', json=dict(plan, name='missing', resolutions={})).status_code == 400
+        assert c.get('/api/engineering/projects').json() == before
+    response = c.post('/api/engineering/merge', json=dict(plan, name='endpoints', resolutions=resolutions))
+    assert response.status_code == 200, response.text
+    saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    line = next(x for x in state['lines'] if x['id'] == lid)
+    chosen = parents[0 if conflict and choice == 'target' else 1]['metadata']['thesis_state']
+    expected = next(x for x in chosen['lines'] if x['id'] == lid)
+    for field in ('from', 'to', 'name', '_keep_length', '_keep_azimuth'):
+        assert (field in line, line.get(field)) == (field in expected, expected.get(field))
+    length, azimuth = _line_geometry(state, line)
+    assert line['length'] == pytest.approx(expected['length'] if line.get('_keep_length') else length)
+    assert line['azimuth'] == pytest.approx(expected['azimuth'] if line.get('_keep_azimuth') else azimuth)
+    assert state['points'][0]['name'] == 'retained point'
+    assert [x['id'] for x in state['lines']] == [x['id'] for x in target['lines']]
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    # Persisted adjustment observations use the selected endpoint names too.
+    names = {p['id']: str(p['name']) for p in state['points']}
+    if lid in state['network']['observed_edges'] + state['network']['added_edges']:
+        assert any(o['kind'] == 'distance' and o['from'] == names[line['from']] and o['to'] == names[line['to']]
+                   for o in saved['observations'])
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['lines'] == state['lines']
+
+
+@pytest.mark.parametrize('mutation', ['missing', 'self', 'unknown_field'])
+def test_endpoint_merge_keeps_invalid_or_unknown_structure_conservative(bridge, mutation):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    target['points'][0]['name'] = 'target'
+    line = source['lines'][0]
+    if mutation == 'missing':
+        line.pop('to')
+    elif mutation == 'self':
+        line['to'] = line['from']
+    else:
+        line['extra'] = 'authored'
+    assert _merge_point_coordinates(base, target, source) is None
+
+
+def test_endpoint_pair_is_indivisible_and_disjoint_lines_combine(bridge):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    line = base['lines'][0]
+    alternatives = [p['id'] for p in base['points'] if p['id'] not in (line['from'], line['to'])]
+    target['lines'][0]['from'] = alternatives[0]
+    source['lines'][0]['to'] = alternatives[1]
+    conflicts = []
+    result = _merge_point_coordinates(base, target, source, conflicts, {'line:'+line['id']: 'source'})
+    assert conflicts == ['line:'+line['id']]
+    assert (result['lines'][0]['from'], result['lines'][0]['to']) == (line['from'], alternatives[1])
+    source['lines'][0] = copy.deepcopy(line)
+    other = source['lines'][1]
+    other['to'] = next(p['id'] for p in base['points'] if p['id'] not in (other['from'], other['to']))
+    for left, right in ((target, source), (source, target)):
+        conflicts = []
+        result = _merge_point_coordinates(base, left, right, conflicts)
+        assert conflicts == []
+        assert result['lines'][0]['from'] == alternatives[0]
+        assert result['lines'][1]['to'] == other['to']
