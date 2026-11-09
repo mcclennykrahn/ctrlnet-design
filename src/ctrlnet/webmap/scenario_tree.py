@@ -8,6 +8,7 @@ Combined field merges match points/lines/angles by ID and retain target list ord
 Existing-line and existing-angle names merge by ID with whole-object conflict choices.
 Existing-line endpoint changes merge as whole authored lines, so measurements
 never transfer automatically between different endpoint pairs.
+Existing-angle reference changes merge as whole authored angles.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -109,6 +110,11 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         for collection in ('points', 'lines', 'angles'):
             value[collection].sort(key=lambda item: item['id'])
         for angle in value.get('angles', []):
+            refs = [angle.get(field) for field in ('station', 'backsight', 'foresight')]
+            if any(ref not in ids for ref in refs) or len(set(refs)) != 3:
+                return None
+            for field in ('station', 'backsight', 'foresight'):
+                angle.pop(field, None)
             angle.pop('value', None)
             angle.pop('name', None)
         return value
@@ -219,7 +225,13 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
                 else:
                     out.pop(key, None)
     for ba, ta, sa, out in aligned('angles'):
-        b, t, s = (("name" in angle, angle.get("name")) for angle in (ba, ta, sa))
+        def authored_angle(angle):
+            # Derived values do not count as edits. Names and references travel
+            # together so an authored name cannot migrate to a different ray.
+            value = copy.deepcopy(angle)
+            value.pop('value', None)
+            return value
+        b, t, s = map(authored_angle, (ba, ta, sa))
         if t == s or s == b:
             chosen = ta
         elif t == b:
@@ -230,7 +242,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             key = 'angle:' + ba['id']
             point_conflicts.append(key)
             chosen = sa if (choices or {}).get(key) == 'source' else ta
-        # References and all other authored fields are equal by skeleton check.
+        # Whole-angle selection keeps reference triples and names together.
         out.clear()
         out.update(copy.deepcopy(chosen))
     _ensure_geometry(result)

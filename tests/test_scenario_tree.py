@@ -839,3 +839,68 @@ def test_endpoint_pair_is_indivisible_and_disjoint_lines_combine(bridge):
         assert conflicts == []
         assert result['lines'][0]['from'] == alternatives[0]
         assert result['lines'][1]['to'] == other['to']
+
+
+@pytest.mark.parametrize('edit', ['none', 'same', 'different', 'name'])
+@pytest.mark.parametrize('choice', ['target', 'source'])
+def test_existing_angle_reference_merge(bridge, edit, choice):
+    from ctrlnet.webmap.thesis_web import _angle_value
+    c, service = bridge
+    root = save(c, 'base')
+    original = copy.deepcopy(service.state['angles'][0])
+    aid = original['id']
+    refs = ('station', 'backsight', 'foresight')
+    # Permutations remain valid even for a three-point network.
+    service.state['points'][0]['name'] = 'retained point'
+    if edit in ('same', 'different'):
+        a = service.state['angles'][0]
+        a['station'], a['backsight'] = a['backsight'], a['station']
+        if edit == 'different':
+            a['backsight'], a['foresight'] = a['foresight'], a['backsight']
+    elif edit == 'name':
+        service.state['angles'][0]['name'] = 987
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    a = service.state['angles'][0]
+    a['station'], a['backsight'] = a['backsight'], a['station']
+    service.state['angles'].reverse()
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)]
+    plan = preview(c, left, right)
+    conflict = edit in ('different', 'name')
+    resolutions = {'angle:'+aid: choice} if conflict else {}
+    assert plan['conflicts'] == list(resolutions)
+    before = c.get('/api/engineering/projects').json()
+    if conflict:
+        for invalid in ({}, {'angle:'+aid: 'invalid'}):
+            assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions=invalid)).status_code == 400
+            assert c.get('/api/engineering/projects').json() == before
+    response = c.post('/api/engineering/merge', json=dict(plan, name='references', resolutions=resolutions))
+    assert response.status_code == 200, response.text
+    saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    angle = next(a for a in state['angles'] if a['id'] == aid)
+    chosen = parents[0 if conflict and choice == 'target' else 1]['metadata']['thesis_state']
+    expected = next(a for a in chosen['angles'] if a['id'] == aid)
+    for field in (*refs, 'name'):
+        assert (field in angle, angle.get(field)) == (field in expected, expected.get(field))
+    assert angle['value'] == pytest.approx(_angle_value(state, angle))
+    assert state['points'][0]['name'] == 'retained point'
+    assert [a['id'] for a in state['angles']] == [a['id'] for a in target['angles']]
+    assert [store.get_scenario(service.repository.path, x['scenario_id']) for x in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['angles'] == state['angles']
+
+
+@pytest.mark.parametrize('field', ['station', 'backsight', 'foresight'])
+@pytest.mark.parametrize('invalid', ['missing', 'duplicate'])
+def test_angle_reference_merge_invalid_is_conservative(bridge, field, invalid):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    target['points'][0]['name'] = 'independent'
+    a = source['angles'][0]
+    a[field] = 'missing-point' if invalid == 'missing' else a[next(k for k in ('station', 'backsight', 'foresight') if k != field)]
+    assert _merge_point_coordinates(base, target, source) is None
