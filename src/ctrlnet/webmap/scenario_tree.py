@@ -9,6 +9,7 @@ Existing-line and existing-angle names merge by ID with whole-object conflict ch
 Existing-line endpoint changes merge as whole authored lines, so measurements
 never transfer automatically between different endpoint pairs.
 Existing-angle reference changes merge as whole authored angles.
+Isolated point additions and unchanged isolated point deletions merge by ID.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -119,9 +120,42 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             angle.pop('name', None)
         return value
 
-    # Isolated additions only: stripping them must leave a supported merge.
-    # New line/angle references and deletions still require topology choices.
+    # Isolated additions/deletions: stripping them must leave a supported merge.
+    # Referenced deletions and mixed additions/deletions remain conservative.
     base_ids = {p['id'] for p in base['points']}
+    branch_ids = [{p['id'] for p in state['points']} for state in (target, source)]
+    removed = base_ids - set.intersection(*branch_ids)
+    if removed:
+        # Deletions are safe only for isolated, otherwise unchanged points.
+        states = (base, target, source)
+        if any(not ids <= base_ids for ids in branch_ids):
+            return None
+        indexes = []
+        for state in states:
+            ids = [p.get('id') for p in state['points']]
+            if (any(not isinstance(i, str) or not i for i in ids)
+                    or len(set(ids)) != len(ids)):
+                return None
+            indexes.append({p['id']: p for p in state['points']})
+            if any(line.get(k) in removed for line in state['lines'] for k in ('from', 'to')):
+                return None
+            if any(angle.get(k) in removed for angle in state['angles']
+                   for k in ('station', 'backsight', 'foresight')):
+                return None
+        for pid in removed:
+            original = indexes[0][pid]
+            if set(original) - {'id', 'name', 'x', 'y', 'lon', 'lat', 'fixed'}:
+                return None
+            if any(pid in index and index[pid] != original for index in indexes[1:]):
+                return None
+        stripped = copy.deepcopy(states)
+        for state in stripped:
+            state['points'] = [p for p in state['points'] if p['id'] not in removed]
+            state['seq']['point'] = base['seq']['point']
+        combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
+        if combined is not None:
+            combined['seq']['point'] = max(state['seq']['point'] for state in states)
+        return combined
     if any({p['id'] for p in state['points']} != base_ids for state in (target, source)):
         states = (base, target, source)
         indexes = []

@@ -1012,3 +1012,83 @@ def test_competing_additions_whole_topology_choices_atomic(bridge):
         r = c.post('/api/engineering/merge', json=dict(plan, name=choice, resolutions={'topology':choice}))
         assert r.status_code == 200, r.text
         assert store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']['points'] == expected
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'both'])
+def test_isolated_deletion_merge_reopen(bridge, direction):
+    c, service = bridge
+    extra = copy.deepcopy(added_point(service.state))
+    root = save(c, 'base with isolated point')
+    if direction in ('target', 'both'):
+        service.state['points'].pop()
+    service.state['points'].reverse()
+    next(p for p in service.state['points'] if p['id'] != extra['id'])['name'] = 'retained edit'
+    left = save(c, 'target', root)
+    target_order = [p['id'] for p in service.state['points'] if p['id'] != extra['id']]
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction in ('source', 'both'):
+        service.state['points'].pop()
+    service.state['seq']['point'] = 950
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    response = c.post('/api/engineering/merge', json=dict(plan, name='deleted', resolutions={}))
+    assert response.status_code == 200, response.text
+    saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    assert [p['id'] for p in state['points']] == target_order
+    assert state['points'][0]['name'] == 'retained edit'
+    assert state['seq']['point'] == 950
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['points'] == state['points']
+
+
+@pytest.mark.parametrize('change', ['edit', 'line', 'angle', 'unknown', 'addition', 'duplicate'])
+def test_isolated_deletion_boundaries(bridge, change):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    added_point(service.state)
+    base = copy.deepcopy(service.state)
+    if change == 'unknown':
+        base['points'][-1]['custom'] = True
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    source['points'].pop()
+    target['points'][0]['x'] += 2
+    if change == 'edit':
+        target['points'][-1]['name'] = 'edited deleted point'
+    elif change == 'line':
+        target['lines'][0]['from'] = 'p900'
+    elif change == 'angle':
+        target['angles'][0]['station'] = 'p900'
+    elif change == 'addition':
+        added_point(target, 'p901', '901')
+    elif change == 'duplicate':
+        target['points'].append(copy.deepcopy(target['points'][0]))
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+def test_delete_versus_edit_requires_atomic_topology_choice(bridge):
+    c, service = bridge
+    added_point(service.state)
+    root = save(c, 'base')
+    service.state['points'].pop()
+    service.state['points'][0]['name'] = 'target edit'
+    left = save(c, 'deleted', root)
+    target = copy.deepcopy(service.state['points'])
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][-1]['name'] = 'edited instead'
+    right = save(c, 'edited', root)
+    source = copy.deepcopy(service.state['points'])
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == ['topology']
+    before = c.get('/api/engineering/projects').json()
+    assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions={})).status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    for choice, expected in [('target', target), ('source', source)]:
+        response = c.post('/api/engineering/merge', json=dict(plan, name=choice, resolutions={'topology': choice}))
+        assert response.status_code == 200, response.text
+        saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
+        assert saved['metadata']['thesis_state']['points'] == expected
