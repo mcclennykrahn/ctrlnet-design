@@ -904,3 +904,111 @@ def test_angle_reference_merge_invalid_is_conservative(bridge, field, invalid):
     a = source['angles'][0]
     a[field] = 'missing-point' if invalid == 'missing' else a[next(k for k in ('station', 'backsight', 'foresight') if k != field)]
     assert _merge_point_coordinates(base, target, source) is None
+
+
+def added_point(state, pid='p900', name='900'):
+    point = dict(state['points'][0], id=pid, name=name, fixed=False)
+    point['x'] += 23
+    state['points'].append(point)
+    state['seq']['point'] = max(state['seq']['point'], int(pid[1:]))
+    return point
+
+
+@pytest.mark.parametrize('both', [False, True])
+def test_isolated_additions_merge_reopen(bridge, both):
+    c, service = bridge
+    root = save(c, 'base')
+    original = copy.deepcopy(service.state)
+    service.state['points'][0]['x'] += 5
+    if both:
+        added_point(service.state, 'p901', '901')
+    service.state['points'].reverse()
+    left = save(c, 'left', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    extra = copy.deepcopy(added_point(service.state))
+    right = save(c, 'right', root)
+    before = [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    result = c.post('/api/engineering/merge', json=dict(plan, name='added', resolutions={}))
+    assert result.status_code == 200, result.text
+    sid = result.json()['scenario_id']
+    state = store.get_scenario(service.repository.path, sid)['metadata']['thesis_state']
+    assert state['points'] == target['points'] + [extra]
+    assert state['seq']['point'] == (901 if both else 900)
+    assert [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)] == before
+    assert c.post('/api/engineering/open/'+sid, json={}).status_code == 200
+    assert service.state['points'] == state['points']
+    assert len(state['points']) == len(original['points']) + 1 + both
+
+
+@pytest.mark.parametrize('change', ['same', 'different', 'name_collision', 'new_edge', 'unknown', 'delete'])
+def test_isolated_additions_conservative_boundaries(bridge, change):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    c, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    added_point(source)
+    target['points'][0]['x'] += 5
+    if change in ('same', 'different'):
+        target['points'].append(copy.deepcopy(source['points'][-1]))
+        target['seq']['point'] = source['seq']['point']
+        if change == 'different':
+            target['points'][-1]['x'] += 1
+    elif change == 'name_collision':
+        added_point(target, 'p901', '900')
+    elif change == 'new_edge':
+        source['lines'][0]['from'] = 'p900'
+    elif change == 'unknown':
+        source['points'][-1]['custom'] = True
+    elif change == 'delete':
+        target['points'].pop()
+    result = _merge_point_coordinates(base, target, source, [])
+    if change == 'same':
+        assert result is not None
+        assert [p['id'] for p in result['points']].count('p900') == 1
+    else:
+        assert result is None
+
+
+def test_isolated_addition_with_existing_point_choice(bridge):
+    c, service = bridge
+    root = save(c, 'base')
+    service.state['points'][0]['x'] += 2
+    left = save(c, 'left', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][0]['x'] += 3
+    added_point(service.state)
+    expected = copy.deepcopy(service.state['points'])
+    right = save(c, 'right', root)
+    plan = preview(c, left, right)
+    key = 'point:' + expected[0]['id']
+    assert plan['conflicts'] == [key]
+    before = c.get('/api/engineering/projects').json()
+    assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions={})).status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='good', resolutions={key:'source'}))
+    assert r.status_code == 200, r.text
+    assert store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']['points'] == expected
+
+
+def test_competing_additions_whole_topology_choices_atomic(bridge):
+    c, service = bridge
+    root = save(c, 'base')
+    added_point(service.state)
+    left = save(c, 'left', root)
+    target = copy.deepcopy(service.state['points'])
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    added_point(service.state)['x'] += 1
+    right = save(c, 'right', root)
+    source = copy.deepcopy(service.state['points'])
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == ['topology']
+    before = c.get('/api/engineering/projects').json()
+    assert c.post('/api/engineering/merge', json=dict(plan, name='bad', resolutions={})).status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    for choice, expected in [('target', target), ('source', source)]:
+        r = c.post('/api/engineering/merge', json=dict(plan, name=choice, resolutions={'topology':choice}))
+        assert r.status_code == 200, r.text
+        assert store.get_scenario(service.repository.path, r.json()['scenario_id'])['metadata']['thesis_state']['points'] == expected

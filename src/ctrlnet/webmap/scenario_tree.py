@@ -119,6 +119,49 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             angle.pop('name', None)
         return value
 
+    # Isolated additions only: stripping them must leave a supported merge.
+    # New line/angle references and deletions still require topology choices.
+    base_ids = {p['id'] for p in base['points']}
+    if any({p['id'] for p in state['points']} != base_ids for state in (target, source)):
+        states = (base, target, source)
+        indexes = []
+        for state in states:
+            ids = [p.get('id') for p in state['points']]
+            if (any(not isinstance(i, str) or not i for i in ids)
+                    or len(set(ids)) != len(ids) or not base_ids <= set(ids)):
+                return None
+            indexes.append({p['id']: p for p in state['points']})
+        additions = {}
+        for index in indexes[1:]:
+            for pid, point in index.items():
+                if pid in base_ids:
+                    continue
+                if set(point) - {'id', 'name', 'x', 'y', 'lon', 'lat', 'fixed'}:
+                    return None
+                if pid in additions and additions[pid] != point:
+                    return None
+                additions[pid] = point
+        stripped = copy.deepcopy(states)
+        for state in stripped:
+            state['points'] = [p for p in state['points'] if p['id'] in base_ids]
+            state['seq']['point'] = base['seq']['point']
+        combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
+        if combined is None:
+            return None
+        by_id = {p['id']: p for p in combined['points']}
+        by_id.update(copy.deepcopy(additions))
+        order = [p['id'] for p in target['points']]
+        order += [p['id'] for p in source['points'] if p['id'] not in indexes[1]]
+        combined['points'] = [by_id[pid] for pid in order]
+        names = [str(p.get('name')) for p in combined['points']]
+        if len(set(names)) != len(names):
+            return None
+        # Keep both allocators' high-water marks to avoid future ID reuse.
+        combined['seq']['point'] = max(state['seq']['point'] for state in states)
+        _ensure_geometry(combined)
+        _refresh_derived(combined)
+        return combined
+
     shapes = [skeleton(s) for s in (base, target, source)]
     if shapes[0] is None or not shapes[0] == shapes[1] == shapes[2]:
         return None
