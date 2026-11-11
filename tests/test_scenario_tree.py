@@ -1325,3 +1325,125 @@ def test_angle_deletion_with_existing_structural_merges(bridge):
     assert result['points'][-1]['id'] == 'p901'
     assert result['points'][0]['x'] == source['points'][0]['x']
     assert result['seq']['angle'] == 950
+
+
+def added_unselected_line(state, lid='l900', name='900'):
+    line = dict(id=lid, name=name, **{'from': state['points'][0]['id'],
+                                   'to': state['points'][2 + (int(lid[1:]) - 900) % 2]['id']})
+    state['lines'].append(line)
+    state['seq']['line'] = max(state['seq']['line'], int(lid[1:]) + 1)
+    return line
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'both', 'distinct'])
+def test_unselected_line_addition_merge_persistence(bridge, direction):
+    c, service = bridge
+    root = save(c, 'base')
+    if direction in ('target', 'both', 'distinct'):
+        added_unselected_line(service.state)
+    service.state['lines'].reverse()
+    service.state['points'][0]['name'] = 'survivor'
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction in ('source', 'both'):
+        added_unselected_line(service.state)
+    elif direction == 'distinct':
+        added_unselected_line(service.state, 'l901', '901')
+    service.state['seq']['line'] = 950
+    right = save(c, 'source', root)
+    source = copy.deepcopy(service.state)
+    parents = [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='merged', resolutions={}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    target_ids = [x['id'] for x in target['lines']]
+    assert [x['id'] for x in state['lines']] == target_ids + [x['id'] for x in source['lines'] if x['id'] not in target_ids]
+    assert state['points'][0]['name'] == 'survivor'
+    assert state['seq']['line'] == 950
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['lines'] == state['lines']
+
+
+@pytest.mark.parametrize('boundary', ['id', 'name', 'existing_name', 'observed_edges', 'added_edges',
+    'measurement', 'unknown', 'duplicate', 'new_point', 'deleted_point', 'self'])
+def test_line_addition_conservative_boundaries(bridge, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    added_point(base)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    line = added_unselected_line(source)
+    target['points'][0]['name'] = 'other edit'
+    if boundary == 'id':
+        added_unselected_line(target)['name'] = 'different'
+    elif boundary == 'name':
+        added_unselected_line(target, 'l901')
+    elif boundary == 'existing_name':
+        line['name'] = base['lines'][0]['name']
+    elif boundary in ('observed_edges', 'added_edges'):
+        source['network'][boundary] = [line['id']]
+    elif boundary == 'measurement':
+        line.update(_keep_length=True, length=123)
+    elif boundary == 'unknown':
+        line['custom'] = True
+    elif boundary == 'duplicate':
+        source['lines'].append(copy.deepcopy(line))
+    elif boundary == 'new_point':
+        added_point(source, 'p901', '901')
+        line['from'] = 'p901'
+    elif boundary == 'deleted_point':
+        line['from'] = 'p900'
+        target['points'].pop()
+    else:
+        line['to'] = line['from']
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+def test_line_addition_with_deletions_and_point_choice(bridge):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    added_point(base)
+    for key in ('observed_edges', 'added_edges', 'observed_angles', 'added_angles'):
+        base['network'][key] = []
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    target['lines'].pop(0)
+    target['angles'].pop(0)
+    target['points'].pop()
+    target['points'][0]['name'] = 'target edit'
+    source['points'][0]['name'] = 'source edit'
+    added_unselected_line(source)
+    conflicts = []
+    key = 'point:' + base['points'][0]['id']
+    result = _merge_point_coordinates(base, target, source, conflicts, {key: 'source'})
+    assert conflicts == [key]
+    assert result['points'][0]['name'] == 'source edit'
+    assert result['lines'][-1]['id'] == 'l900'
+    assert len(result['lines']) == len(base['lines'])
+    assert len(result['angles']) == len(base['angles']) - 1
+    assert 'p900' not in {p['id'] for p in result['points']}
+    assert result['seq']['line'] == 901
+
+
+@pytest.mark.parametrize('boundary', ['existing', 'added', 'endpoint_edit'])
+def test_line_addition_rejects_duplicate_endpoint_pairs(bridge, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    line = added_unselected_line(source)
+    target['points'][0]['name'] = 'survivor'
+    if boundary == 'existing':
+        line.update({k: base['lines'][0][k] for k in ('from', 'to')})
+    elif boundary == 'added':
+        other = added_unselected_line(target, 'l901', '901')
+        other.update({'from': line['to'], 'to': line['from']})
+    else:
+        target['lines'][0].update({'from': line['to'], 'to': line['from']})
+    assert _merge_point_coordinates(base, target, source, []) is None

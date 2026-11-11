@@ -11,6 +11,7 @@ never transfer automatically between different endpoint pairs.
 Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
 Unchanged unselected line and angle deletions merge with allocator preservation.
+Unselected unmeasured line additions between common existing points merge by ID.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -129,6 +130,53 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
         line_indexes.append({line['id']: line for line in state['lines']})
+    added_lines = (set(line_indexes[1]) | set(line_indexes[2])) - set(line_indexes[0])
+    if added_lines:
+        # Check before stripping so recursion cannot hide new references.
+        common_points = set.intersection(*({p['id'] for p in state['points']} for state in states))
+        if any(lid in added_lines for state in states
+               for key in ('observed_edges', 'added_edges')
+               for lid in state.get('network', {}).get(key, [])):
+            return None
+        additions = {}
+        for index in line_indexes[1:]:
+            for lid in added_lines & set(index):
+                line = index[lid]
+                if (set(line) - {'id', 'name', 'from', 'to', 'length', 'azimuth',
+                                 '_keep_length', '_keep_azimuth'}
+                        or line.get('from') not in common_points
+                        or line.get('to') not in common_points
+                        or line['from'] == line['to']
+                        or line.get('_keep_length') or line.get('_keep_azimuth')):
+                    return None
+                authored = {k: v for k, v in line.items() if k not in ('length', 'azimuth')}
+                if lid in additions and additions[lid] != authored:
+                    return None
+                additions[lid] = authored
+        stripped = copy.deepcopy(states)
+        for state in stripped:
+            state['lines'] = [line for line in state['lines'] if line['id'] not in added_lines]
+            state['seq']['line'] = base['seq']['line']
+        combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
+        if combined is None:
+            return None
+        by_id = {line['id']: line for line in combined['lines']}
+        by_id.update(copy.deepcopy(additions))
+        order = [line['id'] for line in target['lines'] if line['id'] in by_id]
+        order += [line['id'] for line in source['lines']
+                  if line['id'] in by_id and line['id'] not in line_indexes[1]]
+        combined['lines'] = [by_id[lid] for lid in order]
+        names = [str(line.get('name')) for line in combined['lines']]
+        if len(set(names)) != len(names):
+            return None
+        pairs = [frozenset((line['from'], line['to'])) for line in combined['lines']]
+        if len(set(pairs)) != len(pairs):
+            return None
+        combined['seq']['line'] = max(state['seq']['line'] for state in states)
+        _ensure_geometry(combined)
+        _refresh_derived(combined)
+        return combined
+
     removed_lines = set(line_indexes[0]) - (set(line_indexes[1]) & set(line_indexes[2]))
     if removed_lines:
         # Reject unsafe selections before preview can offer network choices.
