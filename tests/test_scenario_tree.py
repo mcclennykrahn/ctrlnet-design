@@ -1154,3 +1154,57 @@ def test_mixed_isolated_changes_boundaries(bridge, boundary):
     else:
         source['points'][-1]['custom'] = True
     assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'both'])
+def test_unchanged_line_deletion_merge(bridge, direction):
+    c, service = bridge
+    root = save(c, 'base')
+    removed = service.state['lines'][0]['id']
+    if direction in ('target', 'both'):
+        service.state['lines'].pop(0)
+    service.state['lines'].reverse()
+    service.state['points'][0]['name'] = 'survivor'
+    left = save(c, 'target', root)
+    order = [x['id'] for x in service.state['lines'] if x['id'] != removed]
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction in ('source', 'both'):
+        service.state['lines'].pop(0)
+    service.state['seq']['line'] = 950
+    right = save(c, 'source', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='merged', resolutions={}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    assert [x['id'] for x in state['lines']] == order
+    assert state['points'][0]['name'] == 'survivor'
+    assert state['seq']['line'] == 950
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['lines'] == state['lines']
+
+
+@pytest.mark.parametrize('field,value', [('name', 'edited'), ('from', 'p900'),
+    ('_keep_length', False), ('custom', 1)])
+def test_line_delete_versus_edit_conservative(bridge, field, value):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    source['lines'].pop(0)
+    target['lines'][0][field] = value
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('key', ['observed_edges', 'added_edges'])
+def test_line_deletion_rejects_surviving_network_reference(bridge, key):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    removed = source['lines'].pop(0)['id']
+    target['network'][key] = [removed]
+    source['network'][key] = []
+    assert _merge_point_coordinates(base, target, source, [], {'network': 'target'}) is None
