@@ -10,7 +10,7 @@ Existing-line endpoint changes merge as whole authored lines, so measurements
 never transfer automatically between different endpoint pairs.
 Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
-Unchanged unselected line deletions merge with allocator preservation.
+Unchanged unselected line and angle deletions merge with allocator preservation.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -161,6 +161,51 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
                    for lid in network.get(key, [])):
                 return None
             combined['seq']['line'] = max(state['seq']['line'] for state in states)
+        return combined
+
+    states = (base, target, source)
+    angle_indexes = []
+    for state in states:
+        ids = [angle.get('id') for angle in state['angles']]
+        if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
+            return None
+        angle_indexes.append({angle['id']: angle for angle in state['angles']})
+    removed_angles = set(angle_indexes[0]) - (set(angle_indexes[1]) & set(angle_indexes[2]))
+    if removed_angles:
+        # Stripping angles must not hide a referenced-point deletion from the
+        # existing isolated-point guard below.
+        removed_points = {p['id'] for p in base['points']} - (
+            {p['id'] for p in target['points']} & {p['id'] for p in source['points']})
+        if any(angle.get(key) in removed_points for state in states
+               for angle in state['angles'] for key in ('station', 'backsight', 'foresight')):
+            return None
+        # Reject unsafe selections before preview can offer network choices.
+        if any(aid in removed_angles for state in (target, source)
+               for key in ('observed_angles', 'added_angles')
+               for aid in state.get('network', {}).get(key, [])):
+            return None
+        def authored_deleted_angle(angle):
+            value = copy.deepcopy(angle)
+            value.pop('value', None)
+            return value
+        for aid in removed_angles:
+            original = angle_indexes[0][aid]
+            if set(original) - {'id', 'name', 'station', 'backsight', 'foresight', 'value'}:
+                return None
+            if any(aid in index and authored_deleted_angle(index[aid]) !=
+                   authored_deleted_angle(original) for index in angle_indexes[1:]):
+                return None
+        stripped = copy.deepcopy(states)
+        for state in stripped:
+            state['angles'] = [angle for angle in state['angles'] if angle['id'] not in removed_angles]
+            state['seq']['angle'] = base['seq']['angle']
+        combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
+        if combined is not None:
+            network = combined.get('network', {})
+            if any(aid in removed_angles for key in ('observed_angles', 'added_angles')
+                   for aid in network.get(key, [])):
+                return None
+            combined['seq']['angle'] = max(state['seq']['angle'] for state in states)
         return combined
 
     # Isolated additions/deletions: stripping them must leave a supported merge.
