@@ -121,15 +121,13 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         return value
 
     # Isolated additions/deletions: stripping them must leave a supported merge.
-    # Referenced deletions and mixed additions/deletions remain conservative.
+    # Referenced deletions remain conservative; additions are checked recursively.
     base_ids = {p['id'] for p in base['points']}
     branch_ids = [{p['id'] for p in state['points']} for state in (target, source)]
     removed = base_ids - set.intersection(*branch_ids)
     if removed:
         # Deletions are safe only for isolated, otherwise unchanged points.
         states = (base, target, source)
-        if any(not ids <= base_ids for ids in branch_ids):
-            return None
         indexes = []
         for state in states:
             ids = [p.get('id') for p in state['points']]

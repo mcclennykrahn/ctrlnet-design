@@ -1046,7 +1046,7 @@ def test_isolated_deletion_merge_reopen(bridge, direction):
     assert service.state['points'] == state['points']
 
 
-@pytest.mark.parametrize('change', ['edit', 'line', 'angle', 'unknown', 'addition', 'duplicate'])
+@pytest.mark.parametrize('change', ['edit', 'line', 'angle', 'unknown', 'duplicate'])
 def test_isolated_deletion_boundaries(bridge, change):
     from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
     _, service = bridge
@@ -1063,8 +1063,6 @@ def test_isolated_deletion_boundaries(bridge, change):
         target['lines'][0]['from'] = 'p900'
     elif change == 'angle':
         target['angles'][0]['station'] = 'p900'
-    elif change == 'addition':
-        added_point(target, 'p901', '901')
     elif change == 'duplicate':
         target['points'].append(copy.deepcopy(target['points'][0]))
     assert _merge_point_coordinates(base, target, source, []) is None
@@ -1092,3 +1090,67 @@ def test_delete_versus_edit_requires_atomic_topology_choice(bridge):
         assert response.status_code == 200, response.text
         saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
         assert saved['metadata']['thesis_state']['points'] == expected
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'same_branch'])
+def test_mixed_isolated_changes_merge_reopen(bridge, direction):
+    c, service = bridge
+    added_point(service.state)
+    root = save(c, 'mixed base')
+    base = copy.deepcopy(service.state)
+    service.state['points'].reverse()
+    service.state['points'][-1]['name'] = 'survivor edit'
+    if direction in ('target', 'same_branch'):
+        service.state['points'] = [p for p in service.state['points'] if p['id'] != 'p900']
+    if direction in ('source', 'same_branch'):
+        added_point(service.state, 'p901', '901')
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction == 'source':
+        service.state['points'].pop()
+    if direction == 'target':
+        added_point(service.state, 'p901', '901')
+    service.state['seq']['point'] = 950
+    right = save(c, 'source', root)
+    parents = [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)]
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    response = c.post('/api/engineering/merge', json=dict(plan, name='mixed', resolutions={}))
+    assert response.status_code == 200, response.text
+    saved = store.get_scenario(service.repository.path, response.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    order = [p['id'] for p in target['points'] if p['id'] != 'p900']
+    if 'p901' not in order:
+        order.append('p901')
+    assert [p['id'] for p in state['points']] == order
+    assert len(state['points']) == len(base['points'])
+    assert next(p for p in state['points'] if p['id'] == base['points'][0]['id'])['name'] == 'survivor edit'
+    assert state['seq']['point'] == 950
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert [store.get_scenario(service.repository.path, r['scenario_id']) for r in (left, right)] == parents
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['points'] == state['points']
+
+
+@pytest.mark.parametrize('boundary', ['id', 'name', 'reference', 'edited_delete', 'unknown'])
+def test_mixed_isolated_changes_boundaries(bridge, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    added_point(service.state)
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    target['points'].pop()
+    added_point(source, 'p901', '901')
+    target['points'][0]['x'] += 2
+    if boundary == 'id':
+        added_point(target, 'p901', 'other')
+    elif boundary == 'name':
+        added_point(target, 'p902', '901')
+    elif boundary == 'reference':
+        source['lines'][0]['from'] = 'p901'
+    elif boundary == 'edited_delete':
+        source['points'][-2]['name'] = 'edited'
+    else:
+        source['points'][-1]['custom'] = True
+    assert _merge_point_coordinates(base, target, source, []) is None
