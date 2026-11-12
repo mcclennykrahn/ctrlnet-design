@@ -12,6 +12,7 @@ Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
 Unchanged unselected line and angle deletions merge with allocator preservation.
 Unselected unmeasured line additions between common existing points merge by ID.
+Unselected angle additions between common existing points merge by ID.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -218,6 +219,59 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
         angle_indexes.append({angle['id']: angle for angle in state['angles']})
+    added_angles = (set(angle_indexes[1]) | set(angle_indexes[2])) - set(angle_indexes[0])
+    if added_angles:
+        common_points = set.intersection(*({p['id'] for p in state['points']} for state in states))
+        if any(aid in added_angles for state in states
+               for key in ('observed_angles', 'added_angles')
+               for aid in state.get('network', {}).get(key, [])):
+            return None
+        additions = {}
+        refs = ('station', 'backsight', 'foresight')
+        for index in angle_indexes[1:]:
+            for aid in added_angles & set(index):
+                angle = index[aid]
+                triple = tuple(angle.get(key) for key in refs)
+                if (set(angle) - {'id', 'name', 'station', 'backsight', 'foresight', 'value'}
+                        or any(pid not in common_points for pid in triple)
+                        or len(set(triple)) != 3):
+                    return None
+                authored = {k: v for k, v in angle.items() if k != 'value'}
+                if aid in additions and additions[aid] != authored:
+                    return None
+                additions[aid] = authored
+        # Preview must remain safe for every whole-angle choice it offers.
+        # Checking only the default merged result can hide a collision in the
+        # other branch, causing the resolution pass to return no topology.
+        survivors = set.intersection(*(set(index) for index in angle_indexes))
+        added_names = {str(a.get('name')) for a in additions.values()}
+        added_triples = {tuple(a[key] for key in refs) for a in additions.values()}
+        if any(str(index[aid].get('name')) in added_names
+               or tuple(index[aid].get(key) for key in refs) in added_triples
+               for index in angle_indexes[1:] for aid in survivors):
+            return None
+        stripped = copy.deepcopy(states)
+        for state in stripped:
+            state['angles'] = [a for a in state['angles'] if a['id'] not in added_angles]
+            state['seq']['angle'] = base['seq']['angle']
+        combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
+        if combined is None:
+            return None
+        by_id = {a['id']: a for a in combined['angles']}
+        by_id.update(copy.deepcopy(additions))
+        order = [a['id'] for a in target['angles'] if a['id'] in by_id]
+        order += [a['id'] for a in source['angles']
+                  if a['id'] in by_id and a['id'] not in angle_indexes[1]]
+        combined['angles'] = [by_id[aid] for aid in order]
+        names = [str(a.get('name')) for a in combined['angles']]
+        triples = [tuple(a[key] for key in refs) for a in combined['angles']]
+        if len(set(names)) != len(names) or len(set(triples)) != len(triples):
+            return None
+        combined['seq']['angle'] = max(state['seq']['angle'] for state in states)
+        _ensure_geometry(combined)
+        _refresh_derived(combined)
+        return combined
+
     removed_angles = set(angle_indexes[0]) - (set(angle_indexes[1]) & set(angle_indexes[2]))
     if removed_angles:
         # Stripping angles must not hide a referenced-point deletion from the
