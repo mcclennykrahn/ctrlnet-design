@@ -11,7 +11,7 @@ never transfer automatically between different endpoint pairs.
 Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
 Unchanged unselected line and angle deletions merge with allocator preservation.
-Unselected unmeasured line additions between common existing points merge by ID.
+Unselected line additions between common existing points merge by ID.
 Unselected angle additions between common existing points merge by ID.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
@@ -147,10 +147,12 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
                                  '_keep_length', '_keep_azimuth'}
                         or line.get('from') not in common_points
                         or line.get('to') not in common_points
-                        or line['from'] == line['to']
-                        or line.get('_keep_length') or line.get('_keep_azimuth')):
+                        or line['from'] == line['to']):
                     return None
-                authored = {k: v for k, v in line.items() if k not in ('length', 'azimuth')}
+                authored = copy.deepcopy(line)
+                for field in ('length', 'azimuth'):
+                    if not line.get('_keep_' + field):
+                        authored.pop(field, None)
                 if lid in additions and additions[lid] != authored:
                     return None
                 additions[lid] = authored
