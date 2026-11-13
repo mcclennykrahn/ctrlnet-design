@@ -1382,7 +1382,7 @@ def test_unselected_line_addition_merge_persistence(bridge, direction):
 
 
 @pytest.mark.parametrize('boundary', ['id', 'name', 'existing_name',
-    'unknown', 'duplicate', 'new_point', 'deleted_point', 'self'])
+    'unknown', 'duplicate', 'deleted_point', 'self'])
 @pytest.mark.parametrize('selected', [False, True])
 def test_line_addition_conservative_boundaries(bridge, boundary, selected):
     from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
@@ -1404,9 +1404,6 @@ def test_line_addition_conservative_boundaries(bridge, boundary, selected):
         line['custom'] = True
     elif boundary == 'duplicate':
         source['lines'].append(copy.deepcopy(line))
-    elif boundary == 'new_point':
-        added_point(source, 'p901', '901')
-        line['from'] = 'p901'
     elif boundary == 'deleted_point':
         line['from'] = 'p900'
         target['points'].pop()
@@ -1954,4 +1951,66 @@ def test_selected_angle_deletion_cannot_hide_referenced_point(bridge, direction)
             state['angles'] = [l for l in state['angles'] if l['id'] != angle['id']]
             state['points'] = [p for p in state['points'] if p['id'] != point['id']]
             state['network']['observed_angles'] = []
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('selection', [None, 'observed_edges', 'added_edges'])
+def test_new_point_line_persistence(bridge, reverse, selection):
+    c, service = bridge
+    root = save(c, 'base')
+    added_point(service.state)
+    line = added_unselected_line(service.state)
+    line.update({'from': 'p900', 'length': 123.25, '_keep_length': True})
+    if selection:
+        service.state['network'][selection].append(line['id'])
+    left = save(c, 'new point and line', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    service.state['points'][0]['x'] += 7
+    expected = copy.deepcopy(service.state['points'][0])
+    right = save(c, 'coordinates', root)
+    a, b = (right, left) if reverse else (left, right)
+    plan = preview(c, a, b)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='merged', resolutions={}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    assert state['points'][0] == expected
+    assert state['points'][-1]['id'] == 'p900'
+    assert state['lines'][-1]['from'] == 'p900'
+    assert state['lines'][-1]['length'] == 123.25
+    assert state['seq']['point'] == 900
+    assert state['seq']['line'] == 901
+    if selection:
+        assert 'l900' in state['network'][selection]
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['lines'] == state['lines']
+
+
+@pytest.mark.parametrize('boundary', ['point_id', 'point_name', 'unknown', 'duplicate_pair', 'angle', 'foreign_endpoint'])
+def test_new_point_line_boundaries(bridge, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    added_point(source)
+    line = added_unselected_line(source)
+    line['from'] = 'p900'
+    target['points'][0]['name'] = 'independent'
+    if boundary == 'point_id':
+        added_point(target)
+        target['points'][-1]['x'] += 1
+    elif boundary == 'point_name':
+        added_point(target, 'p901')
+    elif boundary == 'unknown':
+        source['points'][-1]['custom'] = True
+    elif boundary == 'duplicate_pair':
+        added_point(target)
+        other = added_unselected_line(target, 'l901', '901')
+        other.update({'from': line['to'], 'to': line['from']})
+    elif boundary == 'foreign_endpoint':
+        target['points'].append(source['points'].pop())
+    else:
+        added_unselected_angle(source)['station'] = 'p900'
     assert _merge_point_coordinates(base, target, source, []) is None

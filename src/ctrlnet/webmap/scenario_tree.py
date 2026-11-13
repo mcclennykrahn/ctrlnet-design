@@ -12,8 +12,8 @@ Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
 Unchanged line and angle deletions clear unchanged selections and merge
 with allocator preservation.
-Line additions between common existing points merge by ID; selections use
-whole-network merge rules.
+Line additions between surviving existing or compatible new points merge by ID;
+selections use whole-network merge rules.
 Angle additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
@@ -137,17 +137,24 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     added_lines = (set(line_indexes[1]) | set(line_indexes[2])) - set(line_indexes[0])
     if added_lines:
         # Check before stripping so recursion cannot hide new references.
-        common_points = set.intersection(*({p['id'] for p in state['points']} for state in states))
+        point_ids = [{p['id'] for p in state['points']} for state in states]
+        # Base endpoints must survive both branches. Recursion validates new
+        # points and their collisions after the added lines are stripped.
+        common_points = (set.intersection(*point_ids)
+                         | ((point_ids[1] | point_ids[2]) - point_ids[0]))
         # Selection merges with the whole network object below. Accepted
         # additions are restored for every network choice, keeping IDs valid.
         additions = {}
-        for index in line_indexes[1:]:
+        for state, index in zip(states[1:], line_indexes[1:]):
+            local_points = {p['id'] for p in state['points']}
             for lid in added_lines & set(index):
                 line = index[lid]
                 if (set(line) - {'id', 'name', 'from', 'to', 'length', 'azimuth',
                                  '_keep_length', '_keep_azimuth'}
                         or line.get('from') not in common_points
                         or line.get('to') not in common_points
+                        or line.get('from') not in local_points
+                        or line.get('to') not in local_points
                         or line['from'] == line['to']):
                     return None
                 authored = copy.deepcopy(line)
