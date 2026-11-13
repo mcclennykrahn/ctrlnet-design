@@ -1259,6 +1259,8 @@ def test_angle_deletion_rejects_surviving_network_reference(bridge, key):
     from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
     _, service = bridge
     base = copy.deepcopy(service.state)
+    base['network']['observed_angles'] = []
+    base['network']['added_angles'] = []
     target, source = copy.deepcopy(base), copy.deepcopy(base)
     removed = source['angles'].pop(0)['id']
     target['network'][key] = [removed]
@@ -1851,4 +1853,105 @@ def test_selected_line_deletion_cannot_hide_referenced_point(bridge, direction):
             state['lines'] = [l for l in state['lines'] if l['id'] != line['id']]
             state['points'] = [p for p in state['points'] if p['id'] != point['id']]
             state['network']['observed_edges'] = []
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'both'])
+@pytest.mark.parametrize('key', ['observed_angles', 'added_angles', 'both'])
+def test_selected_angle_deletion_persistence(bridge, direction, key):
+    c, service = bridge
+    removed = service.state['angles'][0]['id']
+    keys = ('observed_angles', 'added_angles') if key == 'both' else (key,)
+    service.state['network']['observed_angles'] = []
+    service.state['network']['added_angles'] = []
+    for k in keys:
+        service.state['network'][k] = [removed]
+    root = save(c, 'selected base')
+    if direction in ('target', 'both'):
+        service.state['angles'].pop(0)
+        for k in keys:
+            service.state['network'][k] = []
+    service.state['angles'].reverse()
+    service.state['points'][0]['name'] = 'survivor'
+    left = save(c, 'target', root)
+    order = [x['id'] for x in service.state['angles'] if x['id'] != removed]
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction in ('source', 'both'):
+        service.state['angles'].pop(0)
+        for k in keys:
+            service.state['network'][k] = []
+    service.state['seq']['angle'] = 950
+    right = save(c, 'source', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='merged', resolutions={}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    assert [x['id'] for x in state['angles']] == order
+    assert state['points'][0]['name'] == 'survivor'
+    assert state['seq']['angle'] == 950
+    assert all(removed not in state['network'][k] for k in keys)
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['network'] == state['network']
+
+
+@pytest.mark.parametrize('key', ['observed_angles', 'added_angles'])
+@pytest.mark.parametrize('boundary', ['selection_edit', 'dangling', 'angle_edit'])
+def test_selected_angle_deletion_boundaries(bridge, key, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    removed = base['angles'][0]['id']
+    base['network'][key] = [removed]
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    source['angles'].pop(0)
+    source['network'][key] = []
+    if boundary == 'selection_edit':
+        target['network'][key] = []
+    elif boundary == 'dangling':
+        source['network'][key] = [removed]
+    else:
+        target['angles'][0]['name'] = 'edited'
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('choice', ['target', 'source'])
+def test_selected_angle_delete_network_choices(bridge, choice):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    removed = base['angles'][0]['id']
+    base['network']['observed_angles'] = [removed]
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    source['angles'].pop(0)
+    source['network']['observed_angles'] = []
+    target['network']['sigma_distance'] = 1
+    source['network']['sigma_distance'] = 2
+    conflicts = []
+    merged = _merge_point_coordinates(base, target, source, conflicts, {'network': choice})
+    assert merged is not None
+    assert merged['network']['observed_angles'] == []
+    assert merged['network']['sigma_distance'] == (1 if choice == 'target' else 2)
+
+
+@pytest.mark.parametrize('direction', ['target', 'source', 'both'])
+def test_selected_angle_deletion_cannot_hide_referenced_point(bridge, direction):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    point = copy.deepcopy(base['points'][0])
+    point.update(id='p900', name='900')
+    base['points'].append(point)
+    base['seq']['point'] = 901
+    angle = added_unselected_angle(base)
+    angle['station'] = point['id']
+    base['network']['observed_angles'] = [angle['id']]
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    for label, state in [('target', target), ('source', source)]:
+        if direction in (label, 'both'):
+            state['angles'] = [l for l in state['angles'] if l['id'] != angle['id']]
+            state['points'] = [p for p in state['points'] if p['id'] != point['id']]
+            state['network']['observed_angles'] = []
     assert _merge_point_coordinates(base, target, source, []) is None
