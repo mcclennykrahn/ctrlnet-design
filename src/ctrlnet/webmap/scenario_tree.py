@@ -10,7 +10,8 @@ Existing-line endpoint changes merge as whole authored lines, so measurements
 never transfer automatically between different endpoint pairs.
 Existing-angle reference changes merge as whole authored angles.
 Isolated point additions and unchanged isolated point deletions merge by ID.
-Unchanged unselected line and angle deletions merge with allocator preservation.
+Unchanged line deletions clear unchanged selections; unselected angle deletions
+merge with allocator preservation.
 Line additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Angle additions between common existing points merge by ID; selections use
@@ -182,11 +183,25 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
 
     removed_lines = set(line_indexes[0]) - (set(line_indexes[1]) & set(line_indexes[2]))
     if removed_lines:
-        # Reject unsafe selections before preview can offer network choices.
-        if any(lid in removed_lines for state in (target, source)
-               for key in ('observed_edges', 'added_edges')
-               for lid in state.get('network', {}).get(key, [])):
+        # Inspect original references before stripping lines: otherwise a
+        # referenced point can appear isolated to the recursive deletion guard.
+        removed_points = {p['id'] for p in base['points']} - (
+            {p['id'] for p in target['points']} & {p['id'] for p in source['points']})
+        if any(line.get(key) in removed_points for state in states
+               for line in state['lines'] for key in ('from', 'to')):
             return None
+        # A retaining branch must preserve the base selection for each deleted
+        # line. A deleting branch must clear it. Strip those references from all
+        # three networks before merging unrelated settings, so neither network
+        # resolution can resurrect a dangling selection.
+        selection_keys = ('observed_edges', 'added_edges')
+        for lid in removed_lines:
+            for state, index in zip((target, source), line_indexes[1:]):
+                for key in selection_keys:
+                    selected = lid in state.get('network', {}).get(key, [])
+                    expected = lid in base.get('network', {}).get(key, []) if lid in index else False
+                    if selected != expected:
+                        return None
         def authored_deleted_line(line):
             value = copy.deepcopy(line)
             for field in ('length', 'azimuth'):
@@ -204,6 +219,10 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         stripped = copy.deepcopy(states)
         for state in stripped:
             state['lines'] = [line for line in state['lines'] if line['id'] not in removed_lines]
+            for key in selection_keys:
+                if key in state.get('network', {}):
+                    state['network'][key] = [lid for lid in state['network'][key]
+                                             if lid not in removed_lines]
             state['seq']['line'] = base['seq']['line']
         combined = _merge_point_coordinates(*stripped, point_conflicts=point_conflicts, choices=choices)
         if combined is not None:
