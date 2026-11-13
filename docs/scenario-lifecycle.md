@@ -24,3 +24,12 @@ scenarios remain readable, calculable and usable as branch/merge sources. There
 is no deletion, access control, multi-user reviewer identity or release gate.
 Legacy scenarios default to draft with empty history, without rewriting their
 snapshots. Existing v0.8 acceptance is unchanged.
+
+Selected angle additions between points present in all three snapshots now merge
+by stable ID. Selection remains part of the whole network settings object: competing
+settings require an explicit target/source choice, while either choice retains the
+accepted angle. Target angle order and the maximum allocator are preserved; angle
+values are recomputed from merged coordinates. Selected deletions, unsafe point
+references, competing added IDs/names, duplicate ordered triples and unknown
+authored fields remain whole-topology conflicts. Ambiguous merge bases remain
+unsupported. This bounded extension does not change v0.8 acceptance.

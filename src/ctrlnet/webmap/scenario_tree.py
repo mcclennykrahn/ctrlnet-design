@@ -13,7 +13,8 @@ Isolated point additions and unchanged isolated point deletions merge by ID.
 Unchanged unselected line and angle deletions merge with allocator preservation.
 Line additions between common existing points merge by ID; selections use
 whole-network merge rules.
-Unselected angle additions between common existing points merge by ID.
+Angle additions between common existing points merge by ID; selections use
+whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
 """
@@ -223,10 +224,8 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     added_angles = (set(angle_indexes[1]) | set(angle_indexes[2])) - set(angle_indexes[0])
     if added_angles:
         common_points = set.intersection(*({p['id'] for p in state['points']} for state in states))
-        if any(aid in added_angles for state in states
-               for key in ('observed_angles', 'added_angles')
-               for aid in state.get('network', {}).get(key, [])):
-            return None
+        # Keep selections in the indivisible network object, as for lines.
+        # All accepted additions are restored for either network choice.
         additions = {}
         refs = ('station', 'backsight', 'foresight')
         for index in angle_indexes[1:]:
