@@ -2088,3 +2088,39 @@ def test_new_point_angle_unsafe_references(bridge, boundary):
     else:
         angle['custom'] = True
     assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('collision', ['endpoints', 'reversed_endpoints', 'name'])
+@pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('choice', ['target', 'source'])
+def test_line_addition_collision_choices_are_whole_topology(bridge, collision, reverse, choice):
+    c, service = bridge
+    root = save(c, 'base')
+    added = copy.deepcopy(added_unselected_line(service.state))
+    service.state['lines'][0]['name'] = 801
+    left = save(c, 'addition', root)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    existing = service.state['lines'][0]
+    existing['name'] = added['name'] if collision == 'name' else 802
+    if collision != 'name':
+        existing.update({'from': added['from'], 'to': added['to']})
+        if collision == 'reversed_endpoints':
+            existing['from'], existing['to'] = existing['to'], existing['from']
+    right = save(c, 'competing existing line', root)
+    a, b = (right, left) if reverse else (left, right)
+    plan = preview(c, a, b)
+    assert plan['conflicts'] == ['topology']
+    before = c.get('/api/engineering/projects').json()
+    bad = c.post('/api/engineering/merge', json=dict(plan, name='invalid',
+                 resolutions={'line:' + existing['id']: choice}))
+    assert bad.status_code == 400
+    assert c.get('/api/engineering/projects').json() == before
+    r = c.post('/api/engineering/merge', json=dict(plan, name='resolved',
+               resolutions={'topology': choice}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    selected = a if choice == 'target' else b
+    expected = store.get_scenario(service.repository.path, selected['scenario_id'])['metadata']['thesis_state']
+    assert saved['metadata']['thesis_state'] == expected
+    assert saved['metadata']['merge_parents'] == [a['scenario_id'], b['scenario_id']]
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200

@@ -164,6 +164,17 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
                 if lid in additions and additions[lid] != authored:
                     return None
                 additions[lid] = authored
+        # Every offered whole-line choice must remain compatible with additions.
+        # Checking only the default result can advertise a resolution that later
+        # produces duplicate names or undirected endpoint pairs.
+        survivors = set.intersection(*(set(index) for index in line_indexes))
+        added_names = {str(line.get('name')) for line in additions.values()}
+        added_pairs = {frozenset((line['from'], line['to']))
+                       for line in additions.values()}
+        if any(str(index[lid].get('name')) in added_names
+               or frozenset((index[lid]['from'], index[lid]['to'])) in added_pairs
+               for index in line_indexes[1:] for lid in survivors):
+            return None
         stripped = copy.deepcopy(states)
         for state in stripped:
             state['lines'] = [line for line in state['lines'] if line['id'] not in added_lines]
