@@ -249,17 +249,22 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         angle_indexes.append({angle['id']: angle for angle in state['angles']})
     added_angles = (set(angle_indexes[1]) | set(angle_indexes[2])) - set(angle_indexes[0])
     if added_angles:
-        common_points = set.intersection(*({p['id'] for p in state['points']} for state in states))
+        point_ids = [{p['id'] for p in state['points']} for state in states]
+        # Existing references must survive both branches; recursion validates
+        # new points for authored compatibility and name collisions.
+        common_points = (set.intersection(*point_ids)
+                         | ((point_ids[1] | point_ids[2]) - point_ids[0]))
         # Keep selections in the indivisible network object, as for lines.
         # All accepted additions are restored for either network choice.
         additions = {}
         refs = ('station', 'backsight', 'foresight')
-        for index in angle_indexes[1:]:
+        for state, index in zip(states[1:], angle_indexes[1:]):
+            local_points = {p['id'] for p in state['points']}
             for aid in added_angles & set(index):
                 angle = index[aid]
                 triple = tuple(angle.get(key) for key in refs)
                 if (set(angle) - {'id', 'name', 'station', 'backsight', 'foresight', 'value'}
-                        or any(pid not in common_points for pid in triple)
+                        or any(pid not in common_points or pid not in local_points for pid in triple)
                         or len(set(triple)) != 3):
                     return None
                 authored = {k: v for k, v in angle.items() if k != 'value'}

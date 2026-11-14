@@ -1498,7 +1498,7 @@ def test_unselected_angle_addition_persistence(bridge, direction):
     assert service.state['angles'] == state['angles']
 
 
-@pytest.mark.parametrize('boundary', ['id', 'name', 'existing_name', 'unknown', 'duplicate', 'new_point', 'deleted_point', 'self',
+@pytest.mark.parametrize('boundary', ['id', 'name', 'existing_name', 'unknown', 'duplicate', 'deleted_point', 'self',
     'existing_triple', 'survivor_edit'])
 @pytest.mark.parametrize('selection', [None, 'observed_angles', 'added_angles'])
 def test_angle_addition_conservative_boundaries(bridge, boundary, selection):
@@ -1521,9 +1521,6 @@ def test_angle_addition_conservative_boundaries(bridge, boundary, selection):
         angle['custom'] = True
     elif boundary == 'duplicate':
         source['angles'].append(copy.deepcopy(angle))
-    elif boundary == 'new_point':
-        added_point(source, 'p901', '901')
-        angle['station'] = 'p901'
     elif boundary == 'deleted_point':
         angle['station'] = 'p900'
         target['points'].pop()
@@ -2013,4 +2010,81 @@ def test_new_point_line_boundaries(bridge, boundary):
         target['points'].append(source['points'].pop())
     else:
         added_unselected_angle(source)['station'] = 'p900'
+        result = _merge_point_coordinates(base, target, source, [])
+        assert result is not None
+        assert result['angles'][-1]['station'] == result['lines'][-1]['from'] == 'p900'
+        return
+    assert _merge_point_coordinates(base, target, source, []) is None
+
+
+@pytest.mark.parametrize('selection', [None, 'observed_angles', 'added_angles'])
+@pytest.mark.parametrize('direction', ['target', 'source', 'both'])
+@pytest.mark.parametrize('new_refs', [1, 2, 3])
+def test_new_point_angle_merge_persistence(bridge, selection, direction, new_refs):
+    c, service = bridge
+    root = save(c, 'base')
+    def add(state):
+        angle = added_unselected_angle(state)
+        for i, key in enumerate(('station', 'backsight', 'foresight')[:new_refs]):
+            angle[key] = added_point(state, 'p'+str(900+i), str(900+i))['id']
+        if selection:
+            state['network'][selection].append(angle['id'])
+    if direction in ('target', 'both'):
+        add(service.state)
+    service.state['points'][0]['name'] = 'independent edit'
+    left = save(c, 'target', root)
+    target = copy.deepcopy(service.state)
+    c.post('/api/engineering/open/'+root['scenario_id'], json={})
+    if direction in ('source', 'both'):
+        add(service.state)
+    service.state['seq']['point'] = 980
+    service.state['seq']['angle'] = 990
+    right = save(c, 'source', root)
+    plan = preview(c, left, right)
+    assert plan['conflicts'] == []
+    r = c.post('/api/engineering/merge', json=dict(plan, name='merged', resolutions={}))
+    assert r.status_code == 200, r.text
+    saved = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    state = saved['metadata']['thesis_state']
+    assert state['points'][0]['name'] == 'independent edit'
+    for collection in ('points', 'angles'):
+        ids = [x['id'] for x in target[collection]]
+        assert [x['id'] for x in state[collection]][:len(ids)] == ids
+    assert len([a for a in state['angles'] if a['id'] == 'a900']) == 1
+    assert state['seq']['point'] == 980
+    assert state['seq']['angle'] == 990
+    if selection:
+        assert state['network'][selection].count('a900') == 1
+        assert any(o['kind'] == 'angle' and o['station'] == '900' for o in saved['observations'])
+    assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
+    assert c.post('/api/engineering/open/'+saved['id'], json={}).status_code == 200
+    assert service.state['points'] == state['points']
+    assert service.state['angles'] == state['angles']
+
+
+@pytest.mark.parametrize('boundary', ['point_edit', 'point_name', 'unknown_point', 'missing_local', 'deleted', 'unknown_angle'])
+def test_new_point_angle_unsafe_references(bridge, boundary):
+    from ctrlnet.webmap.scenario_tree import _merge_point_coordinates
+    _, service = bridge
+    base = copy.deepcopy(service.state)
+    added_point(base, 'p899', '899')
+    target, source = copy.deepcopy(base), copy.deepcopy(base)
+    point = added_point(source)
+    angle = added_unselected_angle(source)
+    angle['station'] = point['id']
+    target['points'][0]['name'] = 'independent'
+    if boundary == 'point_edit':
+        added_point(target)['x'] += 1
+    elif boundary == 'point_name':
+        added_point(target, 'p901', '900')
+    elif boundary == 'unknown_point':
+        point['custom'] = True
+    elif boundary == 'missing_local':
+        source['points'].pop()
+        added_point(target)
+    elif boundary == 'deleted':
+        angle['station'] = 'p899'
+        target['points'].pop()
+    else:
+        angle['custom'] = True
     assert _merge_point_coordinates(base, target, source, []) is None
