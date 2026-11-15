@@ -18,6 +18,8 @@ Angle additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
+Differing-content best bases require whole-unit choices unless the tips agree;
+units with equivalent bases retain ordinary three-way behavior.
 """
 import copy
 from .. import store
@@ -592,22 +594,28 @@ def _plan(conn, target, source):
         return found
     ta, sa = ancestors(target), ancestors(source)
     common = set(ta) & set(sa)
-    # Multiple best bases are safe only when every merge unit is equivalent.
-    # Do not synthesize a virtual base or discard competing ancestor edits.
+    # Never use an arbitrary representative to resolve differing ancestor units.
+    # Such units require a whole-unit choice unless both tips already agree.
     bases = sorted(b for b in common if not any(b != c and b in ancestors(c) for c in common))
     if not bases:
         raise ValueError('需要共同祖先')
     base = rows[bases[0]]
     base_units = _units(base)
+    ambiguous_units = set()
     for bid in bases[1:]:
         other = _units(rows[bid])
-        if any(not _same(key, value, other[key]) for key, value in base_units.items()):
-            raise ValueError('不支持内容不同的多个共同祖先；请从唯一共同祖先分支合并')
+        ambiguous_units.update(key for key, value in base_units.items()
+                               if not _same(key, value, other[key]))
     units = [_units(r) for r in (base, t, s)]
     conflicts, merged = [], {}
     for key in units[0]:
         b, tv, sv = (u[key] for u in units)
-        if _same(key, tv, sv) or _same(key, sv, b):
+        if key in ambiguous_units:
+            if _same(key, tv, sv):
+                merged[key] = tv
+            else:
+                conflicts.append(key)
+        elif _same(key, tv, sv) or _same(key, sv, b):
             merged[key] = tv
         elif _same(key, tv, b):
             merged[key] = sv
@@ -620,7 +628,8 @@ def _plan(conn, target, source):
                 merged[key] = combined
                 conflicts.extend(point_conflicts)
     versions = {r['id']: r['version'] for r in [*(rows[bid] for bid in bases), t, s]}
-    return dict(target=target, source=source, base=base['id'], bases=bases, versions=versions,
+    return dict(target=target, source=source, base=base['id'], bases=bases,
+                differing_base_units=sorted(ambiguous_units), versions=versions,
                 conflicts=conflicts), merged, units, t
 
 

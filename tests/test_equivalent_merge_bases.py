@@ -61,15 +61,14 @@ def test_equivalent_criss_cross_merge_reopen(bridge, timestamps):
 
 
 @pytest.mark.parametrize('mutation', ['point', 'gnss', 'unknown', 'order'])
-def test_different_criss_cross_bases_rejected_atomically(bridge, mutation):
+def test_different_criss_cross_bases_with_converged_tips(bridge, mutation):
     c, service = bridge
     a, b, left, right = cross(c, service, mutation)
-    before = c.get('/api/engineering/projects').json()
     for target, source in [(left, right), (right, left)]:
-        params = dict(target=target['scenario_id'], source=source['scenario_id'])
-        assert c.get('/api/engineering/merge/preview', params=params).status_code == 400
-        assert c.post('/api/engineering/merge', json=dict(params, name='bad', versions={}, resolutions={})).status_code == 400
-    assert c.get('/api/engineering/projects').json() == before
+        plan = preview(c, target, source)
+        assert plan['conflicts'] == []
+        assert plan['bases'] == sorted([a['scenario_id'], b['scenario_id']])
+        merge(c, target, source, 'converged')
 
 
 @pytest.mark.parametrize('base_index', [0, 1])
