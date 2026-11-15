@@ -117,7 +117,7 @@
       if (visited.has(s.id)) return;
       visited.add(s.id);
       lines.push('  '.repeat(depth) + '└ ' + s.name + ' · v' + s.version + ' [' + s.id + ']' +
-        (s.merge_parents.length ? ' ← 合并 ' + s.merge_parents.join(' + ') + ' · 祖先 ' + s.merge_base : ''));
+        (s.merge_parents.length ? ' ← 合并 ' + s.merge_parents.join(' + ') + ' · 祖先 ' + (s.merge_bases || [s.merge_base]).join(' + ') : ''));
       rows.filter(c => c.parent_id === s.id).forEach(c => visit(c, depth+1));
     }
     rows.filter(s => !s.parent_id || !rows.some(p => p.id === s.parent_id)).forEach(s => visit(s, 0));

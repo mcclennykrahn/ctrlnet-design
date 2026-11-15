@@ -69,6 +69,7 @@ def create_bridge_router(service):
                     s['snapshots'] = [dict(r) for r in conn.execute('SELECT id,input_hash FROM snapshots WHERE scenario_id=? ORDER BY created_at', (s['id'],))]
                     s['merge_parents'] = s['metadata'].get('merge_parents', [])
                     s['merge_base'] = s['metadata'].get('merge_base')
+                    s['merge_bases'] = s['metadata'].get('merge_bases', [s['merge_base']] if s['merge_base'] else [])
                     s['editable'] = 'thesis_state' in s['metadata']
                     from ..lifecycle import describe
                     s['lifecycle'] = describe(s['metadata'])

@@ -592,11 +592,17 @@ def _plan(conn, target, source):
         return found
     ta, sa = ancestors(target), ancestors(source)
     common = set(ta) & set(sa)
-    # Reject ambiguous merge bases instead of silently choosing in criss-cross DAGs.
-    bases = [b for b in common if not any(b != c and b in ancestors(c) for c in common)]
-    if len(bases) != 1:
-        raise ValueError('需要唯一共同祖先；不支持无共同祖先或交叉合并')
+    # Multiple best bases are safe only when every merge unit is equivalent.
+    # Do not synthesize a virtual base or discard competing ancestor edits.
+    bases = sorted(b for b in common if not any(b != c and b in ancestors(c) for c in common))
+    if not bases:
+        raise ValueError('需要共同祖先')
     base = rows[bases[0]]
+    base_units = _units(base)
+    for bid in bases[1:]:
+        other = _units(rows[bid])
+        if any(not _same(key, value, other[key]) for key, value in base_units.items()):
+            raise ValueError('不支持内容不同的多个共同祖先；请从唯一共同祖先分支合并')
     units = [_units(r) for r in (base, t, s)]
     conflicts, merged = [], {}
     for key in units[0]:
@@ -613,8 +619,8 @@ def _plan(conn, target, source):
             else:
                 merged[key] = combined
                 conflicts.extend(point_conflicts)
-    versions = {r['id']: r['version'] for r in (base, t, s)}
-    return dict(target=target, source=source, base=base['id'], versions=versions,
+    versions = {r['id']: r['version'] for r in [*(rows[bid] for bid in bases), t, s]}
+    return dict(target=target, source=source, base=base['id'], bases=bases, versions=versions,
                 conflicts=conflicts), merged, units, t
 
 
@@ -654,7 +660,7 @@ def merge(path, payload):
             if parent is None:
                 raise ValueError('目标方案没有快照')
             metadata = dict(thesis_state=state, merge_parents=[plan['target'], plan['source']],
-                            merge_base=plan['base'], merge_versions=plan['versions'],
+                            merge_base=plan['base'], merge_bases=plan['bases'], merge_versions=plan['versions'],
                             merge_resolutions=resolutions)
             result = store.save_editor_version(path,
                 dict(id=target['project_id'], name=name, points=points),
