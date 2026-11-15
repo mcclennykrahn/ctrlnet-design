@@ -18,7 +18,8 @@ Angle additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
 Both parents remain durable.
-Differing-content best bases require whole-unit choices unless the tips agree;
+Differing-content best bases require whole-unit choices unless the tips agree
+or every best base produces an equivalent conflict-free topology merge;
 units with equivalent bases retain ordinary three-way behavior.
 """
 import copy
@@ -595,7 +596,7 @@ def _plan(conn, target, source):
     ta, sa = ancestors(target), ancestors(source)
     common = set(ta) & set(sa)
     # Never use an arbitrary representative to resolve differing ancestor units.
-    # Such units require a whole-unit choice unless both tips already agree.
+    # Such units require agreement of tips or clean results from every base.
     bases = sorted(b for b in common if not any(b != c and b in ancestors(c) for c in common))
     if not bases:
         raise ValueError('需要共同祖先')
@@ -614,7 +615,20 @@ def _plan(conn, target, source):
             if _same(key, tv, sv):
                 merged[key] = tv
             else:
-                conflicts.append(key)
+                # Every best base must independently permit the same clean merge.
+                # Never expose field choices against an arbitrary ancestor.
+                candidates = []
+                if key == 'topology':
+                    for bid in bases:
+                        candidate = _merge_point_coordinates(_units(rows[bid])[key], tv, sv)
+                        if candidate is None:
+                            break
+                        candidates.append(candidate)
+                if len(candidates) == len(bases) and all(
+                        _same(key, candidates[0], candidate) for candidate in candidates[1:]):
+                    merged[key] = candidates[0]
+                else:
+                    conflicts.append(key)
         elif _same(key, tv, sv) or _same(key, sv, b):
             merged[key] = tv
         elif _same(key, tv, b):

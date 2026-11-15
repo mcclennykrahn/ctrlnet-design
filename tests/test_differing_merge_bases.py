@@ -1,4 +1,4 @@
-"""Differing best bases require whole-unit choices, never arbitrary-base merges."""
+"""Differing bases accept clean consensus, otherwise require whole-unit choices."""
 import copy
 import pytest
 from test_v08 import bridge, GNSS
@@ -7,7 +7,7 @@ from test_equivalent_merge_bases import cross
 from ctrlnet import store
 
 
-@pytest.mark.parametrize('mutation', ['point', 'gnss', 'unknown', 'order'])
+@pytest.mark.parametrize('mutation', ['point', 'gnss', 'unknown'])
 @pytest.mark.parametrize('choice', ['target', 'source'])
 def test_differing_bases_explicit_whole_unit_reopen(bridge, mutation, choice):
     c, service = bridge
@@ -63,6 +63,9 @@ def test_differing_base_version_guards(bridge, base_index):
     c.post('/api/engineering/open/'+left['scenario_id'], json={})
     service.state['points'][1]['x'] += 3
     left = save(c, 'child', left)
+    c.post('/api/engineering/open/'+right['scenario_id'], json={})
+    service.state['points'][0]['x'] += 5
+    right = save(c, 'competing child', right)
     plan = preview(c, left, right)
     assert plan['conflicts'] == ['topology']
     sid = plan['bases'][base_index]
@@ -71,3 +74,42 @@ def test_differing_base_version_guards(bridge, base_index):
     r = c.post('/api/engineering/merge', json=dict(plan, name='stale', resolutions={'topology': 'source'}))
     assert r.status_code == 409
     assert c.get('/api/engineering/projects').json() == before
+
+
+@pytest.mark.parametrize('mutation', ['point', 'order'])
+@pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('base_index', [None, 0, 1])
+def test_differing_bases_clean_consensus(bridge, reverse, base_index, mutation):
+    c, service = bridge
+    a, b, left, right = cross(c, service, mutation)
+    children, expected = [], {}
+    # Ancestor content/order disagreement has converged; independent edits
+    # affect other fields, so neither ancestor is privileged by the result.
+    for i, parent in enumerate((left, right), 1):
+        c.post('/api/engineering/open/'+parent['scenario_id'], json={})
+        service.state['points'][i]['x'] += 7 + i
+        expected[i] = copy.deepcopy(service.state['points'][i])
+        children.append(save(c, 'independent', parent))
+    if reverse:
+        children.reverse()
+    plan = preview(c, *children)
+    assert plan['conflicts'] == []
+    assert plan['differing_base_units'] == ['topology']
+    assert plan['bases'] == sorted([a['scenario_id'], b['scenario_id']])
+    if base_index is not None:
+        sid = plan['bases'][base_index]
+        c.post('/api/engineering/rename/'+sid, json=dict(name='changed', version=plan['versions'][sid]))
+    before = c.get('/api/engineering/projects').json()
+    r = c.post('/api/engineering/merge', json=dict(plan, name='consensus', resolutions={}))
+    if base_index is not None:
+        assert r.status_code == 409
+        assert c.get('/api/engineering/projects').json() == before
+        return
+    assert r.status_code == 200, r.text
+    result = store.get_scenario(service.repository.path, r.json()['scenario_id'])
+    assert result['metadata']['merge_bases'] == plan['bases']
+    assert result['metadata']['merge_versions'] == plan['versions']
+    assert result['metadata']['merge_resolutions'] == {}
+    c.post('/api/engineering/open/'+r.json()['scenario_id'], json={})
+    for i, point in expected.items():
+        assert service.state['points'][i] == point
