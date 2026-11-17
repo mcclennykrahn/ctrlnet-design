@@ -169,7 +169,7 @@
     mergePlan = plan;
     for (const key of plan.conflicts) {
       const label = document.createElement('label');
-      label.textContent = key.startsWith('point:') ? '点 ' + key.slice(6) + ' 冲突（选择整点） ' : key.startsWith('line:') ? '边 ' + key.slice(5) + ' 冲突（选择整边） ' : key.startsWith('angle:') ? '角 ' + key.slice(6) + ' 冲突（选择整角） ' : key === 'network' ? '网形设置冲突（选择整组设置） ' : key + ' 冲突 ';
+      label.textContent = key.startsWith('point:') ? '点 ' + key.slice(6) + ' 冲突（选择整点） ' : key.startsWith('line:') ? '边 ' + key.slice(5) + ' 冲突（选择整边） ' : key.startsWith('angle:') ? '角 ' + key.slice(6) + ' 冲突（选择整角） ' : key === 'title' ? '编辑器项目标题冲突（仅选择标题） ' : key === 'network' ? '网形设置冲突（选择整组设置） ' : key + ' 冲突 ';
       if ((plan.differing_base_units || []).includes(key)) label.textContent = key + ' 的共同祖先内容不同（选择目标或来源的整组内容） ';
       const select = document.createElement('select'); select.dataset.unit = key;
       options(select, [['','请选择'],['target','保留目标'],['source','采用来源']]);

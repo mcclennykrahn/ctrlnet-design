@@ -18,7 +18,7 @@ Angle additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
 One-sided editor project-title edits combine with supported topology edits;
-competing titles retain whole-topology choices.
+competing titles offer independent target/source title choices.
 Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
@@ -447,8 +447,8 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         return None
     result = copy.deepcopy(target)
     # The editor title is independent of geometry and observation selections.
-    # Preserve presence as well as value; competing titles stay whole-topology
-    # conflicts, without introducing another UI resolution unit.
+    # Preserve presence as well as value. Title choices keep geometry edits intact;
+    # callers without a conflict collector still require a clean merge.
     b, t, s = (("name" in state, state.get("name"))
                for state in (base, target, source))
     if t == s or s == b:
@@ -456,7 +456,10 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     elif t == b:
         chosen_title = source
     else:
-        return None
+        if point_conflicts is None:
+            return None
+        point_conflicts.append('title')
+        chosen_title = source if (choices or {}).get('title') == 'source' else target
     if 'name' in chosen_title:
         result['name'] = copy.deepcopy(chosen_title['name'])
     else:
@@ -688,9 +691,9 @@ def merge(path, payload):
             for key, choice in resolutions.items():
                 if choice not in ('target', 'source'):
                     raise ValueError('冲突选择须为 target/source')
-                if key != 'network' and not key.startswith(('point:', 'line:', 'angle:')):
+                if key not in ('network', 'title') and not key.startswith(('point:', 'line:', 'angle:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
-            if 'network' in resolutions or any(key.startswith(('point:', 'line:', 'angle:')) for key in resolutions):
+            if {'network', 'title'} & resolutions.keys() or any(key.startswith(('point:', 'line:', 'angle:')) for key in resolutions):
                 merged['topology'] = _merge_point_coordinates(
                     *(u['topology'] for u in units), point_conflicts=[], choices=resolutions)
             state = copy.deepcopy(merged['topology'])

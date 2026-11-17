@@ -33,3 +33,9 @@ values are recomputed from merged coordinates. Selected deletions, unsafe point
 references, competing added IDs/names, duplicate ordered triples and unknown
 authored fields remain whole-topology conflicts. Ambiguous merge bases remain
 unsupported. This bounded extension does not change v0.8 acceptance.
+
+Competing editor project titles can be resolved independently through the `title`
+choice when ordinary three-way topology merging is supported. The selected title
+preserves independent geometry edits and is distinct from the new snapshot name.
+Differing-content best bases continue to require conflict-free consensus or a
+whole-topology choice; title choices do not reconcile competing ancestors.
