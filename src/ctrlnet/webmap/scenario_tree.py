@@ -5,6 +5,7 @@ merge automatically; competing existing-point edits offer whole-point choices.
 Competing network settings offer whole-object choices; measured override
 conflicts offer whole-line choices for existing lines.
 Combined field merges match points/lines/angles by ID and retain target list order.
+Known allocator counters merge by maximum even without structural changes.
 Existing-line and existing-angle names merge by ID with whole-object conflict choices.
 Existing-line endpoint changes merge as whole authored lines, so measurements
 never transfer automatically between different endpoint pairs.
@@ -95,6 +96,14 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
             value.pop(field, None)
         value.pop('network', None)
         value.pop('name', None)
+        # Known counters record consumed IDs, independently of authored topology.
+        seq = value.get('seq')
+        if not isinstance(seq, dict) or any(
+                type(seq.get(key)) is not int or seq[key] < 0
+                for key in ('point', 'line', 'angle')):
+            return None
+        for key in ('point', 'line', 'angle'):
+            seq.pop(key)
         ids = [p.get('id') for p in value.get('points', [])]
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
@@ -446,6 +455,8 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     if shapes[0] is None or not shapes[0] == shapes[1] == shapes[2]:
         return None
     result = copy.deepcopy(target)
+    for key in ('point', 'line', 'angle'):
+        result['seq'][key] = max(state['seq'][key] for state in (base, target, source))
     # The editor title is independent of geometry and observation selections.
     # Preserve presence as well as value. Title choices keep geometry edits intact;
     # callers without a conflict collector still require a clean merge.
