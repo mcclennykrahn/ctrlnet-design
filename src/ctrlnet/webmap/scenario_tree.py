@@ -17,6 +17,8 @@ selections use whole-network merge rules.
 Angle additions between common existing points merge by ID; selections use
 whole-network merge rules.
 Other topology conflicts retain whole-topology choices.
+One-sided editor project-title edits combine with supported topology edits;
+competing titles retain whole-topology choices.
 Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
@@ -92,6 +94,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
         for field in ('created_at', 'updated_at', 'saved_created_at', 'saved_updated_at'):
             value.pop(field, None)
         value.pop('network', None)
+        value.pop('name', None)
         ids = [p.get('id') for p in value.get('points', [])]
         if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
             return None
@@ -443,6 +446,21 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     if shapes[0] is None or not shapes[0] == shapes[1] == shapes[2]:
         return None
     result = copy.deepcopy(target)
+    # The editor title is independent of geometry and observation selections.
+    # Preserve presence as well as value; competing titles stay whole-topology
+    # conflicts, without introducing another UI resolution unit.
+    b, t, s = (("name" in state, state.get("name"))
+               for state in (base, target, source))
+    if t == s or s == b:
+        chosen_title = target
+    elif t == b:
+        chosen_title = source
+    else:
+        return None
+    if 'name' in chosen_title:
+        result['name'] = copy.deepcopy(chosen_title['name'])
+    else:
+        result.pop('name', None)
     # Keep observation selections, grade and display settings together. Their
     # internal dependencies are not safe to resolve field by field.
     b, t, s = (("network" in state, state.get("network"))
