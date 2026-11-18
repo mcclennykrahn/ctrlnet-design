@@ -645,7 +645,24 @@ def _plan(conn, target, source):
         b, tv, sv = (u[key] for u in units)
         if key in ambiguous_units:
             if _same(key, tv, sv):
-                merged[key] = tv
+                if key == 'topology':
+                    # Converged authored tips can have reset counters (for
+                    # example after JSON import). Preserve consumed IDs from
+                    # every best base without replaying ancestor edits.
+                    states = [*(_units(rows[bid])[key] for bid in bases), tv, sv]
+                    counters = ('point', 'line', 'angle')
+                    if any(not isinstance(state.get('seq'), dict) or any(
+                            type(state['seq'].get(counter)) is not int
+                            or state['seq'][counter] < 0 for counter in counters)
+                           for state in states):
+                        conflicts.append(key)
+                        continue
+                    merged[key] = copy.deepcopy(tv)
+                    merged[key]['seq'].update({
+                        counter: max(state['seq'][counter] for state in states)
+                        for counter in counters})
+                else:
+                    merged[key] = tv
             else:
                 # Every best base must independently permit the same clean merge.
                 # Never expose field choices against an arbitrary ancestor.
