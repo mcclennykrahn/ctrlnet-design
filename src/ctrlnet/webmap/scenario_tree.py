@@ -656,6 +656,15 @@ def _plan(conn, target, source):
                         if candidate is None:
                             break
                         candidates.append(candidate)
+                if candidates and len(candidates) == len(bases):
+                    # Each clean candidate already preserves its base and both
+                    # tips. Reconcile consumed IDs across *all* best bases
+                    # before comparing authored results; a larger counter is
+                    # bookkeeping, not a competing ancestor edit.
+                    high_water = {counter: max(c['seq'][counter] for c in candidates)
+                                  for counter in ('point', 'line', 'angle')}
+                    for candidate in candidates:
+                        candidate['seq'].update(high_water)
                 if len(candidates) == len(bases) and all(
                         _same(key, candidates[0], candidate) for candidate in candidates[1:]):
                     merged[key] = candidates[0]
