@@ -1,0 +1,11 @@
+# Converged structural tips with allocator drift
+
+One bounded post-v0.8 gap: differing-content criss-cross bases now accept converged authored topology even when the tips' known point/line/angle allocation counters differ. The result preserves maxima across every best base and both tips. This includes converged removal of a referenced point and its incident geometry, which cannot safely be replayed independently against each ancestor.
+
+Only the three known counters are omitted from tip convergence comparison. Unknown allocation fields and authored fields still participate in equality. Existing all-state counter validation, all-base version guards, provenance, target ordering and whole-topology fallback remain in place. Divergent authored tips still need the existing clean consensus or explicit choice. Recursive competing ancestor reconciliation remains unsupported; accepted v0.8 status is unchanged.
+
+Regression reproduced the previous whole-topology conflict in both merge directions. Tests cover ancestor and tip high-water marks, unknown fields, invalid counters, stale ancestor versions and input immutability. Focused Chromium exercises real criss-cross branches, converged referenced-point deletion with differing tip counters, merge, restart/reopen, provenance and fresh allocation.
+
+Stage evidence and final validation: `/workspace/ctrlnet-v08/cn_post_v08_converged_structural_drift/`. The initial browser launch failed because the Playwright cache was absent; the installed Google Chrome run passed. The initial full pytest environment lacked the benchmark's `.venv/bin/python`; a temporary link to the existing environment is used for validation and removed before delivery. No sample database or unrelated worktree changes are included.
+
+Final validation: 799 passed, 1 skipped, 2 xfailed, 8 warnings in 56.53s. Independent review PASS: 64 focused tests, 14 additional probes and separate Chromium restart/reopen. Author Chromium PASS. The skipped test lacks pyproj; expected failures retain the existing thesis-evidence limitations. Initial environment failure: 1 failed, 798 passed, 1 skipped, 2 xfailed (benchmark interpreter path). Temporary environment link removed. Sample SQLite SHA256 matches HEAD: fa597f57b5952fa603b9464550c5d72e9c7c2b6bd4efc48c8281692b84a204f6.

@@ -644,7 +644,15 @@ def _plan(conn, target, source):
     for key in units[0]:
         b, tv, sv = (u[key] for u in units)
         if key in ambiguous_units:
-            if _same(key, tv, sv):
+            # Convergence concerns authored content. Only the known allocation
+            # counters may differ; unknown seq fields remain part of equality.
+            tip_values = copy.deepcopy([tv, sv])
+            if key == 'topology':
+                for value in tip_values:
+                    if isinstance(value.get('seq'), dict):
+                        for counter in ('point', 'line', 'angle'):
+                            value['seq'].pop(counter, None)
+            if _same(key, *tip_values):
                 if key == 'topology':
                     # Converged authored tips can have reset counters (for
                     # example after JSON import). Preserve consumed IDs from
