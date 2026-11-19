@@ -23,7 +23,8 @@ competing titles offer independent target/source title choices.
 Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
-units with equivalent bases retain ordinary three-way behavior.
+units with equivalent authored bases retain ordinary three-way behavior,
+reconciling valid known allocator counters across every base.
 """
 import copy
 from .. import store
@@ -634,12 +635,27 @@ def _plan(conn, target, source):
         raise ValueError('需要共同祖先')
     base = rows[bases[0]]
     base_units = _units(base)
+    # Known consumed-ID counters do not make authored ancestors disagree.
+    # Use their shared high-water marks in the representative merge state,
+    # including the later field-choice pass, without modifying saved ancestors.
+    ancestor_units = [_units(rows[bid]) for bid in bases]
+    counters = ('point', 'line', 'angle')
+    valid_counters = all(
+        isinstance(u['topology'].get('seq'), dict) and all(
+            type(u['topology']['seq'].get(k)) is int
+            and u['topology']['seq'][k] >= 0 for k in counters)
+        for u in ancestor_units)
+    if valid_counters:
+        high_water = {k: max(u['topology']['seq'][k] for u in ancestor_units)
+                      for k in counters}
+        base_units['topology']['seq'].update(high_water)
+        for u in ancestor_units:
+            u['topology']['seq'].update(high_water)
     ambiguous_units = set()
-    for bid in bases[1:]:
-        other = _units(rows[bid])
+    for other in ancestor_units[1:]:
         ambiguous_units.update(key for key, value in base_units.items()
                                if not _same(key, value, other[key]))
-    units = [_units(r) for r in (base, t, s)]
+    units = [base_units, _units(t), _units(s)]
     conflicts, merged = [], {}
     for key in units[0]:
         b, tv, sv = (u[key] for u in units)
