@@ -39,3 +39,9 @@ choice when ordinary three-way topology merging is supported. The selected title
 preserves independent geometry edits and is distinct from the new snapshot name.
 Differing-content best bases continue to require conflict-free consensus or a
 whole-topology choice; title choices do not reconcile competing ancestors.
+
+Ordinary and equivalent-base merges also preserve known point/line/angle allocator
+high-water marks from every best base and both tips when content merging takes a
+trivial shortcut. Converged imports or deletions cannot recycle an ancestor's
+consumed IDs. Invalid known counters require a whole-topology choice. This does
+not extend recursive reconciliation of competing ancestor edits.

@@ -695,10 +695,25 @@ def _plan(conn, target, source):
                     merged[key] = candidates[0]
                 else:
                     conflicts.append(key)
-        elif _same(key, tv, sv) or _same(key, sv, b):
-            merged[key] = tv
-        elif _same(key, tv, b):
-            merged[key] = sv
+        elif (_same(key, tv, sv) or _same(key, sv, b)
+              or _same(key, tv, b)):
+            chosen = sv if not (_same(key, tv, sv) or _same(key, sv, b)) else tv
+            if key == 'topology':
+                # Trivial content merges can reset consumed IDs through import
+                # or converged deletions. Preserve all ancestor high-water marks.
+                states = [*(_units(rows[bid])[key] for bid in bases), tv, sv]
+                counters = ('point', 'line', 'angle')
+                if any(not isinstance(state.get('seq'), dict) or any(
+                        type(state['seq'].get(counter)) is not int
+                        or state['seq'][counter] < 0 for counter in counters)
+                       for state in states):
+                    conflicts.append(key)
+                    continue
+                chosen = copy.deepcopy(chosen)
+                chosen['seq'].update({
+                    counter: max(state['seq'][counter] for state in states)
+                    for counter in counters})
+            merged[key] = chosen
         else:
             point_conflicts = []
             combined = _merge_point_coordinates(b, tv, sv, point_conflicts) if key == 'topology' else None
