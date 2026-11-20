@@ -8,9 +8,10 @@ from ctrlnet import store
 
 
 @pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('reordered', [False, True])
 @pytest.mark.parametrize('structural_drift', [False, True])
 @pytest.mark.parametrize('guard', [None, 'unknown_seq', 'authored', 'invalid', 'stale'])
-def test_converged_tips_keep_all_base_counters(bridge, reverse, structural_drift, guard):
+def test_converged_tips_keep_all_base_counters(bridge, reverse, structural_drift, guard, reordered):
     c, service = bridge
     root = save(c, 'root')
     original = copy.deepcopy(service.state)
@@ -40,6 +41,9 @@ def test_converged_tips_keep_all_base_counters(bridge, reverse, structural_drift
                 state['network'][key] = []
             state['seq']['point'] += i
             state['seq']['line'] += i*50
+        if i == 2 and reordered:
+            for collection in ('points', 'lines', 'angles'):
+                service.state[collection].reverse()
         if i == 2:
             if guard == 'unknown_seq':
                 service.state['seq']['future'] = 1
@@ -68,7 +72,11 @@ def test_converged_tips_keep_all_base_counters(bridge, reverse, structural_drift
     c.post('/api/engineering/open/'+result['scenario_id'], json={})
     assert service.state['seq'] == dict(original['seq'], point=original['seq']['point']+20,
         line=original['seq']['line']+(100 if structural_drift else 30), angle=original['seq']['angle']+40)
-    assert service.state['points'][0]['x'] == original['points'][0]['x']+1
+    expected_x = original['points'][0]['x']+1
+    assert next(p for p in service.state['points'] if p['id'] == original['points'][0]['id'])['x'] == expected_x
+    target_state = before[2]['metadata']['thesis_state']
+    for collection in ('points', 'lines', 'angles'):
+        assert [p['id'] for p in service.state[collection]] == [p['id'] for p in target_state[collection]]
     if structural_drift:
         assert pid not in [p['id'] for p in service.state['points']]
     assert before == [store.get_scenario(service.repository.path, x['scenario_id']) for x in (a,b,*tips)]

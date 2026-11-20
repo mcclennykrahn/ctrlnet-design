@@ -45,3 +45,10 @@ high-water marks from every best base and both tips when content merging takes a
 trivial shortcut. Converged imports or deletions cannot recycle an ancestor's
 consumed IDs. Invalid known counters require a whole-topology choice. This does
 not extend recursive reconciliation of competing ancestor edits.
+
+Differing-content best bases also permit converged authored tips whose point,
+line or angle lists differ only in stable-ID presentation order. This includes
+converged structural deletions: the target order and all-base/tip known allocator
+maxima survive without replaying ancestor edits. Actual authored disagreements,
+unknown-field differences and invalid counters retain conservative conflicts.
+Recursive reconciliation of competing ancestor edits remains unsupported.

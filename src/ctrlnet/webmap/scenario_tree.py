@@ -695,8 +695,10 @@ def _plan(conn, target, source):
                         value['seq'].pop(counter, None)
         if key in ambiguous_units or (key == 'topology' and reordered_topology_bases
                                       and _same(key, *tip_values)):
-            if _same(key, *tip_values):
+            if _same_base(key, *tip_values):
                 if key == 'topology':
+                    # Stable-ID list order does not undo authored convergence.
+                    # Retain the target presentation without replaying edits.
                     # Converged authored tips can have reset counters (for
                     # example after JSON import). Preserve consumed IDs from
                     # every best base without replaying ancestor edits.
