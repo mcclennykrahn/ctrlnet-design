@@ -164,7 +164,7 @@ def test_competing_title_multibase_guard(bridge, differing):
         service.state['name'] = 'title '+str(i)
         tips.append(save(c, 'tip', parent))
     plan = preview(c, *tips)
-    assert plan['conflicts'] == (['topology'] if differing else ['title'])
+    assert plan['conflicts'] == ['title']
     key = plan['conflicts'][0]
     r = c.post('/api/engineering/merge', json=dict(plan, name='resolved', resolutions={key: 'source'}))
     assert r.status_code == 200, r.text

@@ -37,8 +37,12 @@ unsupported. This bounded extension does not change v0.8 acceptance.
 Competing editor project titles can be resolved independently through the `title`
 choice when ordinary three-way topology merging is supported. The selected title
 preserves independent geometry edits and is distinct from the new snapshot name.
-Differing-content best bases continue to require conflict-free consensus or a
-whole-topology choice; title choices do not reconcile competing ancestors.
+Differing-content best bases also offer the independent title choice when every
+best base reports only a title conflict and produces the same remaining topology.
+The chosen title is applied to that verified consensus, preserving target order,
+all-base/tip allocator maxima and all-base version guards. Mixed clean/conflicted
+ancestor results, other field conflicts and disagreeing geometry still require a
+whole-topology choice. This does not recursively reconcile competing ancestors.
 
 Ordinary and equivalent-base merges also preserve known point/line/angle allocator
 high-water marks from every best base and both tips when content merging takes a

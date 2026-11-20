@@ -23,7 +23,9 @@ competing titles offer independent target/source title choices.
 Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
-units with equivalent authored bases retain ordinary three-way behavior,
+an otherwise clean consensus can retain an independent competing-title choice
+when every best base reports only that same title conflict.
+Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
 """
@@ -717,15 +719,19 @@ def _plan(conn, target, source):
                 else:
                     merged[key] = tv
             else:
-                # Every best base must independently permit the same clean merge.
-                # Never expose field choices against an arbitrary ancestor.
+                # Every base must permit the same geometry, with either no
+                # conflicts or only the same independent title choice.
                 candidates = []
+                candidate_conflicts = []
                 if key == 'topology':
                     for bid in bases:
-                        candidate = _merge_point_coordinates(_units(rows[bid])[key], tv, sv)
-                        if candidate is None:
+                        fields = []
+                        candidate = _merge_point_coordinates(
+                            _units(rows[bid])[key], tv, sv, point_conflicts=fields)
+                        if candidate is None or fields not in ([], ['title']):
                             break
                         candidates.append(candidate)
+                        candidate_conflicts.append(fields)
                 if candidates and len(candidates) == len(bases):
                     # Each clean candidate already preserves its base and both
                     # tips. Reconcile consumed IDs across *all* best bases
@@ -735,9 +741,12 @@ def _plan(conn, target, source):
                                   for counter in ('point', 'line', 'angle')}
                     for candidate in candidates:
                         candidate['seq'].update(high_water)
-                if len(candidates) == len(bases) and all(
-                        _same(key, candidates[0], candidate) for candidate in candidates[1:]):
+                if (len(candidates) == len(bases)
+                        and all(fields == candidate_conflicts[0] for fields in candidate_conflicts)
+                        and all(
+                            _same(key, candidates[0], candidate) for candidate in candidates[1:])):
                     merged[key] = candidates[0]
+                    conflicts.extend(candidate_conflicts[0])
                 else:
                     conflicts.append(key)
         elif (_same(key, tv, sv) or (
@@ -799,7 +808,15 @@ def merge(path, payload):
                     raise ValueError('冲突选择须为 target/source')
                 if key not in ('network', 'title') and not key.startswith(('point:', 'line:', 'angle:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
-            if {'network', 'title'} & resolutions.keys() or any(key.startswith(('point:', 'line:', 'angle:')) for key in resolutions):
+            if 'topology' in plan['differing_base_units'] and 'title' in resolutions:
+                # The geometry was verified against every base. Replaying the
+                # representative ancestor here would discard that consensus.
+                chosen = units[1 if resolutions['title'] == 'target' else 2]['topology']
+                if 'name' in chosen:
+                    merged['topology']['name'] = copy.deepcopy(chosen['name'])
+                else:
+                    merged['topology'].pop('name', None)
+            elif {'network', 'title'} & resolutions.keys() or any(key.startswith(('point:', 'line:', 'angle:')) for key in resolutions):
                 merged['topology'] = _merge_point_coordinates(
                     *(u['topology'] for u in units), point_conflicts=[], choices=resolutions)
             state = copy.deepcopy(merged['topology'])
