@@ -24,6 +24,7 @@ Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
 units with equivalent authored bases retain ordinary three-way behavior,
+including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
 """
 import copy
@@ -75,6 +76,27 @@ def _same(key, a, b):
         _refresh_derived(value)
         return value
     return normalized(a) == normalized(b)
+
+
+def _same_base(key, a, b):
+    """Presentation order does not distinguish stable-ID authored ancestors.
+
+    Normalize comparison copies only; the merge still uses the target's order.
+    Unknown fields and malformed/duplicate IDs must not disappear in comparison.
+    """
+    if key != 'topology':
+        return _same(key, a, b)
+    values = copy.deepcopy([a, b])
+    for value in values:
+        for collection in ('points', 'lines', 'angles'):
+            items = value.get(collection)
+            if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+                return False
+            ids = [item.get('id') for item in items]
+            if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
+                return False
+            items.sort(key=lambda item: item['id'])
+    return _same(key, *values)
 
 
 def _merge_point_coordinates(base, target, source, point_conflicts=None, choices=None):
@@ -652,22 +674,27 @@ def _plan(conn, target, source):
         for u in ancestor_units:
             u['topology']['seq'].update(high_water)
     ambiguous_units = set()
+    reordered_topology_bases = False
     for other in ancestor_units[1:]:
+        if (_same_base('topology', base_units['topology'], other['topology'])
+                and not _same('topology', base_units['topology'], other['topology'])):
+            reordered_topology_bases = True
         ambiguous_units.update(key for key, value in base_units.items()
-                               if not _same(key, value, other[key]))
+                               if not _same_base(key, value, other[key]))
     units = [base_units, _units(t), _units(s)]
     conflicts, merged = [], {}
     for key in units[0]:
         b, tv, sv = (u[key] for u in units)
-        if key in ambiguous_units:
-            # Convergence concerns authored content. Only the known allocation
-            # counters may differ; unknown seq fields remain part of equality.
-            tip_values = copy.deepcopy([tv, sv])
-            if key == 'topology':
-                for value in tip_values:
-                    if isinstance(value.get('seq'), dict):
-                        for counter in ('point', 'line', 'angle'):
-                            value['seq'].pop(counter, None)
+        # Preserve the existing convergence path even when order-only bases
+        # become equivalent: structural convergence need not replay edits.
+        tip_values = copy.deepcopy([tv, sv])
+        if key == 'topology':
+            for value in tip_values:
+                if isinstance(value.get('seq'), dict):
+                    for counter in ('point', 'line', 'angle'):
+                        value['seq'].pop(counter, None)
+        if key in ambiguous_units or (key == 'topology' and reordered_topology_bases
+                                      and _same(key, *tip_values)):
             if _same(key, *tip_values):
                 if key == 'topology':
                     # Converged authored tips can have reset counters (for
@@ -711,8 +738,9 @@ def _plan(conn, target, source):
                     merged[key] = candidates[0]
                 else:
                     conflicts.append(key)
-        elif (_same(key, tv, sv) or _same(key, sv, b)
-              or _same(key, tv, b)):
+        elif (_same(key, tv, sv) or (
+                not (key == 'topology' and reordered_topology_bases)
+                and (_same(key, sv, b) or _same(key, tv, b)))):
             chosen = sv if not (_same(key, tv, sv) or _same(key, sv, b)) else tv
             if key == 'topology':
                 # Trivial content merges can reset consumed IDs through import

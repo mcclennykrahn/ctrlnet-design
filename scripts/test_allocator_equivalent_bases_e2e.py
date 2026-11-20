@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = Path(os.environ.get('SCENARIO_ARTIFACTS', '/workspace/ctrlnet-v08/cn_post_v08_allocator_equivalent_bases'))
 
 
-def main():
+def main(reorder_bases=False):
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     env = isolated_environment()
     base = f'http://127.0.0.1:{_free_port()}'
@@ -57,9 +57,29 @@ def main():
                     request('delete', '/api/thesis/points/'+added['points'][-1]['id'])
             consume(4)
             a = save('a', root)
+            from ctrlnet import store
+            authored_base = store.get_scenario(env['CTRLNET_THESIS_DB'], a['scenario_id'])['metadata']['thesis_state']
             request('post', '/api/engineering/open/'+root['scenario_id'], {})
             consume(7)
+            if reorder_bases:
+                state = json.loads(json.dumps(authored_base))
+                for key in ('points', 'lines', 'angles'):
+                    state[key].reverse()
+                request('post', '/api/thesis/import/json', state)
             b = save('b', root)
+            base_states = [authored_base, store.get_scenario(env['CTRLNET_THESIS_DB'], b['scenario_id'])['metadata']['thesis_state']]
+            expected_seq = {key: max(state['seq'][key] for state in base_states)
+                            for key in ('point', 'line', 'angle')}
+            if reorder_bases:
+                from ctrlnet.webmap.scenario_tree import _same_base
+                other_base = store.get_scenario(env['CTRLNET_THESIS_DB'], b['scenario_id'])['metadata']['thesis_state']
+                comparison = json.loads(json.dumps([authored_base, other_base]))
+                for value in comparison:
+                    for counter in ('point', 'line', 'angle'):
+                        value['seq'][counter] = 0
+                if not _same_base('topology', *comparison):
+                    (ARTIFACTS/'fixture_bases.json').write_text(json.dumps(comparison, indent=2))
+                    raise AssertionError('fixture changed authored fields beyond order')
             left = merge('left', a, b)
             right = merge('right', b, a)
             bases = sorted([a['scenario_id'], b['scenario_id']])
@@ -69,12 +89,14 @@ def main():
                 request('post', '/api/engineering/open/'+parent['scenario_id'], {})
                 pt = initial['points'][i]
                 state = request('patch', '/api/thesis/points/'+pt['id'], dict(lon=pt['lon']+.00003, lat=pt['lat']+.00001))
-                expected_points[i] = state['points'][i]
+                expected_points[pt['id']] = next(x for x in state['points'] if x['id'] == pt['id'])
                 state['name'] = 'Merged editor title '+str(i)
                 # JSON roundtrip rebuilds counters below both ancestor maxima.
                 request('post', '/api/thesis/import/json', state)
                 children.append(save('edit '+str(i), parent))
             left, right = children
+            request('post', '/api/engineering/open/'+left['scenario_id'], {})
+            target_order = request('get', '/api/thesis/state')
             page.reload(wait_until='networkidle')
             page.wait_for_function('document.querySelectorAll("#engineering-scenario option").length === 7')
             page.select_option('#engineering-scenario', left['scenario_id'])
@@ -82,7 +104,7 @@ def main():
             with page.expect_response(lambda r: '/merge/preview?' in r.url) as response:
                 page.click('#engineering-merge-preview')
             plan = response.value.json()
-            assert plan['conflicts'] == ['title'] and plan['bases'] == bases
+            assert plan['conflicts'] == ['title'] and plan['bases'] == bases, plan
             assert plan['differing_base_units'] == []
             page.select_option('[data-unit=title]', 'source')
             page.fill('#engineering-name', 'equivalent bases')
@@ -100,8 +122,8 @@ def main():
             with page.expect_navigation(wait_until='networkidle'):
                 page.click('#engineering-open', no_wait_after=True)
             actual = request('get', '/api/thesis/state')
-            for i, point in expected_points.items():
-                assert actual['points'][i] == point
+            for pid, point in expected_points.items():
+                assert next(x for x in actual['points'] if x['id'] == pid) == point
             from ctrlnet import store
             saved = store.get_scenario(env['CTRLNET_THESIS_DB'], merged['scenario_id'])
             assert saved['metadata']['merge_bases'] == bases
@@ -109,13 +131,14 @@ def main():
             assert saved['metadata']['merge_parents'] == [left['scenario_id'], right['scenario_id']]
             assert actual['name'] == 'Merged editor title 1'
             assert saved['name'] == 'equivalent bases'
-            assert actual['seq'] == dict(initial['seq'], point=initial['seq']['point']+7)
-            assert [p['id'] for p in actual['points']] == [p['id'] for p in initial['points']]
+            assert actual['seq'] == expected_seq
+            for key in ('points', 'lines', 'angles'):
+                assert [x['id'] for x in actual[key]] == [x['id'] for x in target_order[key]]
             assert ' + '.join(bases) in page.locator('#engineering-tree').inner_text()
             allocated = request('post', '/api/thesis/points', dict(lon=117.3, lat=30.3))
-            assert allocated['points'][-1]['id'] == 'p'+str(initial['seq']['point']+8)
+            assert allocated['points'][-1]['id'] == 'p'+str(expected_seq['point']+1)
             assert not errors, errors
-            result = dict(ok=True, checks=['allocator-only ancestor differences with divergent reset tips and title choice', 'Chromium field merge and independent title choice', 'restart/reopen retains independent geometry, order, allocators and provenance', 'fresh point allocation exceeds every best-base counter', 'tree displays both bases', 'no page errors'])
+            result = dict(ok=True, reordered_bases=reorder_bases, checks=['authored-equivalent ancestor differences with divergent reset tips and title choice', 'Chromium field merge and independent title choice', 'restart/reopen retains independent geometry, order, allocators and provenance', 'fresh point allocation exceeds every best-base counter', 'tree displays both bases', 'no page errors'])
             (ARTIFACTS/'e2e.json').write_text(json.dumps(result, indent=2)+'\n')
             print(json.dumps(result))
             browser.close()

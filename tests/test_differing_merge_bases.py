@@ -94,7 +94,7 @@ def test_differing_bases_clean_consensus(bridge, reverse, base_index, mutation):
         children.reverse()
     plan = preview(c, *children)
     assert plan['conflicts'] == []
-    assert plan['differing_base_units'] == ['topology']
+    assert plan['differing_base_units'] == (['topology'] if mutation == 'point' else [])
     assert plan['bases'] == sorted([a['scenario_id'], b['scenario_id']])
     if base_index is not None:
         sid = plan['bases'][base_index]
