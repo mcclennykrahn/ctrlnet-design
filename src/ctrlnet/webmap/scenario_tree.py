@@ -24,7 +24,8 @@ Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
 an otherwise clean consensus can retain an independent competing-title choice
-when every best base reports only that same title conflict.
+when every best base reports only that same title conflict. A network-only
+conflict also retains a choice when both outcomes agree across every best base.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
@@ -627,7 +628,7 @@ def _merge_point_coordinates(base, target, source, point_conflicts=None, choices
     return result
 
 
-def _plan(conn, target, source):
+def _plan(conn, target, source, choices=None):
     if target == source:
         raise ValueError('请选择两个不同方案')
     rows = {r['id']: store._fetch_scenario_dict(conn, r['id'])
@@ -720,15 +721,15 @@ def _plan(conn, target, source):
                     merged[key] = tv
             else:
                 # Every base must permit the same geometry, with either no
-                # conflicts or only the same independent title choice.
+                # conflicts or only the same independent title or network choice.
                 candidates = []
                 candidate_conflicts = []
                 if key == 'topology':
                     for bid in bases:
                         fields = []
                         candidate = _merge_point_coordinates(
-                            _units(rows[bid])[key], tv, sv, point_conflicts=fields)
-                        if candidate is None or fields not in ([], ['title']):
+                            _units(rows[bid])[key], tv, sv, point_conflicts=fields, choices=choices)
+                        if candidate is None or fields not in ([], ['title'], ['network']):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)
@@ -745,6 +746,26 @@ def _plan(conn, target, source):
                         and all(fields == candidate_conflicts[0] for fields in candidate_conflicts)
                         and all(
                             _same(key, candidates[0], candidate) for candidate in candidates[1:])):
+                    if candidate_conflicts[0] == ['network']:
+                        # Structural edits can filter network selections. Verify
+                        # both outcomes rather than copying a raw tip network.
+                        alternate = []
+                        for bid in bases:
+                            fields = []
+                            value = _merge_point_coordinates(
+                                _units(rows[bid])[key], tv, sv,
+                                point_conflicts=fields,
+                                choices={'network': 'target' if (choices or {}).get(
+                                    'network') == 'source' else 'source'})
+                            if value is None or fields != ['network']:
+                                break
+                            value['seq'].update(high_water)
+                            alternate.append(value)
+                        if len(alternate) != len(bases) or any(
+                                not _same(key, alternate[0], value)
+                                for value in alternate[1:]):
+                            conflicts.append(key)
+                            continue
                     merged[key] = candidates[0]
                     conflicts.extend(candidate_conflicts[0])
                 else:
@@ -808,7 +829,10 @@ def merge(path, payload):
                     raise ValueError('冲突选择须为 target/source')
                 if key not in ('network', 'title') and not key.startswith(('point:', 'line:', 'angle:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
-            if 'topology' in plan['differing_base_units'] and 'title' in resolutions:
+            if 'topology' in plan['differing_base_units'] and 'network' in resolutions:
+                _, resolved, _, _ = _plan(conn, payload['target'], payload['source'], resolutions)
+                merged['topology'] = resolved['topology']
+            elif 'topology' in plan['differing_base_units'] and 'title' in resolutions:
                 # The geometry was verified against every base. Replaying the
                 # representative ancestor here would discard that consensus.
                 chosen = units[1 if resolutions['title'] == 'target' else 2]['topology']
