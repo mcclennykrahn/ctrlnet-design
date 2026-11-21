@@ -24,13 +24,14 @@ Both parents remain durable.
 Differing-content best bases require whole-unit choices unless the tips agree
 or every best base produces an equivalent conflict-free topology merge;
 an otherwise clean consensus can retain an independent competing-title choice
-when every best base reports only that same title conflict. A network-only
-conflict also retains a choice when both outcomes agree across every best base.
+when every best base reports only that same title conflict. Title and network
+conflicts can coexist when all four outcomes agree across every best base.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
 """
 import copy
+from itertools import product
 from .. import store
 from .project_bridge import editor_records, gnss_records
 
@@ -721,7 +722,7 @@ def _plan(conn, target, source, choices=None):
                     merged[key] = tv
             else:
                 # Every base must permit the same geometry, with either no
-                # conflicts or only the same independent title or network choice.
+                # conflicts or the same independent title/network choices.
                 candidates = []
                 candidate_conflicts = []
                 if key == 'topology':
@@ -729,7 +730,7 @@ def _plan(conn, target, source, choices=None):
                         fields = []
                         candidate = _merge_point_coordinates(
                             _units(rows[bid])[key], tv, sv, point_conflicts=fields, choices=choices)
-                        if candidate is None or fields not in ([], ['title'], ['network']):
+                        if candidate is None or fields not in ([], ['title'], ['network'], ['title', 'network']):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)
@@ -746,26 +747,31 @@ def _plan(conn, target, source, choices=None):
                         and all(fields == candidate_conflicts[0] for fields in candidate_conflicts)
                         and all(
                             _same(key, candidates[0], candidate) for candidate in candidates[1:])):
-                    if candidate_conflicts[0] == ['network']:
-                        # Structural edits can filter network selections. Verify
-                        # both outcomes rather than copying a raw tip network.
+                    # Check every independent title/network outcome. Selection
+                    # filtering can depend on structural edits, so agreement for
+                    # one choice cannot establish agreement for another.
+                    choice_fields = candidate_conflicts[0]
+                    outcomes_agree = True
+                    for outcomes in product(('target', 'source'), repeat=len(choice_fields)):
+                        resolved_choices = dict(zip(choice_fields, outcomes))
                         alternate = []
                         for bid in bases:
                             fields = []
                             value = _merge_point_coordinates(
                                 _units(rows[bid])[key], tv, sv,
-                                point_conflicts=fields,
-                                choices={'network': 'target' if (choices or {}).get(
-                                    'network') == 'source' else 'source'})
-                            if value is None or fields != ['network']:
+                                point_conflicts=fields, choices=resolved_choices)
+                            if value is None or fields != choice_fields:
                                 break
                             value['seq'].update(high_water)
                             alternate.append(value)
                         if len(alternate) != len(bases) or any(
                                 not _same(key, alternate[0], value)
                                 for value in alternate[1:]):
-                            conflicts.append(key)
-                            continue
+                            outcomes_agree = False
+                            break
+                    if not outcomes_agree:
+                        conflicts.append(key)
+                        continue
                     merged[key] = candidates[0]
                     conflicts.extend(candidate_conflicts[0])
                 else:
