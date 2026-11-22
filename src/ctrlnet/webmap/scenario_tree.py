@@ -26,6 +26,8 @@ or every best base produces an equivalent conflict-free topology merge;
 an otherwise clean consensus can retain an independent competing-title choice
 when every best base reports only that same title conflict. Title and network
 conflicts can coexist when all four outcomes agree across every best base.
+A lone whole-point choice is also retained when both outcomes agree across
+every best base; mixed or multiple point conflicts remain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
@@ -722,7 +724,7 @@ def _plan(conn, target, source, choices=None):
                     merged[key] = tv
             else:
                 # Every base must permit the same geometry, with either no
-                # conflicts or the same independent title/network choices.
+                # conflicts or the same bounded title/network or lone point choice.
                 candidates = []
                 candidate_conflicts = []
                 if key == 'topology':
@@ -730,7 +732,9 @@ def _plan(conn, target, source, choices=None):
                         fields = []
                         candidate = _merge_point_coordinates(
                             _units(rows[bid])[key], tv, sv, point_conflicts=fields, choices=choices)
-                        if candidate is None or fields not in ([], ['title'], ['network'], ['title', 'network']):
+                        if candidate is None or not (
+                                fields in ([], ['title'], ['network'], ['title', 'network'])
+                                or (len(fields) == 1 and fields[0].startswith('point:'))):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)
@@ -747,7 +751,7 @@ def _plan(conn, target, source, choices=None):
                         and all(fields == candidate_conflicts[0] for fields in candidate_conflicts)
                         and all(
                             _same(key, candidates[0], candidate) for candidate in candidates[1:])):
-                    # Check every independent title/network outcome. Selection
+                    # Check every supported choice outcome. Selection
                     # filtering can depend on structural edits, so agreement for
                     # one choice cannot establish agreement for another.
                     choice_fields = candidate_conflicts[0]
@@ -835,7 +839,8 @@ def merge(path, payload):
                     raise ValueError('冲突选择须为 target/source')
                 if key not in ('network', 'title') and not key.startswith(('point:', 'line:', 'angle:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
-            if 'topology' in plan['differing_base_units'] and 'network' in resolutions:
+            if 'topology' in plan['differing_base_units'] and (
+                    'network' in resolutions or any(k.startswith('point:') for k in resolutions)):
                 _, resolved, _, _ = _plan(conn, payload['target'], payload['source'], resolutions)
                 merged['topology'] = resolved['topology']
             elif 'topology' in plan['differing_base_units'] and 'title' in resolutions:

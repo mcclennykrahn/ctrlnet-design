@@ -56,3 +56,11 @@ converged structural deletions: the target order and all-base/tip known allocato
 maxima survive without replaying ancestor edits. Actual authored disagreements,
 unknown-field differences and invalid counters retain conservative conflicts.
 Recursive reconciliation of competing ancestor edits remains unsupported.
+
+Differing-content best bases can retain one whole-point conflict choice when every
+base reports only the same `point:<stable-id>` conflict and both target/source
+outcomes agree across all bases. The choice selects the entire point and keeps
+verified unrelated edits, target order, allocator maxima and base version guards.
+Multiple point conflicts, mixed point/title/network conflicts, differing per-base
+conflict sets or outcome disagreements still require a whole-topology choice.
+This bounded consensus check does not recursively merge competing ancestors.
