@@ -26,8 +26,9 @@ or every best base produces an equivalent conflict-free topology merge;
 an otherwise clean consensus can retain an independent competing-title choice
 when every best base reports only that same title conflict. Title and network
 conflicts can coexist when all four outcomes agree across every best base.
-A lone whole-point choice is also retained when both outcomes agree across
-every best base; mixed or multiple point conflicts remain whole-topology choices.
+A lone whole-point or whole-line choice is also retained when both outcomes
+agree across every best base; mixed or multiple field conflicts retain
+whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
@@ -724,7 +725,7 @@ def _plan(conn, target, source, choices=None):
                     merged[key] = tv
             else:
                 # Every base must permit the same geometry, with either no
-                # conflicts or the same bounded title/network or lone point choice.
+                # conflicts or the same bounded title/network or lone point/line choice.
                 candidates = []
                 candidate_conflicts = []
                 if key == 'topology':
@@ -734,7 +735,7 @@ def _plan(conn, target, source, choices=None):
                             _units(rows[bid])[key], tv, sv, point_conflicts=fields, choices=choices)
                         if candidate is None or not (
                                 fields in ([], ['title'], ['network'], ['title', 'network'])
-                                or (len(fields) == 1 and fields[0].startswith('point:'))):
+                                or (len(fields) == 1 and fields[0].startswith(('point:', 'line:')))):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)
@@ -840,7 +841,7 @@ def merge(path, payload):
                 if key not in ('network', 'title') and not key.startswith(('point:', 'line:', 'angle:')):
                     merged[key] = units[1 if choice == 'target' else 2][key]
             if 'topology' in plan['differing_base_units'] and (
-                    'network' in resolutions or any(k.startswith('point:') for k in resolutions)):
+                    'network' in resolutions or any(k.startswith(('point:', 'line:')) for k in resolutions)):
                 _, resolved, _, _ = _plan(conn, payload['target'], payload['source'], resolutions)
                 merged['topology'] = resolved['topology']
             elif 'topology' in plan['differing_base_units'] and 'title' in resolutions:
