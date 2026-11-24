@@ -77,7 +77,7 @@ def test_angle_choice_reopen(bridge, reverse, choice, field):
     assert rows == [store.get_scenario(service.repository.path, x['scenario_id']) for x in (a,b,*children)]
 
 
-@pytest.mark.parametrize('guard',['title','multiple','angles','line','network','unknown'])
+@pytest.mark.parametrize('guard',['multiple','angles','line','network','unknown'])
 def test_other_conflicts_conservative(bridge, guard):
     c, service = bridge
     _, _, children = angle_tips(c, service, guard)
