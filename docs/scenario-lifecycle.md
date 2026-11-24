@@ -64,3 +64,11 @@ verified unrelated edits, target order, allocator maxima and base version guards
 Multiple point conflicts, mixed point/title/network conflicts, differing per-base
 conflict sets or outcome disagreements still require a whole-topology choice.
 This bounded consensus check does not recursively merge competing ancestors.
+
+Differing-content best bases can also retain independent title and one whole-line
+choices when every base reports exactly those same conflicts and all four joint
+outcomes agree. The line choice selects the entire authored line; unrelated
+supported edits, target order, allocator maxima and all-base version guards
+survive. Title plus point, additional item/network conflicts, differing conflict
+IDs, unsafe line outcomes and unknown authored fields remain whole-topology
+conflicts. Recursive reconciliation of competing ancestors remains unsupported.

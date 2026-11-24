@@ -27,9 +27,9 @@ an otherwise clean consensus can retain an independent competing-title choice
 when every best base reports only that same title conflict. Title and network
 conflicts can coexist when all four outcomes agree across every best base.
 A lone whole-point, whole-line or whole-angle choice is also retained when
-both outcomes agree across every best base. A title plus one whole-angle choice
-is retained only when all four outcomes agree; other mixed or multiple field
-conflicts retain whole-topology choices.
+both outcomes agree across every best base. A title plus one whole-line or
+whole-angle choice is retained only when all four outcomes agree; other mixed
+or multiple field conflicts retain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
@@ -738,7 +738,7 @@ def _plan(conn, target, source, choices=None):
                                 fields in ([], ['title'], ['network'], ['title', 'network'])
                                 or (len(fields) == 1 and fields[0].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 2 and fields[0] == 'title'
-                                    and fields[1].startswith('angle:'))):
+                                    and fields[1].startswith(('line:', 'angle:')))):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)
@@ -770,6 +770,16 @@ def _plan(conn, target, source, choices=None):
                                 point_conflicts=fields, choices=resolved_choices)
                             if value is None or fields != choice_fields:
                                 break
+                            if (len(choice_fields) == 2 and choice_fields[0] == 'title'
+                                    and choice_fields[1].startswith('line:')):
+                                # A whole-line endpoint choice can collide with
+                                # another line's independent endpoint edit. Every
+                                # offered joint outcome must remain safe, even
+                                # when the requested outcome has no collision.
+                                pairs = [frozenset((line['from'], line['to']))
+                                         for line in value['lines']]
+                                if len(set(pairs)) != len(pairs):
+                                    break
                             value['seq'].update(high_water)
                             alternate.append(value)
                         if len(alternate) != len(bases) or any(

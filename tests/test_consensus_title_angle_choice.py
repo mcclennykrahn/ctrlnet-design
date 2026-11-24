@@ -100,7 +100,7 @@ def test_other_mixed_conflicts_conservative(bridge, extra):
     assert preview(c,*descendants)['conflicts'] == ['topology']
 
 
-@pytest.mark.parametrize('kind', ['point', 'line'])
+@pytest.mark.parametrize('kind', ['point'])
 def test_title_other_lone_item_stays_conservative(bridge, kind):
     from test_scenario_tree import save
     from test_equivalent_merge_bases import cross

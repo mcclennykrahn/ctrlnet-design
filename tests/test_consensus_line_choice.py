@@ -64,7 +64,7 @@ def test_line_choice_reopen(bridge, reverse, choice, field):
     assert rows == [store.get_scenario(service.repository.path, x['scenario_id']) for x in (a,b,*children)]
 
 
-@pytest.mark.parametrize('guard',['title','multiple','unknown'])
+@pytest.mark.parametrize('guard',['multiple','unknown'])
 def test_other_conflicts_conservative(bridge, guard):
     c, service = bridge
     _, _, children = line_tips(c, service, guard)
