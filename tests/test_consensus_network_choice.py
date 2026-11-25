@@ -14,6 +14,9 @@ def network_tips(c, service, guard=None):
         c.post('/api/engineering/open/'+child['scenario_id'], json={})
         service.state['name'] = 'Shared title'
         service.state['network']['tolerance_mm'] = 35+i
+        if guard == 'point':
+            # Two point conflicts remain unsupported alongside the network choice.
+            service.state['points'][0]['y'] += 50+i
         result.append(save(c, 'network tip', child))
     return a, b, result
 
