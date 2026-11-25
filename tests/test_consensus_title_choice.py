@@ -72,7 +72,7 @@ def test_consensus_title_choice_reopen(bridge, reverse, choice):
     assert rows == [store.get_scenario(service.repository.path, x['scenario_id']) for x in (a,b,*children)]
 
 
-@pytest.mark.parametrize('guard', ['point', 'unknown', 'invalid'])
+@pytest.mark.parametrize('guard', ['unknown', 'invalid'])
 def test_non_title_conflicts_stay_whole_topology(bridge, guard):
     c, service = bridge
     _, _, children = tips(c, service, guard)
@@ -90,3 +90,9 @@ def test_title_choice_guards_every_base(bridge, base_index):
     before = c.get('/api/engineering/projects').json()
     assert c.post('/api/engineering/merge', json=dict(plan, name='stale', resolutions={'title':'source'})).status_code == 409
     assert c.get('/api/engineering/projects').json() == before
+
+
+def test_title_with_one_point_now_retains_independent_choices(bridge):
+    c, service = bridge
+    _, _, children = tips(c, service, 'point')
+    assert preview(c, *children)['conflicts'] == ['title', 'point:'+service.state['points'][3]['id']]

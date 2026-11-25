@@ -27,7 +27,7 @@ an otherwise clean consensus can retain an independent competing-title choice
 when every best base reports only that same title conflict. Title and network
 conflicts can coexist when all four outcomes agree across every best base.
 A lone whole-point, whole-line or whole-angle choice is also retained when
-both outcomes agree across every best base. A title plus one whole-line or
+both outcomes agree across every best base. A title plus one whole-point, whole-line or
 whole-angle choice is retained only when all four outcomes agree; other mixed
 or multiple field conflicts retain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
@@ -738,7 +738,7 @@ def _plan(conn, target, source, choices=None):
                                 fields in ([], ['title'], ['network'], ['title', 'network'])
                                 or (len(fields) == 1 and fields[0].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 2 and fields[0] == 'title'
-                                    and fields[1].startswith(('line:', 'angle:')))):
+                                    and fields[1].startswith(('point:', 'line:', 'angle:')))):
                             break
                         candidates.append(candidate)
                         candidate_conflicts.append(fields)

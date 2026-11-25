@@ -98,21 +98,3 @@ def test_other_mixed_conflicts_conservative(bridge, extra):
             service.state['future_authored'] = True
         descendants.append(save(c,'extra conflict',parent))
     assert preview(c,*descendants)['conflicts'] == ['topology']
-
-
-@pytest.mark.parametrize('kind', ['point'])
-def test_title_other_lone_item_stays_conservative(bridge, kind):
-    from test_scenario_tree import save
-    from test_equivalent_merge_bases import cross
-    c, service = bridge
-    _, _, left, right = cross(c,service,'point')
-    children = []
-    for i,parent in enumerate((left,right)):
-        assert c.post('/api/engineering/open/'+parent['scenario_id'],json={}).status_code == 200
-        service.state['name'] = 'title '+str(i)
-        if kind == 'point':
-            service.state['points'][0]['y'] += i+1
-        else:
-            service.state['lines'][0]['name'] = 901+i
-        children.append(save(c,'mixed conflict',parent))
-    assert preview(c,*children)['conflicts'] == ['topology']
