@@ -76,7 +76,7 @@ def test_every_base_version_guarded(bridge,index):
     assert c.get('/api/engineering/projects').json() == before
 
 
-@pytest.mark.parametrize('extra', ['line', 'point', 'angle', 'network', 'unknown'])
+@pytest.mark.parametrize('extra', ['line', 'point', 'angle', 'unknown'])
 def test_other_mixed_conflicts_conservative(bridge, extra):
     from test_scenario_tree import save
     c, service = bridge

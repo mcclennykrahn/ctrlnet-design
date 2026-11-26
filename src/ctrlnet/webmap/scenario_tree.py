@@ -30,7 +30,7 @@ A lone whole-point, whole-line or whole-angle choice is also retained when
 both outcomes agree across every best base. A title plus one whole-point, whole-line or
 whole-angle choice is retained only when all four outcomes agree. Independent
 network plus one whole-point, whole-line or whole-angle choice has the same requirement.
-Title, network and one whole-point or whole-angle choice require agreement for
+Title, network and one whole-point, whole-line or whole-angle choice require agreement for
 all eight outcomes. Other mixed or multiple field conflicts retain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
@@ -742,7 +742,7 @@ def _plan(conn, target, source, choices=None):
                                 or (len(fields) == 2 and fields[0] == 'title'
                                     and fields[1].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 3 and fields[:2] == ['title', 'network']
-                                    and fields[2].startswith(('point:', 'angle:')))
+                                    and fields[2].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 2 and fields[0] == 'network'
                                     and fields[1].startswith(('point:', 'line:', 'angle:')))):
                             break
@@ -776,8 +776,9 @@ def _plan(conn, target, source, choices=None):
                                 point_conflicts=fields, choices=resolved_choices)
                             if value is None or fields != choice_fields:
                                 break
-                            if (len(choice_fields) == 2 and choice_fields[0] in ('title', 'network')
-                                    and choice_fields[1].startswith('line:')):
+                            if (len(choice_fields) in (2, 3)
+                                    and choice_fields[-1].startswith('line:')
+                                    and all(field in ('title', 'network') for field in choice_fields[:-1])):
                                 # A whole-line endpoint choice can collide with
                                 # another line's independent endpoint edit. Every
                                 # offered joint outcome must remain safe, even
