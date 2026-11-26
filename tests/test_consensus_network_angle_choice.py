@@ -97,4 +97,8 @@ def test_other_mixed_conflicts_conservative(bridge, extra):
         elif i:
             service.state['future_authored'] = True
         descendants.append(save(c,'extra conflict',parent))
-    assert preview(c,*descendants)['conflicts'] == ['topology']
+    conflicts = preview(c,*descendants)['conflicts']
+    if extra == 'title':
+        assert conflicts == ['title', 'network', 'angle:'+service.state['angles'][0]['id']]
+    else:
+        assert conflicts == ['topology']
