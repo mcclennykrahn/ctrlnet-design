@@ -47,7 +47,7 @@ def test_independent_dual_choices(bridge, reverse, title, network):
     assert rows == [store.get_scenario(service.repository.path, x['scenario_id']) for x in (a,b,*children)]
 
 
-@pytest.mark.parametrize('guard', ['point', 'unknown', 'invalid'])
+@pytest.mark.parametrize('guard', ['unknown', 'invalid'])
 def test_other_conflicts_stay_whole_topology(bridge, guard):
     c, service = bridge
     _, _, children = dual_tips(c, service, guard)

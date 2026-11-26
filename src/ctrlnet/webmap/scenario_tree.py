@@ -29,7 +29,8 @@ conflicts can coexist when all four outcomes agree across every best base.
 A lone whole-point, whole-line or whole-angle choice is also retained when
 both outcomes agree across every best base. A title plus one whole-point, whole-line or
 whole-angle choice is retained only when all four outcomes agree. Independent
-network plus one whole-point, whole-line or whole-angle choice has the same requirement. Other mixed
+network plus one whole-point, whole-line or whole-angle choice has the same requirement.
+Title, network and one whole-point choice require agreement for all eight outcomes. Other mixed
 or multiple field conflicts retain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
@@ -740,6 +741,8 @@ def _plan(conn, target, source, choices=None):
                                 or (len(fields) == 1 and fields[0].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 2 and fields[0] == 'title'
                                     and fields[1].startswith(('point:', 'line:', 'angle:')))
+                                or (len(fields) == 3 and fields[:2] == ['title', 'network']
+                                    and fields[2].startswith('point:'))
                                 or (len(fields) == 2 and fields[0] == 'network'
                                     and fields[1].startswith(('point:', 'line:', 'angle:')))):
                             break
