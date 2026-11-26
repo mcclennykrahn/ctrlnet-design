@@ -72,3 +72,11 @@ supported edits, target order, allocator maxima and all-base version guards
 survive. Title plus point, additional item/network conflicts, differing conflict
 IDs, unsafe line outcomes and unknown authored fields remain whole-topology
 conflicts. Recursive reconciliation of competing ancestors remains unsupported.
+
+Differing-content best bases can retain independent whole-network and one
+whole-line choices when every base reports exactly those conflicts and all four
+joint outcomes agree across all bases. Every outcome must also have unique
+undirected line endpoint pairs. The choices preserve supported unrelated edits,
+target order, allocator maxima, provenance and all-base version guards. Extra
+item conflicts, title/network/line triples, unknown authored fields and recursive
+ancestor reconciliation remain unsupported. Accepted v0.8 status is unchanged.

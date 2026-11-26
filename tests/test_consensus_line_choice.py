@@ -20,6 +20,8 @@ def line_tips(c, service, guard=None, field="name"):
         service.state['seq']['point'] += 20+i
         if guard == 'title':
             service.state['name'] = 'title '+str(i)
+        elif guard == 'network':
+            service.state['network']['observed_edges'] = [line['id'] for line in service.state['lines'][:i+1]]
         elif guard == 'multiple':
             service.state['points'][0]['y'] += i+1
         elif guard == 'unknown' and i:
