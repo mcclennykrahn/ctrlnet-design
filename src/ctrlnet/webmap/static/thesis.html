@@ -64,12 +64,15 @@
           </select>
         </label>
       </div>
-      <div class="project-load-row">
-        <select id="project-select" aria-label="已存论文工程"><option value="">已存工程…</option></select>
-        <button class="btn btn-gray" id="load-project" type="button">读取</button>
-        <span class="bar-sep"></span>
-        <button class="btn btn-gray btn-example" data-example="1" type="button">载入论文算例 1</button>
-        <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
+      <div class="project-load-controls">
+        <div class="saved-project-controls" role="group" aria-label="读取已存工程">
+          <select id="project-select" aria-label="已存论文工程"><option value="">已存工程…</option></select>
+          <button class="btn btn-gray" id="load-project" type="button">读取</button>
+        </div>
+        <div class="example-controls" role="group" aria-label="论文算例">
+          <button class="btn btn-gray btn-example" data-example="1" type="button">载入论文算例 1</button>
+          <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
+        </div>
       </div>
 
       <div class="projection-controls" role="group" aria-label="投影设置">

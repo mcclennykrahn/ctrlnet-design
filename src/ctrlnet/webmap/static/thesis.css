@@ -270,15 +270,30 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   background: #fff;
   padding: 1px 4px;
 }
-.project-load-row select {
-  flex: 1 1 130px;
-  min-width: 100px;
-  height: 26px;
-  border: 1px solid #cfd4cc;
-  background: #fff;
-  padding: 1px 4px;
+.project-load-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 234px), 1fr));
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: var(--green-soft);
 }
-.bar-sep { width: 1px; height: 18px; background: #e3e6e0; }
+.saved-project-controls, .example-controls {
+  display: grid;
+  gap: 8px;
+}
+.saved-project-controls { grid-template-columns: minmax(0, 1fr) auto; }
+.example-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.project-load-controls select {
+  min-width: 0;
+  border: 1px solid #c8d6ce;
+  background: #fff;
+  padding: 4px 6px;
+}
+.project-load-controls select, .project-load-controls .btn { min-height: 36px; }
+.example-controls .btn { white-space: normal; }
 
 .btn {
   min-height: 32px;
@@ -297,7 +312,6 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 .btn-calc { background: #226851; color: #fff; border-color: #226851; font-weight: 600; }
 .btn-calc:hover { background: #19533f; border-color: #19533f; }
-.btn-example { font-size: 11.5px; padding: 2px 7px; }
 
 .panel {
   border: 1px solid #d8ded4;
@@ -761,7 +775,7 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   cursor: pointer;
 }
 .project-load-row button:hover, #engineering-panel button:hover { background: var(--button-hover); }
-.project-load-row input, .project-load-row select, #engineering-panel input,
+.project-load-row input, #engineering-panel input,
 #engineering-panel select, #engineering-panel textarea {
   border: 1px solid #c8d6ce;
   background: #fff;
@@ -803,7 +817,6 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   .project-name-label { flex-basis: 100%; }
   .project-name-label input { min-width: 0; }
   .project-load-row { gap: 8px; }
-  .project-load-row select { min-width: 0; }
   .panel-actions { flex-wrap: wrap; }
   .map-caption-right { flex-wrap: wrap; white-space: normal; }
   .btn, .project-load-row button, #engineering-panel button { min-height: 36px; }
