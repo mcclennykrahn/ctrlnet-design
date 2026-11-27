@@ -72,13 +72,13 @@
         <button class="btn btn-gray btn-example" data-example="2" type="button">载入论文算例 2</button>
       </div>
 
-      <div class="project-load-row">
-        <label>中央子午线 °E <input id="projection-cm" type="number" value="117" step="0.1" min="-180" max="180" style="width:80px"></label>
+      <div class="projection-controls" role="group" aria-label="投影设置">
+        <label>中央子午线 °E <input id="projection-cm" type="number" value="117" step="0.1" min="-180" max="180"></label>
         <label>带宽 <select id="projection-width"><option>3</option><option>6</option></select></label>
         <label>约定 <select id="projection-convention"><option>gauss</option><option>utm</option></select></label>
-        <label>假东 m <input id="projection-fe" type="number" value="500000" style="width:100px"></label>
-        <button id="apply-projection">应用投影</button>
-        <span>保留经纬度重算平面；带外点拒绝且保留原工程。轴序 x北/y东。</span>
+        <label>假东 m <input id="projection-fe" type="number" value="500000"></label>
+        <button class="btn" id="apply-projection" type="button">应用投影</button>
+        <span class="projection-help">保留经纬度重算平面；带外点拒绝且保留原工程。轴序 x北/y东。</span>
       </div>
       <div class="project-load-row"><label>导入完整拓扑 JSON <input id="topology-file" type="file" accept=".json"></label>
         <button id="export-json">导出工程 JSON</button><button id="undo-mutation">撤销（持久化20步）</button><button id="redo-mutation">重做</button><label>点/线段吸附（米，0关闭）<input id="snap-geometry-m" type="number" min="0" max="1000" value="0" style="width:65px"></label><label>放点/拖动吸附网格（米，0关闭）<input id="snap-m" type="number" min="0" max="1000" value="0" style="width:65px"></label>

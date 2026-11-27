@@ -743,3 +743,42 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   border-radius: 5px;
 }
 #point-table .link-button:hover { background: #fff0ee; }
+
+/* Keep projection labels and values aligned in the narrow library column. */
+.projection-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.projection-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.projection-controls input,
+.projection-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 5px 8px;
+  border: 1px solid #cfd4cc;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.projection-controls .btn { grid-column: 1 / -1; min-height: 36px; }
+.projection-help {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
