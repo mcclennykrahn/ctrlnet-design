@@ -618,8 +618,12 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   border: 1px solid #e3b8b2;
   background: #fdf2f1;
   color: #8e2e26;
-  padding: 7px 8px;
-  font-size: 11.5px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border-left: 4px solid #b64b40;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
