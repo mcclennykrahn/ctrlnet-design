@@ -908,3 +908,18 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
+
+/* Geometry libraries share the coordinate table's readable row rhythm. */
+#line-table, #angle-table { font-size: 12px; }
+#line-table th, #line-table td,
+#angle-table th, #angle-table td { padding: 8px; white-space: nowrap; }
+#line-table tbody tr:nth-child(even),
+#angle-table tbody tr:nth-child(even) { background: #f7faf8; }
+#line-table tbody tr:hover, #line-table tbody tr:focus-within,
+#angle-table tbody tr:hover, #angle-table tbody tr:focus-within { background: #edf5f1; }
+#line-table .link-button, #angle-table .link-button {
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+#line-table .link-button:hover, #angle-table .link-button:hover { background: #fff0ee; }
