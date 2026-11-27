@@ -847,6 +847,8 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   border-top: 1px solid var(--green-head-border);
 }
 .topology-edit small { font-size: 11px; font-weight: 400; }
+.topology-edit label:focus-within { color: #227c67; }
+.topology-edit input:focus-visible { border-color: #227c67; }
 @media (max-width: 480px) {
   .topology-transfer { grid-template-columns: minmax(0, 1fr); }
 }
