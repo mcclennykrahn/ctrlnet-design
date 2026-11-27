@@ -350,7 +350,6 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 .empty-project .obs-grid,
 .empty-project .optimize-box { display: none; }
 .empty-project .panel-body { padding-top: 5px; padding-bottom: 5px; }
-.empty-project .empty-row { padding: 4px 3px 3px; }
 .muted { color: var(--muted); font-size: 11px; }
 
 .table-wrap { width: 100%; overflow-x: auto; position: relative; }
@@ -390,10 +389,19 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 }
 .link-button:hover { text-decoration: underline; }
 .empty-row {
-  color: #929a8f;
-  font-size: 11px;
-  padding: 5px 3px 3px;
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 14px 12px;
+  border: 1px dashed #c5d8ce;
+  border-radius: 7px;
+  background: #f5f9f7;
+  color: #52685e;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
+.empty-row strong { color: #304e40; font-weight: 600; }
 .empty-row.hidden { display: none; }
 
 .fixed-select {
