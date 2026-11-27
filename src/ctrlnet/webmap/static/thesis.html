@@ -47,6 +47,15 @@
     </section>
 
     <aside class="library-side" aria-label="点线角网数据库">
+      <label class="stage-label" title="按论文第 4 章的分步页面切换视图">论文步骤
+        <select id="stage-select" aria-label="论文步骤视图">
+          <option value="full">完整页面</option>
+          <option value="map">仅地图</option>
+          <option value="points">点库</option>
+          <option value="lines">线库</option>
+          <option value="angles">角库</option>
+        </select>
+      </label>
       <div class="project-bar">
         <label class="project-name-label">工程
           <input id="project-name" type="text" value="未命名论文工程" autocomplete="off" />
@@ -54,15 +63,6 @@
         <button class="btn btn-gray" id="save-project" type="button">保存</button>
         <button class="btn btn-gray" id="refresh-projects" type="button" title="刷新已存工程">刷新</button>
         <button class="btn btn-gray" id="new-project" type="button" title="清空当前工程">新建</button>
-        <label class="stage-label" title="按论文第 4 章的分步页面切换视图">论文步骤
-          <select id="stage-select" aria-label="论文步骤视图">
-            <option value="full">完整页面</option>
-            <option value="map">仅地图</option>
-            <option value="points">点库</option>
-            <option value="lines">线库</option>
-            <option value="angles">角库</option>
-          </select>
-        </label>
       </div>
       <div class="project-load-controls">
         <div class="saved-project-controls" role="group" aria-label="读取已存工程">

@@ -258,17 +258,27 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   padding: 2px 6px;
 }
 .stage-label {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
-  color: #4b5563;
-  white-space: nowrap;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: var(--green-head);
+  color: #285d49;
+  font-weight: 700;
 }
 .stage-label select {
-  height: 26px;
-  border: 1px solid #cfd4cc;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #a9beb3;
   background: #fff;
-  padding: 1px 4px;
+  color: var(--text);
+  font-weight: 500;
+  padding: 6px 10px;
 }
 .project-load-controls {
   display: grid;
