@@ -1056,3 +1056,29 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 #denom-table th:nth-child(n+3), #denom-table td:nth-child(n+3) { text-align: right; }
 #denom-table tbody tr:nth-child(even) { background: #f7faf8; }
 #denom-table tbody tr:hover { background: #eaf3ee; }
+
+/* Keep row identity visible while narrow panels scroll to the tolerance column. */
+.denom-scroll-hint { display: none; }
+.result-table-wrap:focus-visible {
+  outline: 2px solid #227c67;
+  outline-offset: 3px;
+}
+#denom-table th:first-child, #denom-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  box-shadow: 1px 0 #d5e1d9;
+  z-index: 1;
+}
+#denom-table tbody tr:nth-child(even) td:first-child { background: #f7faf8; }
+#denom-table tbody tr:hover td:first-child { background: #eaf3ee; }
+#denom-table thead th:first-child { background: #edf5f1; z-index: 2; }
+@container result-summary (max-width: 280px) {
+  .denom-scroll-hint {
+    display: block;
+    margin: 0 0 8px;
+    color: #495e53;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}

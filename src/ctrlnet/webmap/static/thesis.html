@@ -227,8 +227,9 @@
               <label class="inline-check"><input id="show-ellipses" type="checkbox" checked /> 显示误差椭圆</label>
               <label>放大倍数 <input id="ellipse-scale" type="number" min="1" step="100" value="2000" /></label>
             </div>
-            <div class="result-subtitle">边长相对中误差分母</div>
-            <div class="table-wrap result-table-wrap">
+            <div class="result-subtitle" id="denom-title">边长相对中误差分母</div>
+            <p class="denom-scroll-hint" id="denom-scroll-hint">左右滚动查看限差 · 线号固定</p>
+            <div class="table-wrap result-table-wrap" tabindex="0" role="region" aria-labelledby="denom-title" aria-describedby="denom-scroll-hint">
               <table class="data-table" id="denom-table">
                 <thead><tr><th>线号</th><th>端点</th><th>边长 m</th><th>分母</th><th>限差</th></tr></thead>
                 <tbody id="denom-body"></tbody>
