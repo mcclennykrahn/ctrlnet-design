@@ -764,7 +764,6 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 .basemap-toolbar,.projection-summary { padding:8px; background:#eef4e9; font-size:12px; line-height:1.7; }
 .basemap-toolbar select { max-width:230px; }
 #basemap-status { margin-left:8px; }
-#coordinate-file { width:185px; }
 
 /* Workspace controls also cover the shared engineering panel injected at runtime. */
 .project-load-row button, #engineering-panel button {
@@ -1095,3 +1094,47 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
     line-height: 1.6;
   }
 }
+
+/* Keep coordinate upload and its coordinate-system guidance together. */
+.coordinate-import {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #c8d6ce;
+  border-radius: 8px;
+  background: #f4f8f5;
+}
+.coordinate-import label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: #294b3c;
+  font-size: 13px;
+  font-weight: 600;
+}
+.coordinate-import input[type="file"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 5px;
+  border-radius: 5px;
+  font: inherit;
+  font-weight: 400;
+}
+.coordinate-import input::file-selector-button {
+  min-height: 32px;
+  margin-right: 8px;
+  padding: 4px 10px;
+  border: 1px solid #bacdc0;
+  border-radius: 4px;
+  background: #e5eee8;
+  color: #294b3c;
+  font: inherit;
+  cursor: pointer;
+}
+.coordinate-import input:focus-visible {
+  outline: 2px solid #287353;
+  outline-offset: 2px;
+}
+.coordinate-import > span { font-size: 13px; }

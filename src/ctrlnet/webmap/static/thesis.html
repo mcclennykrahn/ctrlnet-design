@@ -105,8 +105,8 @@
         </div>
       </div>
       <div id="projection-summary" class="projection-summary" role="status"></div>
-      <div class="project-load-row"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" /></label>
-      <span>点号；x北，y东（m），按当前所选中央子午线/假东/gauss 或 utm 解算的绝对坐标。替换四库，类型初始为未知。</span></div>
+      <div class="project-load-row coordinate-import"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" aria-describedby="coordinate-import-help" /></label>
+      <span id="coordinate-import-help">点号；x北，y东（m），按当前所选中央子午线/假东/gauss 或 utm 解算的绝对坐标。替换四库，类型初始为未知。</span></div>
       <section class="panel" id="panel-points">
         <header class="panel-title"><span>点库</span><span class="panel-count" id="point-count">0</span></header>
         <div class="panel-body">
