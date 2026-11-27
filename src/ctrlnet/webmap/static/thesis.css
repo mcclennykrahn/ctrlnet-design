@@ -497,15 +497,28 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   background: #fffdf7;
   margin-top: 7px;
   padding: 0;
+  border-radius: 7px;
 }
 .optimize-box summary {
   cursor: pointer;
-  padding: 4px 6px;
-  font-size: 11.5px;
-  color: #6b5720;
+  min-height: 44px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #66501b;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
   user-select: none;
 }
-.optimize-box .obs-grid { padding: 0 6px 6px; }
+.optimize-box summary:hover { background: #fff4d6; }
+.optimize-box summary:focus-visible { outline-offset: -3px; background: #fff4d6; }
+.optimize-box[open] > summary {
+  background: #fff4d6;
+  border-bottom: 1px solid #eadfbd;
+  border-radius: 6px 6px 0 0;
+}
+.optimize-box .obs-grid { padding: 10px; }
 .yellow-dot {
   display: inline-block;
   width: 8px; height: 8px;
