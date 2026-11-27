@@ -430,3 +430,11 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .inspector .kv dt { color: #a8b8ce; background: rgba(148, 163, 184, .05); }
 .inspector .kv dd { color: #e0f2fe; }
 .inspector .kv dt:last-of-type, .inspector .kv dd:last-of-type { border-bottom: 0; }
+
+/* Registration metrics: readable labels and stable two-column cards. */
+.registration .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.registration .stat-grid > div { min-width: 0; min-height: 76px; padding: 12px; border-radius: 10px; background: rgba(2, 6, 23, .28); }
+.registration .stat-label { font-size: 12px; line-height: 1.5; letter-spacing: 0; margin-bottom: 6px; color: #a8b8ce; }
+.registration .stat-grid strong { display: block; font-size: 16px; line-height: 1.5; color: #e0f2fe; overflow-wrap: anywhere; }
+#reload-registration { width: 100%; min-height: 40px; padding: 9px 12px; line-height: 1.5; }
+#registration-status { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
