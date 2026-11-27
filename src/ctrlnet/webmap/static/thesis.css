@@ -782,3 +782,71 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   font-size: 11px;
   line-height: 1.6;
 }
+
+.topology-tools {
+  margin-bottom: 12px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.topology-transfer, .topology-edit {
+  display: grid;
+  gap: 8px 12px;
+  padding: 12px 14px;
+}
+.topology-transfer {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.topology-transfer label, .topology-edit label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.topology-tools input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid #cfd4cc;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+.topology-tools input[type="number"] {
+  padding: 5px 8px;
+  font-size: 14px;
+}
+.topology-tools input::file-selector-button {
+  min-height: 34px;
+  margin-inline-end: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-inline-end: 1px solid var(--green-head-border);
+  background: var(--green-soft);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.topology-tools .btn { min-height: 36px; white-space: normal; }
+.topology-transfer p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.topology-edit {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  border-top: 1px solid var(--green-head-border);
+}
+.topology-edit small { font-size: 11px; font-weight: 400; }
+@media (max-width: 480px) {
+  .topology-transfer { grid-template-columns: minmax(0, 1fr); }
+}

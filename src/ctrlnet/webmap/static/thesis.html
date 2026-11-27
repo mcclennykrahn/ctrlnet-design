@@ -80,9 +80,27 @@
         <button class="btn" id="apply-projection" type="button">应用投影</button>
         <span class="projection-help">保留经纬度重算平面；带外点拒绝且保留原工程。轴序 x北/y东。</span>
       </div>
-      <div class="project-load-row"><label>导入完整拓扑 JSON <input id="topology-file" type="file" accept=".json"></label>
-        <button id="export-json">导出工程 JSON</button><button id="undo-mutation">撤销（持久化20步）</button><button id="redo-mutation">重做</button><label>点/线段吸附（米，0关闭）<input id="snap-geometry-m" type="number" min="0" max="1000" value="0" style="width:65px"></label><label>放点/拖动吸附网格（米，0关闭）<input id="snap-m" type="number" min="0" max="1000" value="0" style="width:65px"></label>
-        <span>ctrlnet.thesis.web/1：points、lines、angles、network、projection；导出文件即模板。覆盖四库及观测。</span></div>
+      <div class="topology-tools">
+        <div class="topology-transfer" role="group" aria-label="拓扑文件">
+          <label>导入完整拓扑 JSON
+            <input id="topology-file" type="file" accept=".json" aria-describedby="topology-import-help">
+          </label>
+          <button class="btn" id="export-json" type="button">导出工程 JSON</button>
+          <p id="topology-import-help">ctrlnet.thesis.web/1：points、lines、angles、network、projection；导出文件即模板。覆盖四库及观测。</p>
+        </div>
+        <div class="topology-edit" role="group" aria-label="编辑历史和吸附设置">
+          <label>点/线段吸附
+            <small>米，0 关闭</small>
+            <input id="snap-geometry-m" type="number" min="0" max="1000" value="0">
+          </label>
+          <label>放点/拖动网格吸附
+            <small>米，0 关闭</small>
+            <input id="snap-m" type="number" min="0" max="1000" value="0">
+          </label>
+          <button class="btn" id="undo-mutation" type="button">撤销（持久化20步）</button>
+          <button class="btn" id="redo-mutation" type="button">重做</button>
+        </div>
+      </div>
       <div id="projection-summary" class="projection-summary" role="status"></div>
       <div class="project-load-row"><label>导入论文坐标 <input id="coordinate-file" type="file" accept=".txt,.csv" /></label>
       <span>点号；x北，y东（m），按当前所选中央子午线/假东/gauss 或 utm 解算的绝对坐标。替换四库，类型初始为未知。</span></div>
