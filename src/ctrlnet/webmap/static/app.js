@@ -438,8 +438,8 @@
       const lngs = points.map(function (p) { return p.E; });
       map.fitBounds([[Math.min.apply(null, lats), Math.min.apply(null, lngs)],
         [Math.max.apply(null, lats), Math.max.apply(null, lngs)]], {
-        paddingTopLeft: [330, 120],
-        paddingBottomRight: [410, 70],
+        paddingTopLeft: [24, 64],
+        paddingBottomRight: [24, 24],
         maxZoom: maxZoom === undefined ? 6 : maxZoom,
       });
     }

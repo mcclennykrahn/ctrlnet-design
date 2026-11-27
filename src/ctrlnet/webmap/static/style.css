@@ -316,3 +316,60 @@ html, body {
 #version-list button, #compare-versions { background: #172a40; color: #e2e8f0; border: 1px solid #334155; border-radius: 4px; padding: 3px 5px; margin: 2px 0; cursor: pointer; }
 #version-comparison { font-size: 11px; overflow-wrap: anywhere; }
 #xyz-map .leaflet-control-attribution { position: fixed; left: 320px; top: 76px; bottom: auto; margin: 0; max-width: calc(100vw - 740px); color: #172a40; background: #fffffff0; }
+
+/* Keep the terrain canvas clear of the dashboard's reading panels. */
+@media (min-width: 1025px) {
+  .map-stage { position: absolute; inset: 80px 406px 42px 320px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; }
+  #xyz-map .leaflet-control-attribution { position: static; max-width: 100%; }
+}
+@media (min-width: 1025px) and (max-width: 1120px) {
+  .map-stage { left: 292px; right: 358px; }
+}
+.brand > div:last-child { min-width: 0; }
+.panel-section { line-height: 1.55; }
+.section-kicker, .scenario-label, .chart-note, .stat-label { color: var(--muted); }
+button, select, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+#offline-tiles { min-width: 0; max-width: 100%; flex: 1; background: #0b1728; color: var(--text); border: 1px solid #334155; border-radius: 6px; padding: 6px; }
+#terrain-status { border-radius: 6px; }
+#terrain-status:empty { display: none; }
+
+/* On tablets and phones, read controls and results below a dedicated map. */
+@media (max-width: 1024px) {
+  html, body { height: auto; min-height: 100%; overflow: auto; }
+  body { display: flex; flex-direction: column; padding: 0 12px; gap: 12px; }
+  #topbar { position: relative; order: 0; height: auto; min-height: 76px; flex-wrap: wrap; gap: 12px; padding: 14px; margin: 0 -12px; }
+  .brand { min-width: 0; flex: 1 1 100%; }
+  .brand-title { font-size: 14px; }
+  .brand-sub { white-space: normal; overflow-wrap: anywhere; }
+  .report-actions { margin: 0; flex-wrap: wrap; }
+  .report-btn { min-height: 36px; padding: 8px 10px; }
+  .offline-badge { margin-left: auto; font-size: 10px; padding: 6px 8px; }
+  .map-stage { position: relative; inset: auto; order: 1; width: 100%; height: 52vh; min-height: 320px; max-height: 520px; flex: none; border: 1px solid var(--line); border-radius: 12px; }
+  .panel, #left-panel, #right-panel { position: relative; inset: auto; width: 100%; overflow: visible; border-radius: 12px; }
+  #left-panel { order: 2; }
+  #right-panel { order: 3; }
+  .panel-section { padding: 16px; }
+  .layer-row { min-height: 36px; }
+  #statusbar { position: relative; order: 4; height: auto; flex-wrap: wrap; gap: 8px 18px; padding: 12px; margin: 0 -12px; white-space: normal; }
+  #statusbar .status-attrib { margin-left: 0; }
+  #terrain-status { position: relative !important; order: 5; inset: auto !important; max-width: 100% !important; overflow-wrap: anywhere; }
+  #xyz-map .leaflet-control-attribution { position: static; max-width: 100%; }
+  .error-banner { position: fixed; width: calc(100% - 24px); }
+}
+@media (max-width: 480px) {
+  .offline-badge { margin-left: 0; }
+  .inspector .kv { grid-template-columns: 76px minmax(0, 1fr); }
+  .inspector dd, .detail-list { overflow-wrap: anywhere; }
+  .profile-head { flex-wrap: wrap; }
+}
+@media (min-width: 1025px) and (max-width: 1120px) {
+  #engineering-panel { left: 292px !important; right: 358px !important; }
+}
+@media (max-width: 1024px) {
+  #engineering-panel { position: relative !important; inset: auto !important; order: 2; margin: 0 !important; max-height: 60vh !important; flex: none; border-radius: 10px; overflow-wrap: anywhere; }
+  #engineering-panel input, #engineering-panel select { max-width: 100%; }
+  #engineering-panel table { display: block; overflow-x: auto; }
+}
