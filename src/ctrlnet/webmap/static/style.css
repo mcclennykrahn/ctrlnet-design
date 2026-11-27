@@ -373,3 +373,15 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   #engineering-panel input, #engineering-panel select { max-width: 100%; }
   #engineering-panel table { display: block; overflow-x: auto; }
 }
+
+/* Version navigation: separate the destination from its parent lineage. */
+#version-list { margin: 16px 0; }
+#version-list h3 { margin: 0 0 8px; font-size: 12px; color: var(--text); font-weight: 650; }
+.version-row { padding: 9px; margin-top: 8px; border: 1px solid var(--line); border-radius: 9px; background: rgba(2, 6, 23, .3); }
+#version-list .version-open { display: block; width: 100%; min-height: 36px; text-align: left; padding: 8px 10px; margin: 0; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.version-lineage { margin: 7px 2px 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+#version-list .version-lineage button { min-height: 32px; max-width: 100%; padding: 4px 8px; margin: 0; color: #bae6fd; font: inherit; overflow-wrap: anywhere; }
+#version-list button:hover { background: #203d58; border-color: var(--accent); }
+#compare-versions { min-height: 36px; padding: 8px 10px; margin: 4px 0 0; border-radius: 8px; border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.11); color: #bae6fd; font-size: 12px; }
+#compare-versions:hover { background: rgba(56,189,248,.2); border-color: var(--accent); }
+#version-comparison:not(:empty) { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(2,6,23,.4); line-height: 1.65; color: #cbd5e1; }

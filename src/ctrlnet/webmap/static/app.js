@@ -961,18 +961,23 @@
 
   function setupVersionList() {
     const base = document.getElementById("compare-base"), list = document.getElementById("version-list");
-    list.innerHTML = "<b>方案版本 / 父链接</b><br>";
+    list.innerHTML = "<h3>方案版本 / 父链接</h3>";
     state.scenarios.forEach(item => {
       base.add(new Option(item.name + " · v" + item.version, item.id));
       const row = document.createElement("div"), open = document.createElement("button");
       open.textContent = item.name + " · v" + item.version;
       open.onclick = () => {document.getElementById("scenario-select").value = item.id; switchScenario(item.id).catch(() => {});};
-      row.append(open, document.createTextNode(" ← "));
+      row.className = "version-row";
+      open.className = "version-open";
+      const lineage = document.createElement("div");
+      lineage.className = "version-lineage";
+      lineage.append(document.createTextNode("父版本 · "));
+      row.append(open, lineage);
       if (item.parent_id) {
         const parent = document.createElement("button"); parent.textContent = item.parent_id;
         parent.onclick = () => {document.getElementById("scenario-select").value = item.parent_id; switchScenario(item.parent_id).catch(() => {});};
-        row.append(parent);
-      } else row.append(document.createTextNode("根版本"));
+        lineage.append(parent);
+      } else lineage.textContent = "根版本";
       list.append(row);
     });
     document.getElementById("compare-versions").onclick = async () => {
