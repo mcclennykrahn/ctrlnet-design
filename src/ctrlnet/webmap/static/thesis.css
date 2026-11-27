@@ -852,3 +852,46 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
 @media (max-width: 480px) {
   .topology-transfer { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Give network settings the same readable field rhythm as projection settings. */
+.network-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: #f7faf8;
+}
+.network-top .field-label {
+  min-width: 0;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.network-top .field-label select,
+.network-top .field-label input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.network-top .field-label:focus-within { color: #227c67; }
+.network-top .grade-suggestion {
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
