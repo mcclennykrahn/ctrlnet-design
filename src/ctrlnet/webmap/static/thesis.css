@@ -716,3 +716,23 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   .btn, .project-load-row button, #engineering-panel button { min-height: 36px; }
   .toast { font-size: 11px; }
 }
+
+/* Keep coordinate rows readable while their wide table scrolls locally. */
+#point-table { font-size: 12px; }
+#point-table th,
+#point-table td { padding: 8px; white-space: nowrap; }
+#point-table tbody tr:nth-child(even) { background: #f7faf8; }
+#point-table tbody tr:hover,
+#point-table tbody tr:focus-within { background: #edf5f1; }
+#point-table .fixed-select {
+  min-width: 62px;
+  height: 30px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+#point-table .link-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+#point-table .link-button:hover { background: #fff0ee; }
