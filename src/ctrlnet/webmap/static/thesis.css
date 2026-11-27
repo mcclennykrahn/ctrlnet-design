@@ -977,3 +977,13 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   #export-modal .modal-head, #export-modal .modal-actions { padding: 10px 12px; }
   #export-modal .export-text { padding: 12px; }
 }
+
+/* Keep denominator comparisons legible inside their bounded result scroller. */
+.result-subtitle { font-size: 12px; margin: 10px 0 6px; }
+.result-table-wrap { border-color: #d5e1d9; border-radius: 6px; background: #fff; }
+#denom-table { font-size: 12px; }
+#denom-table th, #denom-table td { padding: 8px; white-space: nowrap; }
+#denom-table thead th { background: #edf5f1; color: #38584a; }
+#denom-table th:nth-child(n+3), #denom-table td:nth-child(n+3) { text-align: right; }
+#denom-table tbody tr:nth-child(even) { background: #f7faf8; }
+#denom-table tbody tr:hover { background: #eaf3ee; }
