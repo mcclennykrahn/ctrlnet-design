@@ -31,7 +31,8 @@ both outcomes agree across every best base. A title plus one whole-point, whole-
 whole-angle choice is retained only when all four outcomes agree. Independent
 network plus one whole-point, whole-line or whole-angle choice has the same requirement.
 Title, network and one whole-point, whole-line or whole-angle choice require agreement for
-all eight outcomes. Other mixed or multiple field conflicts retain whole-topology choices.
+all eight outcomes. Two whole-point choices also require all four outcomes to
+agree across every base. Other mixed or multiple field conflicts retain whole-topology choices.
 Units with equivalent authored bases retain ordinary three-way behavior,
 including bases differing only in stable-ID list presentation order,
 reconciling valid known allocator counters across every base.
@@ -739,6 +740,7 @@ def _plan(conn, target, source, choices=None):
                         if candidate is None or not (
                                 fields in ([], ['title'], ['network'], ['title', 'network'])
                                 or (len(fields) == 1 and fields[0].startswith(('point:', 'line:', 'angle:')))
+                                or (len(fields) == 2 and all(field.startswith('point:') for field in fields))
                                 or (len(fields) == 2 and fields[0] == 'title'
                                     and fields[1].startswith(('point:', 'line:', 'angle:')))
                                 or (len(fields) == 3 and fields[:2] == ['title', 'network']
@@ -776,6 +778,11 @@ def _plan(conn, target, source, choices=None):
                                 point_conflicts=fields, choices=resolved_choices)
                             if value is None or fields != choice_fields:
                                 break
+                            if (len(choice_fields) == 2
+                                    and all(field.startswith('point:') for field in choice_fields)):
+                                names = [str(point.get('name')) for point in value['points']]
+                                if len(set(names)) != len(names):
+                                    break
                             if (len(choice_fields) in (2, 3)
                                     and choice_fields[-1].startswith('line:')
                                     and all(field in ('title', 'network') for field in choice_fields[:-1])):
