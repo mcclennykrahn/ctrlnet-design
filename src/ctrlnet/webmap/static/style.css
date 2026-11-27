@@ -229,12 +229,14 @@ html, body {
 
 #statusbar {
   position: absolute; z-index: 1100; left: 0; right: 0; bottom: 0; height: 30px;
-  display: flex; align-items: center; gap: 24px; padding: 0 15px;
+  display: flex; align-items: center; gap: clamp(12px, 2vw, 28px); padding: 0 15px;
   background: rgba(2, 6, 23, 0.94); border-top: 1px solid var(--line);
-  font-size: 10.5px; color: #94a3b8; font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-size: 12px; line-height: 1.5; color: #cbd5e1; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-#statusbar .status-attrib { margin-left: auto; color: #64748b; }
-#status-mode { color: #7dd3fc; }
+#statusbar .status-attrib { margin-left: auto; color: #94a3b8; }
+#status-mode { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #7dd3fc; }
+#status-coord { color: #e2e8f0; }
 
 .loading {
   position: absolute; z-index: 2000; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -353,7 +355,12 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   #right-panel { order: 3; }
   .panel-section { padding: 16px; }
   .layer-row { min-height: 36px; }
-  #statusbar { position: relative; order: 4; height: auto; flex-wrap: wrap; gap: 8px 18px; padding: 12px; margin: 0 -12px; white-space: normal; }
+  #statusbar {
+    position: relative; order: 4; height: auto; display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px;
+    padding: 12px; margin: 0 -12px; white-space: normal; overflow-wrap: anywhere;
+  }
+  #status-mode { overflow: visible; }
   #statusbar .status-attrib { margin-left: 0; }
   #terrain-status { position: relative !important; order: 5; inset: auto !important; max-width: 100% !important; overflow-wrap: anywhere; }
   #xyz-map .leaflet-control-attribution { position: static; max-width: 100%; }
@@ -364,6 +371,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   .inspector .kv { grid-template-columns: 76px minmax(0, 1fr); }
   .inspector dd, .detail-list { overflow-wrap: anywhere; }
   .profile-head { flex-wrap: wrap; }
+  #statusbar { grid-template-columns: minmax(0, 1fr); }
 }
 @media (min-width: 1025px) and (max-width: 1120px) {
   #engineering-panel { left: 292px !important; right: 358px !important; }
