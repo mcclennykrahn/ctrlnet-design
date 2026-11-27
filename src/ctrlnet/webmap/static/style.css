@@ -385,3 +385,25 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 #compare-versions { min-height: 36px; padding: 8px 10px; margin: 4px 0 0; border-radius: 8px; border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.11); color: #bae6fd; font-size: 12px; }
 #compare-versions:hover { background: rgba(56,189,248,.2); border-color: var(--accent); }
 #version-comparison:not(:empty) { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(2,6,23,.4); line-height: 1.65; color: #cbd5e1; }
+
+/* Layer controls: generous targets and a visible enabled state. */
+.layer-row {
+  min-height: 44px;
+  gap: 10px;
+  padding: 10px;
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  background: rgba(2, 6, 23, .28);
+  line-height: 1.5;
+}
+.layer-row input { width: 18px; height: 18px; flex: none; }
+.layer-row > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.layer-row:has(input:checked) {
+  border-color: rgba(56, 189, 248, .35);
+  background: rgba(56, 189, 248, .07);
+  color: #e0f2fe;
+}
+.layer-row:hover { border-color: var(--accent); background: rgba(56, 189, 248, .12); }
+.layer-row:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.layer-row:has(select) { flex-wrap: wrap; }
+#offline-tiles { min-height: 36px; flex-basis: 120px; }
