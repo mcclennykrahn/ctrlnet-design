@@ -407,3 +407,26 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .layer-row:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .layer-row:has(select) { flex-wrap: wrap; }
 #offline-tiles { min-height: 36px; flex-basis: 120px; }
+
+/* Object inspector: align labels and values in readable, separated rows. */
+.inspector h3 { line-height: 1.6; overflow-wrap: anywhere; }
+.inspector .kv {
+  grid-template-columns: minmax(76px, .9fr) minmax(0, 1.4fr);
+  gap: 0;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, .28);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.inspector .kv dt, .inspector .kv dd {
+  min-width: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.inspector .kv dt { color: #a8b8ce; background: rgba(148, 163, 184, .05); }
+.inspector .kv dd { color: #e0f2fe; }
+.inspector .kv dt:last-of-type, .inspector .kv dd:last-of-type { border-bottom: 0; }
