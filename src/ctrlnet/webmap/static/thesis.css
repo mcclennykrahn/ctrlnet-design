@@ -201,29 +201,32 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .principles article {
+  min-width: 0;
   border: 1px solid #e2e6df;
   background: #fcfdfb;
-  padding: 12px;
+  padding: 16px;
   border-radius: 8px;
 }
 .principles h3 {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 10px;
+  font-size: 14px;
   color: var(--blue);
   font-weight: 700;
   letter-spacing: .01em;
 }
-.principles p { margin: 0 0 5px; font-size: 11.5px; line-height: 1.55; color: #414741; }
+.principles p { margin: 0 0 10px; font-size: 13px; line-height: 1.75; color: #414741; }
+.principles p:last-child { margin-bottom: 0; }
 .principles .formula {
   font-family: "Cambria Math", "Times New Roman", "Noto Serif CJK SC", serif;
   color: #33475f;
   background: #f5f8fb;
   border-left: 2px solid #b9cbe2;
-  padding: 3px 6px;
-  font-size: 10.8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 .offline-note { color: #7b8178; font-size: 10.5px; margin: 8px 2px 0; }
