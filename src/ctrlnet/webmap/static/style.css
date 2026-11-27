@@ -438,3 +438,23 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .registration .stat-grid strong { display: block; font-size: 16px; line-height: 1.5; color: #e0f2fe; overflow-wrap: anywhere; }
 #reload-registration { width: 100%; min-height: 40px; padding: 9px 12px; line-height: 1.5; }
 #registration-status { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* Map legend: readable symbols and separated labels at every panel width. */
+.legend-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #dbeafe;
+}
+.legend-grid > span {
+  min-width: 0;
+  min-height: 40px;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .28);
+  overflow-wrap: anywhere;
+}
+.legend-grid i { width: 14px; height: 14px; }
