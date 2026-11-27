@@ -532,8 +532,27 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   margin: 0 2px;
 }
 
-.calc-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
-.btn-calc { flex: 0 0 auto; min-width: 90px; }
+.calc-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.calc-actions .btn {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.calc-actions .btn-calc { flex: 1 1 100px; }
+.calc-exports {
+  flex: 2 1 256px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.calc-actions .calc-exports .btn { background: #fff; border-color: #b7cbbf; color: #38584a; }
+.calc-actions .calc-exports .btn:hover { background: #edf5f1; border-color: #8daa98; }
 
 .result-box {
   container: result-summary / inline-size;
