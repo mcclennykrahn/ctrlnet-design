@@ -98,9 +98,13 @@
         <h2>DEM 剖面 / 通视</h2>
         <span class="mode-pill" id="profile-mode">点击两点</span>
       </div>
-      <div id="profile-summary" class="profile-summary muted">点击地图上任意两点（或调用 <code>showProfile('P1','P6')</code>）绘制地形线、曲率折光视线与净空。</div>
+      <div id="profile-summary" class="profile-summary muted"><ol class="profile-steps" aria-label="绘制剖面步骤"><li><span>1</span>点击地图选择起点</li><li><span>2</span>再次点击选择终点</li></ol></div>
       <div id="profile-chart" class="profile-chart">
-        <div class="chart-placeholder">剖面图将显示在这里</div>
+        <div class="chart-placeholder profile-empty">
+          <svg class="profile-empty-icon" viewBox="0 0 80 40" aria-hidden="true"><path d="M4 34 23 17 36 26 53 8 76 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12 76 22" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="4 4"/><circle cx="4" cy="12" r="3" fill="#7dd3fc"/><circle cx="76" cy="22" r="3" fill="#7dd3fc"/></svg>
+          <strong>等待选择剖面起终点</strong>
+          <span>选择两点后显示地形、视线与净空</span>
+        </div>
       </div>
     </section>
 

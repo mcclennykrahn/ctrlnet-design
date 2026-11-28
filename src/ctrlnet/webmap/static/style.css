@@ -497,3 +497,12 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .profile-metrics dd span { font-size: 12px; font-weight: 400; color: #a8b8ce; }
 .profile-metrics .profile-obstruction { grid-column: 1 / -1; border-color: rgba(239, 68, 68, .4); }
 .profile-summary .chart-note { margin: 10px 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* Empty profile guidance; replaced by the existing result renderer. */
+.profile-steps { display: grid; gap: 8px; margin: 10px 0 12px; padding: 0; list-style: none; }
+.profile-steps li { display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; line-height: 1.5; }
+.profile-steps li > span { display: grid; place-items: center; flex: 0 0 24px; height: 24px; border: 1px solid #475569; border-radius: 50%; color: #bae6fd; background: #172b41; font-size: 11px; font-weight: 700; }
+.profile-empty { height: auto; min-height: 164px; box-sizing: border-box; padding: 20px 12px; gap: 8px; align-content: center; text-align: center; color: #a5b4c8; line-height: 1.6; }
+.profile-empty .profile-empty-icon { width: 80px; height: 40px; color: #64748b; }
+.profile-empty strong { font-size: 13px; color: #e2e8f0; }
+.profile-empty > span { font-size: 11px; overflow-wrap: anywhere; }

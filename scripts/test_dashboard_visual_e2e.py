@@ -53,7 +53,7 @@ def main():
                     page.select_option('#scenario-select', 'dem-opt')
                     page.wait_for_function('window.ctrlnetScenarioReady === "dem-opt"')
                     page.evaluate("window.ctrlnetApp.showProfile('P1','P6')")
-                    page.wait_for_selector('#profile-chart svg')
+                    page.wait_for_selector('#profile-chart > svg')
                     page.locator('#right-panel').scroll_into_view_if_needed()
                     page.screenshot(path=str(out / f'{width}-profile.png'))
                 assert not errors, errors
