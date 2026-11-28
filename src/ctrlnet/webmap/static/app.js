@@ -115,18 +115,24 @@
     if (!node) return;
     const parent = scenario && scenario.parent_id ? scenario.parent_id : "—";
     const hash = summary.snapshot_hash ? String(summary.snapshot_hash).slice(0, 12) + "…" : "—";
+    const measures = [
+      ["观测", fmtInt(summary.n_observations)],
+      ["点数", fmtInt(summary.n_points)],
+      ["固定", fmtInt(summary.n_fixed)],
+      ["max mp", fmt(summary.max_mp_mm, 2) + " mm"],
+      ["min r_i", summary.min_r === null || summary.min_r === undefined ? "—" : fmt(summary.min_r, 3)],
+      ["通视", fmtInt(summary.n_visible) + " / " + fmtInt(summary.n_pairs)],
+      ["冗余", fmtInt(summary.redundancy)],
+    ];
     node.innerHTML =
-      "<b>" + esc(summary.scenario_name || (scenario && scenario.name) || "—") + "</b> · v" +
-      esc(summary.scenario_version || (scenario && scenario.version) || 1) +
-      "<br>观测 " + fmtInt(summary.n_observations) +
-      " · 点数 " + fmtInt(summary.n_points) +
-      " · 固定 " + fmtInt(summary.n_fixed) +
-      "<br>max mp <b>" + fmt(summary.max_mp_mm, 2) + " mm</b> · min r_i " +
-      (summary.min_r === null || summary.min_r === undefined ? "—" : fmt(summary.min_r, 3)) +
-      "<br>通视 " + fmtInt(summary.n_visible) + " / " + fmtInt(summary.n_pairs) +
-      " · 冗余 " + fmtInt(summary.redundancy) +
-      '<br><span class="muted-line">父方案 ' + esc(parent) +
-      " · 快照 " + esc(hash) + "</span>";
+      '<div class="scenario-summary-title"><b>' + esc(summary.scenario_name || (scenario && scenario.name) || "—") +
+      '</b><span>v' + esc(summary.scenario_version || (scenario && scenario.version) || 1) + '</span></div>' +
+      '<dl class="scenario-measures">' + measures.map(([label, value]) =>
+        '<div><dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd></div>'
+      ).join('') + '</dl>' +
+      '<div class="scenario-provenance"><span>父方案 <b>' + esc(parent) +
+      '</b></span><span>快照 <b>' + esc(hash) + '</b></span></div>';
+
   }
 
   function styleContours(feature) {
