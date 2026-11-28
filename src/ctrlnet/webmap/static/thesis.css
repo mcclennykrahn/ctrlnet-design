@@ -130,11 +130,29 @@ body[data-stage="full"] #map { height: clamp(360px, 53vh, 620px); }
 #map-coord { white-space: nowrap; color: #44604b; font-variant-numeric: tabular-nums; }
 
 /* 论文第 4 章的分步视图：只显示当前阶段已有的库。 */
+body[data-stage="map"] { display: flex; overflow-y: auto; }
+body[data-stage="map"] #engineering-panel { flex-shrink: 0; }
 body[data-stage="map"] .library-side { display: none; }
-body[data-stage="map"] .thesis-layout { grid-template-columns: minmax(0, 1fr); }
+body[data-stage="map"] .thesis-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1 0 auto;
+  height: auto;
+}
+body[data-stage="map"] .map-side,
+body[data-stage="map"] .map-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
 body[data-stage="map"] .map-side { border-right: 0; padding: 0; }
-body[data-stage="map"] .map-card { border-left: 0; border-right: 0; border-top: 0; height: 100vh; }
-body[data-stage="map"] #map { height: calc(100vh - 26px); }
+body[data-stage="map"] .map-card { border-width: 0 0 1px; }
+body[data-stage="map"] #map {
+  /* Let the toolbar and caption size naturally, including wrapped text. */
+  flex: 1 0 200px;
+  height: auto;
+  min-height: 0;
+}
 body[data-stage="map"] .principles,
 body[data-stage="map"] .offline-note { display: none; }
 

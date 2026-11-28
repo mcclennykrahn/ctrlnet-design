@@ -91,6 +91,15 @@
     });
     state.map = map;
 
+    if (typeof ResizeObserver === "function") {
+      // Wrapped toolbar and caption text can resize the map without resizing the window.
+      new ResizeObserver(() => {
+        if (document.body.dataset.stage === "map") {
+          map.invalidateSize({ debounceMoveend: true });
+        }
+      }).observe(map.getContainer());
+    }
+
     L.control.zoom({ position: "topleft" }).addTo(map);
     L.control
       .scale({ position: "bottomleft", metric: true, imperial: false, maxWidth: 170 })
