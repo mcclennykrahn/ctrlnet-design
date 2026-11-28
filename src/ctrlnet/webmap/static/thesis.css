@@ -1222,3 +1222,20 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   font-weight: 400;
 }
 .project-bar .btn { min-height: 44px; white-space: normal; }
+
+/* Make observation selection readable and comfortable to tap. */
+.check-list { padding: 6px; scrollbar-width: thin; }
+.check-list label {
+  min-height: 44px;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid transparent;
+}
+.check-list label + label { margin-top: 4px; }
+.check-list label:has(input:checked) {
+  background: #edf5f1;
+  border-color: #c8ddd1;
+  color: #244f40;
+}
+.check-list label:hover { background: #e4efe8; }
+.check-list input { width: 16px; height: 16px; accent-color: #226851; }
