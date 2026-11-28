@@ -215,6 +215,14 @@ html, body {
   border-radius: 10px; color: #64748b; font-size: 11px; background: rgba(2, 6, 23, 0.28);
 }
 .profile-chart svg { display: block; width: 100%; height: auto; }
+.profile-chart-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  margin: 8px 0 0; padding: 0; list-style: none;
+  color: #a5b4c8; font-size: 11px; line-height: 1.5;
+}
+.profile-chart-legend li { display: flex; align-items: center; gap: 6px; }
+.profile-chart-legend span { flex: 0 0 18px; border-top: 2px solid; }
+.profile-chart-legend .profile-los-key { border-top-style: dashed; }
 .chart-note { font-size: 9.5px; color: #7c8da6; margin-top: 4px; }
 
 .inspector { font-size: 11.5px; line-height: 1.55; }

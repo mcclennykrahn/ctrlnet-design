@@ -622,15 +622,16 @@
       grid += '<line x1="' + pad.left + '" y1="' + py.toFixed(1) + '" x2="' + (W - pad.right) +
         '" y2="' + py.toFixed(1) + '" stroke="#334155" stroke-width="0.6" opacity="0.75"/>';
       grid += '<text x="' + (pad.left - 5) + '" y="' + (py + 3).toFixed(1) +
-        '" text-anchor="end" fill="#7c8da6" font-size="8">' + Math.round(y) + "</text>";
+        '" text-anchor="end" fill="#a5b4c8" font-size="10">' + Math.round(y) + "</text>";
     }
     const xTicks = [0, 0.5, 1];
     let xLabels = "";
     xTicks.forEach(function (fraction) {
       const x = xMax * fraction;
       const px = sx(x);
+      const anchor = fraction === 0 ? "start" : (fraction === 1 ? "end" : "middle");
       xLabels += '<text x="' + px.toFixed(1) + '" y="' + (H - 7) +
-        '" text-anchor="middle" fill="#7c8da6" font-size="8">' +
+        '" text-anchor="' + anchor + '" fill="#a5b4c8" font-size="10">' +
         (x / 1000).toFixed(1) + " km</text>";
       xLabels += '<line x1="' + px.toFixed(1) + '" y1="' + pad.top + '" x2="' + px.toFixed(1) +
         '" y2="' + (H - pad.bottom) + '" stroke="#334155" stroke-width="0.6" opacity="0.55"/>';
@@ -645,19 +646,17 @@
         '<circle cx="' + ox.toFixed(1) + '" cy="' + oy.toFixed(1) + '" r="4.2" fill="#ef4444" stroke="#fff" stroke-width="1"/>';
     }
     const color = data.visible ? "#22c55e" : "#ef4444";
+    const terrainColor = "#d6b47a";
     return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="DEM 剖面图">' +
       '<rect x="0" y="0" width="' + W + '" height="' + H + '" rx="9" fill="#07111f" stroke="#273449"/>' +
       grid + xLabels +
-      '<path d="' + terrainPath + '" fill="#8a6a3c" fill-opacity="0.32" stroke="#d6b47a" stroke-width="1.15"/>' +
-      '<path d="' + losPath + '" fill="none" stroke="' + color + '" stroke-width="1.8"/>' +
+      '<path d="' + terrainPath + '" fill="#8a6a3c" fill-opacity="0.32" stroke="' + terrainColor + '" stroke-width="1.15"/>' +
+      '<path d="' + losPath + '" fill="none" stroke="' + color + '" stroke-width="1.8" stroke-dasharray="5 3"/>' +
       obstruction +
-      '<g font-size="8.5" fill="#94a3b8">' +
-      '<rect x="' + (pad.left + 4) + '" y="' + (pad.top + 3) + '" width="104" height="30" rx="4" fill="#0f172a" opacity="0.86"/>' +
-      '<line x1="' + (pad.left + 10) + '" y1="' + (pad.top + 12) + '" x2="' + (pad.left + 28) + '" y2="' + (pad.top + 12) + '" stroke="#d6b47a" stroke-width="1.2"/>' +
-      '<text x="' + (pad.left + 34) + '" y="' + (pad.top + 15) + '">地形 / 遮挡</text>' +
-      '<line x1="' + (pad.left + 10) + '" y1="' + (pad.top + 25) + '" x2="' + (pad.left + 28) + '" y2="' + (pad.top + 25) + '" stroke="' + color + '" stroke-width="1.8"/>' +
-      '<text x="' + (pad.left + 34) + '" y="' + (pad.top + 28) + '">曲率折光视线</text></g>' +
-      "</svg>";
+      '</svg><ul class="profile-chart-legend">' +
+      '<li><span aria-hidden="true" style="border-color:' + terrainColor + '"></span>地形高程（m）</li>' +
+      '<li><span aria-hidden="true" class="profile-los-key" style="border-color:' + color + '"></span>曲率折光视线</li>' +
+      '</ul>';
   }
 
   function renderProfileSummary(data) {
