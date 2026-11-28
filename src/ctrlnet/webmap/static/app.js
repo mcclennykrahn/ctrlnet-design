@@ -665,13 +665,15 @@
     const klass = data.visible ? "ok" : "bad";
     const from = data.from.label || "起点";
     const to = data.to.label || "终点";
-    let html = "<strong>" + esc(from) + " → " + esc(to) + "</strong> · " +
-      fmt(data.distance_m / 1000, 3) + " km · <span class=\"" + klass + "\">" +
-      esc(statusMap[status] || status) + "</span> · 最小净空 " +
-      fmt(data.min_clearance_m, 2) + " m";
+    let html = '<div class="profile-route"><strong>' + esc(from) + " → " + esc(to) +
+      '</strong><span class="profile-result ' + klass + '">' + esc(statusMap[status] || status) + '</span></div>' +
+      '<dl class="profile-metrics"><div><dt>距离</dt><dd>' + fmt(data.distance_m / 1000, 3) +
+      ' <span>km</span></dd></div><div><dt>最小净空</dt><dd>' + fmt(data.min_clearance_m, 2) +
+      ' <span>m</span></dd></div>';
     if (data.obstruction) {
-      html += " · 遮挡点距起点 " + fmt(data.obstruction.distance_m, 1) + " m";
+      html += '<div class="profile-obstruction"><dt>遮挡点距起点</dt><dd>' + fmt(data.obstruction.distance_m, 1) + ' <span>m</span></dd></div>';
     }
+    html += '</dl>';
     html += '<div class="chart-note">k=' + fmt(data.analysis.k, 2) +
       "，R=" + fmtInt(data.analysis.R_m) + " m，仪器高/目标高 " +
       fmt(data.analysis.instrument_height_m, 1) + " / " + fmt(data.analysis.target_height_m, 1) +
