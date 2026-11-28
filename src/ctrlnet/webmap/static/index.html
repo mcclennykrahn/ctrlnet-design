@@ -23,10 +23,10 @@
       </div>
     </div>
     <div class="top-stats" id="top-stats"></div>
-    <div class="report-actions" aria-label="报告下载">
-      <a id="report-html" class="report-btn primary" href="/api/report?format=html" download>⬇ 下载报告</a>
-      <a id="report-md" class="report-btn" href="/api/report?format=md" download>MD</a>
-      <a id="report-docx" class="report-btn" href="/api/report?format=docx" download>DOCX</a>
+    <div class="report-actions" role="group" aria-label="报告下载">
+      <a id="report-html" class="report-btn primary" href="/api/report?format=html" download>下载 HTML 报告</a>
+      <a id="report-md" class="report-btn" href="/api/report?format=md" download aria-label="下载 MD 报告">MD</a>
+      <a id="report-docx" class="report-btn" href="/api/report?format=docx" download aria-label="下载 DOCX 报告">DOCX</a>
     </div>
     <div class="offline-badge"><span class="dot"></span> 127.0.0.1 · 离线 Leaflet</div>
   </header>

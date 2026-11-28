@@ -72,13 +72,14 @@ html, body {
 .top-stats .stat span { display: block; font-size: 9.5px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
 
 
-.report-actions { display: flex; gap: 5px; align-items: center; margin-left: 4px; }
+.report-actions { display: flex; gap: 8px; align-items: center; margin-left: 4px; }
 .report-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 9px; border-radius: 7px; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px;
+  padding: 8px 10px; border-radius: 8px; text-decoration: none;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(30, 41, 59, 0.72); color: #cbd5e1;
-  font-size: 10.5px; white-space: nowrap; transition: .15s ease;
+  font-size: 12px; white-space: nowrap; transition: .15s ease;
 }
 .report-btn:hover { border-color: rgba(56, 189, 248, .65); color: #e0f2fe; }
 .report-btn.primary {
@@ -300,7 +301,6 @@ html, body {
 @media (max-width: 1240px) {
   .top-stats { gap: 10px; }
   .brand { min-width: 300px; }
-  .report-btn { padding: 6px 7px; }
 }
 
 @media (max-width: 1120px) {
@@ -347,7 +347,6 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   .brand-title { font-size: 14px; }
   .brand-sub { white-space: normal; overflow-wrap: anywhere; }
   .report-actions { margin: 0; flex-wrap: wrap; }
-  .report-btn { min-height: 36px; padding: 8px 10px; }
   .offline-badge { margin-left: auto; font-size: 10px; padding: 6px 8px; }
   .map-stage { position: relative; inset: auto; order: 1; width: 100%; height: 52vh; min-height: 320px; max-height: 520px; flex: none; border: 1px solid var(--line); border-radius: 12px; }
   .panel, #left-panel, #right-panel { position: relative; inset: auto; width: 100%; overflow: visible; border-radius: 12px; }
@@ -367,6 +366,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   .error-banner { position: fixed; width: calc(100% - 24px); }
 }
 @media (max-width: 480px) {
+  .report-actions { flex-basis: 100%; }
+  .report-btn.primary { flex: 1; }
   .offline-badge { margin-left: 0; }
   .inspector .kv { grid-template-columns: 76px minmax(0, 1fr); }
   .inspector dd, .detail-list { overflow-wrap: anywhere; }
