@@ -1192,3 +1192,33 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   outline-offset: 2px;
 }
 .coordinate-import > span { font-size: 13px; }
+
+/* Keep project identity readable and separate from its commands. */
+.project-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--green-head-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.project-bar .project-name-label {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.project-bar .project-name-label input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 8px 10px;
+  border-color: #b9cdbf;
+  font-size: 14px;
+  font-weight: 400;
+}
+.project-bar .btn { min-height: 44px; white-space: normal; }
