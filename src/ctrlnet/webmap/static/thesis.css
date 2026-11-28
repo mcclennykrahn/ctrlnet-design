@@ -320,7 +320,7 @@ body[data-stage="angles"] #map { height: calc(100vh - 50px); max-height: none; }
   background: #fff;
   padding: 4px 6px;
 }
-.project-load-controls select, .project-load-controls .btn { min-height: 36px; }
+.project-load-controls select, .project-load-controls .btn { min-height: 44px; }
 .example-controls .btn { white-space: normal; }
 
 .btn {
