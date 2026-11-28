@@ -231,7 +231,11 @@ html, body {
 .tag-observed { color: #082f49; background: #7dd3fc; }
 
 .detail-list { font-size: 10.5px; line-height: 1.6; font-variant-numeric: tabular-nums; }
-.detail-list b { color: #cbd5e1; font-weight: 600; }
+.detail-list dl { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
+.detail-list dt { padding-top: 8px; color: var(--muted); font-weight: 600; }
+.detail-list dd { margin: 2px 0 0; padding-bottom: 8px; overflow-wrap: anywhere; }
+.detail-list dd:not(:last-child) { border-bottom: 1px solid var(--line); }
+.detail-list .param { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 2px 8px; }
 .detail-list .param { color: #7dd3fc; }
 
 #statusbar {

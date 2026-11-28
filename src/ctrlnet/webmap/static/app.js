@@ -559,16 +559,17 @@
       const p = data.parameters;
       document.getElementById("registration-detail").classList.remove("muted");
       document.getElementById("registration-detail").innerHTML =
-        "<b>模型</b>：E=a0+a1·col+a2·row；N=b0+b1·col+b2·row<br>" +
-        '<span class="param">a0=' + fmt(p.a0, 3) + "，a1=" + fmt(p.a1, 5) + "，a2=" + fmt(p.a2, 5) + "</span><br>" +
-        '<span class="param">b0=' + fmt(p.b0, 3) + "，b1=" + fmt(p.b1, 5) + "，b2=" + fmt(p.b2, 5) + "</span><br>" +
-        "<b>控制点残差</b>：" + (data.control_points || []).map(function (pt) {
-          return pt.label + " " + fmt(pt.residual_m, 2) + " m";
-        }).join("，") + "<br>" +
-        "<b>检查点</b>：" + (data.check_points || []).map(function (pt) {
-          return pt.label + " " + fmt(pt.residual_m, 2) + " m";
-        }).join("，") +
-        "<br><b>影像</b>：" + esc(data.image_name) + " · " + data.overlay_size[0] + "×" + data.overlay_size[1] + " px";
+        "<dl><dt>模型</dt><dd>E=a0+a1·col+a2·row<br>N=b0+b1·col+b2·row</dd>" +
+        '<dt>仿射参数</dt><dd class="param">' + ["a0", "a1", "a2", "b0", "b1", "b2"].map(function (key) {
+          return "<span>" + key + "=" + fmt(p[key], key.endsWith("0") ? 3 : 5) + "</span>";
+        }).join("") + "</dd>" +
+        "<dt>控制点残差</dt><dd>" + (data.control_points || []).map(function (pt) {
+          return esc(pt.label) + " " + fmt(pt.residual_m, 2) + " m";
+        }).join("，") + "</dd>" +
+        "<dt>检查点</dt><dd>" + (data.check_points || []).map(function (pt) {
+          return esc(pt.label) + " " + fmt(pt.residual_m, 2) + " m";
+        }).join("，") + "</dd>" +
+        "<dt>影像</dt><dd>" + esc(data.image_name) + " · " + data.overlay_size[0] + "×" + data.overlay_size[1] + " px</dd></dl>";
 
       window.ctrlnetRegistration = data;
       return data;
